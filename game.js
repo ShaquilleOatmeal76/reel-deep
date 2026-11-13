@@ -11,6 +11,7 @@ const C = DATA.consts, SPECIES = DATA.species, ZONES = DATA.zones, LURES = DATA.
 const SPEC = {};
 SPECIES.forEach(s => { SPEC[s[0]] = s; });           // [id, name, zone, [min lb, max lb], speed, pool weight, time of day, legendary]
 const DEPTH_PX = C.MAX_M * M;
+const TROPHY = "#ff6e3c", LEGEND = "#ffd246";            // trophies are red-orange, legendaries gold
 const INK = "#1a1628", WHITE = "#fafaff", GOLD = "#ffd246", RED = "#f05050", CYAN = "#5ae6ff", LIME = "#82f082", ORANGE = "#ffa046", GREY = "#96a0c8";
 const rgb = c => "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")";
 const ZONE_COL = DATA.zoneCol.map(rgb);
@@ -542,8 +543,8 @@ function land(i, f) {
   splash(S.hx, S.hy, 6, "#c8ecff");
   const legend = SPEC[f.id][7];
   if (f.id === "poop") { S.flash = 0.5; S.popups.push(["MYTHIC!", 3, "#c8a0ff"], ["WHAT IS THAT?!", 3, "#c8a0ff"]); play("fanfare"); }
-  else if (legend) { S.flash = 0.35; S.popups.push(["LEGENDARY!", 2.4, GOLD], [SPEC[f.id][1], 2.4, GOLD]); play("fanfare"); }
-  else if (f.tr) { S.flash = 0.25; S.popups.push(["TROPHY " + SPEC[f.id][1] + "!", 2.2, ORANGE]); play("chime"); }
+  else if (legend) { S.flash = 0.35; S.popups.push(["LEGENDARY!", 2.4, LEGEND], [SPEC[f.id][1], 2.4, LEGEND]); play("fanfare"); }
+  else if (f.tr) { S.flash = 0.25; S.popups.push(["TROPHY " + SPEC[f.id][1] + "!", 2.2, TROPHY]); play("chime"); }
   if (S.catch.length >= C.CAPACITY) setState("turn", "FULL HOOK");
   else {
     if (!legend && !f.tr) S.popups.push(["HOOKED " + S.catch.length + "/" + C.CAPACITY, 1.0, GOLD]);
@@ -715,13 +716,31 @@ function draw() {
     let x = Math.floor(f.x);
     const y = Math.floor(sy - h / 2 + Math.sin(t * 3 + f.ph) * 1.5);
     if (S.fight && S.fight.f === f) x += Math.floor(Math.sin(t * 40) * (S.fight.shake > 0 ? 3 : 1));
+    const leg = SPEC[f.id][7], pulse = 0.5 + 0.5 * Math.sin(t * 4 + f.ph);
+    if (leg) {                                           // a legendary sits in a pulsing gold aura...
+      g.globalAlpha = 0.18 + 0.16 * pulse; ell(LEGEND, x - 6, y - 5, w + 12, h + 10);
+      g.globalAlpha = 0.22 + 0.14 * pulse; ell("#fff6c8", x - 2, y - 1, w + 4, h + 2);
+      g.globalAlpha = 1;
+    }
     spr(f.id, x, y, !right, f.tr ? 1.7 : 1);
-    if (f.tr || SPEC[f.id][7]) {                         // trophies and legends sparkle
-      const col = f.tr ? ORANGE : GOLD;
+    if (leg) {                                           // ...with gold stars circling it and a crown overhead
+      const cx = x + w / 2, cy = y + h / 2;
+      for (let k = 0; k < 4; k++) {
+        const a = t * 2.4 + k * Math.PI / 2, px = Math.round(cx + Math.cos(a) * (w / 2 + 5)), py = Math.round(cy + Math.sin(a) * (h / 2 + 4));
+        rect(LEGEND, px - 1, py, 3, 1); rect(LEGEND, px, py - 1, 1, 3); rect(WHITE, px, py, 1, 1);
+      }
+      const kx = Math.round(cx) - 4, ky = y - 9 + Math.round(Math.sin(t * 3 + f.ph));
+      rect(INK, kx - 1, ky - 1, 11, 6); rect(LEGEND, kx, ky + 1, 9, 3);
+      rect(LEGEND, kx, ky - 1, 1, 2); rect(LEGEND, kx + 4, ky - 1, 1, 2); rect(LEGEND, kx + 8, ky - 1, 1, 2);
+      rect("#f05050", kx + 2, ky + 2, 1, 1); rect(CYAN, kx + 4, ky + 2, 1, 1); rect("#f05050", kx + 6, ky + 2, 1, 1);
+    } else if (f.tr) {                                   // a trophy is big, throws red-orange sparkles and has a cup over it
       for (let k = 0; k < 3; k++) if (Math.floor(t * 6 + k * 2 + f.ph) % 3 === 0) {
         const px = x + (k * 37 + Math.floor(t * 3)) % Math.max(1, w), py = y + (k * 23 + Math.floor(t * 5)) % Math.max(1, h);
-        rect(col, px - 1, py, 3, 1); rect(col, px, py - 1, 1, 3); rect(WHITE, px, py, 1, 1);
+        rect(TROPHY, px - 1, py, 3, 1); rect(TROPHY, px, py - 1, 1, 3); rect(WHITE, px, py, 1, 1);
       }
+      const ux = x + 3, uy = y - 8 + Math.round(Math.sin(t * 3 + f.ph));
+      rect(INK, ux - 1, uy - 1, 9, 8); rect(TROPHY, ux, uy, 7, 3); rect(TROPHY, ux + 2, uy + 3, 3, 1); rect(TROPHY, ux + 3, uy + 4, 1, 1); rect(TROPHY, ux + 1, uy + 5, 5, 1);
+      rect("#ffd2b4", ux + 1, uy, 1, 2);
     }
     if (f.id === S.bounty && Math.floor(t * 3) % 2) { const bx = x + (w >> 1); rect(INK, bx - 2, y - 7, 5, 6); rect(GOLD, bx - 1, y - 6, 3, 4); rect(INK, bx, y - 5, 1, 2); }   // today's bounty wears a tag
   }
@@ -862,8 +881,9 @@ function drawHud() {
     if (st === "down" && S.hy < 22 * M && Math.floor(t * 3) % 2) text("PICK YOUR " + C.CAPACITY + " FISH", 60 - 3, 166, 1, WHITE);
   }
   if (st === "fight") {
-    const fg = S.fight, leg = SPEC[fg.f.id][7], col = leg ? GOLD : ORANGE;
+    const fg = S.fight, leg = SPEC[fg.f.id][7], col = leg ? LEGEND : TROPHY;
     box(8, 104, 104, 68, col);
+    if (leg) { g.fillStyle = Math.floor(t * 6) % 2 ? LEGEND : WHITE; g.fillRect(10, 106, 100, 1); g.fillRect(10, 169, 100, 1); g.fillRect(10, 106, 1, 64); g.fillRect(109, 106, 1, 64); }   // legendaries get a flashing double border
     text(leg ? "LEGENDARY!" : "TROPHY!", 60, 111, 1, col, "center", null);
     text(SPEC[fg.f.id][1], 60, 120, 1, WHITE, "center", null);
     text(STYLE_HINT[fg.style], 60, 129, 1, CYAN, "center", null);
@@ -886,9 +906,9 @@ function drawHud() {
     text("THE HAUL", 60, 92, 1, CYAN, "center", null);
     const rows = h.rows.slice(0, h.shown);
     rows.forEach(([fid, lb, tag, tr], i) => {
-      const y = 104 + i * 10, name = ((tr ? "*" : "") + SPEC[fid][1]).slice(0, tag ? 10 : 13);
-      text(name, 10, y, 1, fid === "poop" ? "#c8a0ff" : SPEC[fid][7] ? GOLD : tr ? ORANGE : WHITE, "left", null);
-      if (tag) text(tag, 92, y, 1, tag[0] === "X" ? GOLD : tag === "NEW" ? LIME : tag === "???" ? "#c8a0ff" : "#ff8c32", "right", null);
+      const y = 104 + i * 10, name = ((SPEC[fid][7] ? "!" : tr ? "*" : "") + SPEC[fid][1]).slice(0, tag ? 9 : lb >= 100 ? 12 : 13);
+      text(name, 10, y, 1, fid === "poop" ? "#c8a0ff" : SPEC[fid][7] ? LEGEND : tr ? TROPHY : WHITE, "left", null);
+      if (tag) text(tag, 88, y, 1, tag[0] === "X" ? GOLD : tag === "NEW" ? LIME : tag === "???" ? "#c8a0ff" : "#ff8c32", "right", null);
       text(lb, 110, y, 1, WHITE, "right", null);
     });
     if (!h.rows.length) { text("NOTHING BUT", 60, 110, 1, WHITE, "center", null); text("SEAWEED", 60, 120, 1, WHITE, "center", null); }
@@ -932,7 +952,7 @@ function drawLog() {
   if (e) {
     text(s[1], 60, 113, 1, s[7] ? GOLD : WHITE, "center", null);
     text("X" + e.n + " BEST " + e.rec + " LB", 60, 123, 1, CYAN, "center", null);
-    text(s[7] ? "LEGENDARY" : e.star ? "* TROPHY CAUGHT" : "NO TROPHY YET", 60, 133, 1, s[7] || e.star ? GOLD : GREY, "center", null);
+    text(s[7] ? "! LEGENDARY !" : e.star ? "* TROPHY CAUGHT" : "NO TROPHY YET", 60, 133, 1, s[7] ? LEGEND : e.star ? TROPHY : GREY, "center", null);
   } else {
     text("???", 60, 113, 1, GREY, "center", null);
     text(ZONES[s[2]][0] + (s[6] ? " " + s[6] : ""), 60, 123, 1, GREY, "center", null);
@@ -965,7 +985,7 @@ function drawScores() {
     if (r) {
       box(2, 147, 116, 41, CYAN);
       if (h) {
-        h.fish.forEach((f, i) => { text((f[2] ? "*" : "") + SPEC[f[0]][1].slice(0, 14), 6, 153 + i * 8, 1, f[0] === "poop" ? "#c8a0ff" : SPEC[f[0]][7] ? GOLD : f[2] ? ORANGE : WHITE, "left", null); text(f[1], 114, 153 + i * 8, 1, WHITE, "right", null); });
+        h.fish.forEach((f, i) => { text((SPEC[f[0]][7] ? "!" : f[2] ? "*" : "") + SPEC[f[0]][1].slice(0, 14), 6, 153 + i * 8, 1, f[0] === "poop" ? "#c8a0ff" : SPEC[f[0]][7] ? LEGEND : f[2] ? TROPHY : WHITE, "left", null); text(f[1], 114, 153 + i * 8, 1, WHITE, "right", null); });
         const head = "X" + h.mult + (h.bottom ? " +FLOOR" : "");
         text(head, 6, 181, 1, LIME, "left", null);
         if (r.ti) text(String(r.ti).slice(0, 18 - head.length), 114, 181, 1, "#c8a0ff", "right", null);
@@ -1066,7 +1086,7 @@ function drawTasks() {
 const HELP = [
   ["THE DIVE", ["PICK A LURE, THEN", "CAST.", "", "STEER: DRAG, OR", "A / D / ARROWS.", "", "EVERY FISH YOU", "TOUCH IS HOOKED.", "THE HOOK HOLDS 3.", "", "A JELLYFISH ENDS", "THE DIVE."]],
   ["YOUR TOOLS", ["PULSE (SHIFT)", "SCATTERS NEARBY", "FISH. LURES GIVE", "1 TO 3 PULSES.", "", "SINKER: FAST DROP", "", "GLOW: MORE BIG", "FISH, BUT PULLS", "EVERYTHING IN", "", "SONAR: 3 PULSES"]],
-  ["BIG FISH", ["ORANGE SPARKLES:", "A TROPHY.", "GOLD: A LEGENDARY.", "", "THEY FIGHT. TAP", "(OR SPACE) ON", "GREEN BEFORE THE", "CLOCK RUNS OUT.", "", "ONE LEGENDARY", "PER HOOK."]],
+  ["BIG FISH", ["TROPHY: A HUGE FISH", "WITH RED SPARKLES", "AND A CUP ON TOP.", "LEGENDARY: GOLD", "AURA, STARS, CROWN.", "", "BOTH FIGHT. TAP", "(SPACE) ON GREEN", "BEFORE TIME RUNS", "OUT.", "ONE LEGENDARY", "PER HOOK."]],
   ["THE SEA FLOOR", ["REACH THE FLOOR", "FOR +40 LB.", "", "IF YOUR HOOK ISN'T", "FULL, YOU RISE", "SLOWLY AND CAN", "KEEP FISHING", "UNTIL IT IS."]],
   ["SCORING", ["POUNDS, TIMES YOUR", "SET BONUSES. THEY", "ADD TOGETHER:", "", "A PAIR        +0.5", "3 ZONES         +1", "3 TROPHIES      +1", "3 FROM THE DEEP +1", "3 OF A KIND     +2", "", "BOUNTY FISH: X3", "COINS BUY LOOKS."]],
 ];
