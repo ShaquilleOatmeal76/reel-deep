@@ -723,24 +723,17 @@ function draw() {
       g.globalAlpha = 1;
     }
     spr(f.id, x, y, !right, f.tr ? 1.7 : 1);
-    if (leg) {                                           // ...with gold stars circling it and a crown overhead
+    if (leg) {                                           // ...with gold stars circling it
       const cx = x + w / 2, cy = y + h / 2;
       for (let k = 0; k < 4; k++) {
         const a = t * 2.4 + k * Math.PI / 2, px = Math.round(cx + Math.cos(a) * (w / 2 + 5)), py = Math.round(cy + Math.sin(a) * (h / 2 + 4));
         rect(LEGEND, px - 1, py, 3, 1); rect(LEGEND, px, py - 1, 1, 3); rect(WHITE, px, py, 1, 1);
       }
-      const kx = Math.round(cx) - 4, ky = y - 9 + Math.round(Math.sin(t * 3 + f.ph));
-      rect(INK, kx - 1, ky - 1, 11, 6); rect(LEGEND, kx, ky + 1, 9, 3);
-      rect(LEGEND, kx, ky - 1, 1, 2); rect(LEGEND, kx + 4, ky - 1, 1, 2); rect(LEGEND, kx + 8, ky - 1, 1, 2);
-      rect("#f05050", kx + 2, ky + 2, 1, 1); rect(CYAN, kx + 4, ky + 2, 1, 1); rect("#f05050", kx + 6, ky + 2, 1, 1);
-    } else if (f.tr) {                                   // a trophy is big, throws red-orange sparkles and has a cup over it
+    } else if (f.tr) {                                   // a trophy is big and throws red-orange sparkles
       for (let k = 0; k < 3; k++) if (Math.floor(t * 6 + k * 2 + f.ph) % 3 === 0) {
         const px = x + (k * 37 + Math.floor(t * 3)) % Math.max(1, w), py = y + (k * 23 + Math.floor(t * 5)) % Math.max(1, h);
         rect(TROPHY, px - 1, py, 3, 1); rect(TROPHY, px, py - 1, 1, 3); rect(WHITE, px, py, 1, 1);
       }
-      const ux = x + 3, uy = y - 8 + Math.round(Math.sin(t * 3 + f.ph));
-      rect(INK, ux - 1, uy - 1, 9, 8); rect(TROPHY, ux, uy, 7, 3); rect(TROPHY, ux + 2, uy + 3, 3, 1); rect(TROPHY, ux + 3, uy + 4, 1, 1); rect(TROPHY, ux + 1, uy + 5, 5, 1);
-      rect("#ffd2b4", ux + 1, uy, 1, 2);
     }
     if (f.id === S.bounty && Math.floor(t * 3) % 2) { const bx = x + (w >> 1); rect(INK, bx - 2, y - 7, 5, 6); rect(GOLD, bx - 1, y - 6, 3, 4); rect(INK, bx, y - 5, 1, 2); }   // today's bounty wears a tag
   }
@@ -1086,7 +1079,7 @@ function drawTasks() {
 const HELP = [
   ["THE DIVE", ["PICK A LURE, THEN", "CAST.", "", "STEER: DRAG, OR", "A / D / ARROWS.", "", "EVERY FISH YOU", "TOUCH IS HOOKED.", "THE HOOK HOLDS 3.", "", "A JELLYFISH ENDS", "THE DIVE."]],
   ["YOUR TOOLS", ["PULSE (SHIFT)", "SCATTERS NEARBY", "FISH. LURES GIVE", "1 TO 3 PULSES.", "", "SINKER: FAST DROP", "", "GLOW: MORE BIG", "FISH, BUT PULLS", "EVERYTHING IN", "", "SONAR: 3 PULSES"]],
-  ["BIG FISH", ["TROPHY: A HUGE FISH", "WITH RED SPARKLES", "AND A CUP ON TOP.", "LEGENDARY: GOLD", "AURA, STARS, CROWN.", "", "BOTH FIGHT. TAP", "(SPACE) ON GREEN", "BEFORE TIME RUNS", "OUT.", "ONE LEGENDARY", "PER HOOK."]],
+  ["BIG FISH", ["TROPHY: A HUGE FISH", "WITH RED SPARKLES.", "", "LEGENDARY: A GOLD", "AURA AND STARS.", "", "BOTH FIGHT. TAP", "(SPACE) ON GREEN", "BEFORE TIME RUNS", "OUT.", "ONE LEGENDARY", "PER HOOK."]],
   ["THE SEA FLOOR", ["REACH THE FLOOR", "FOR +40 LB.", "", "IF YOUR HOOK ISN'T", "FULL, YOU RISE", "SLOWLY AND CAN", "KEEP FISHING", "UNTIL IT IS."]],
   ["SCORING", ["POUNDS, TIMES YOUR", "SET BONUSES. THEY", "ADD TOGETHER:", "", "A PAIR        +0.5", "3 ZONES         +1", "3 TROPHIES      +1", "3 FROM THE DEEP +1", "3 OF A KIND     +2", "", "BOUNTY FISH: X3", "COINS BUY LOOKS."]],
 ];
