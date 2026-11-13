@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#060a1e">
+<title>Reel Deep</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #060a1e; overflow: hidden; overscroll-behavior: none; }
+  body { display: flex; align-items: center; justify-content: center; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #game { height: min(100dvh, 166.67vw); aspect-ratio: 120 / 200; display: block; image-rendering: pixelated; image-rendering: crisp-edges;
+          touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; background: #000; }
+  #fsBtn { position: fixed; top: 12px; right: 12px; font: inherit; font-size: 13px; letter-spacing: 1px; padding: 8px 12px; background: rgba(6, 10, 30, .7);
+           color: #fafaff; border: 2px solid rgba(250, 250, 255, .6); cursor: pointer; display: none; }
+  #fsBtn:hover { border-color: #ffd246; color: #ffd246; }
+  #keys { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12px; letter-spacing: 1px; color: rgba(250, 250, 255, .55); display: none; pointer-events: none; }
+  @media (hover: hover) and (pointer: fine) and (min-aspect-ratio: 1/1) { #fsBtn { display: block; } #keys { display: block; left: auto; right: 12px; text-align: right; line-height: 1.7; } }
+  :fullscreen #fsBtn { display: none; }
+  body.playing #keys, body.playing #fsBtn { display: none; }
+  #nameModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 20, .82); }
+  #nameModal.open { display: flex; }
+  #nameModal form { background: #1a1628; border: 3px solid #5ae6ff; padding: 22px 24px; text-align: center; color: #fafaff; width: min(300px, 80vw); }
+  #nameModal h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: 2px; color: #ffd246; }
+  #nameModal p { margin: 0 0 14px; font-size: 13px; color: #96a0c8; }
+  #nameInput { width: 5ch; font: inherit; font-size: 34px; text-align: center; text-transform: uppercase; letter-spacing: 6px; padding: 6px 4px 6px 10px;
+               background: #060a1e; color: #fafaff; border: 2px solid #fafaff; border-radius: 0; outline: none; }
+  #nameInput:focus { border-color: #ffd246; }
+  #nameModal .row { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+  #nameModal button { font: inherit; font-size: 15px; letter-spacing: 1px; padding: 9px 16px; background: #060a1e; color: #5ae6ff; border: 2px solid #5ae6ff; cursor: pointer; }
+  #nameOk { color: #ffd246 !important; border-color: #ffd246 !important; }
+</style>
+</head>
+<body>
+<canvas id="game" width="120" height="200"></canvas>
+<button id="fsBtn" type="button">FULL SCREEN (F)</button>
+<div id="keys">A / D or arrows: steer<br>SHIFT: pulse<br>SPACE: cast / tap</div>
+<div id="nameModal">
+  <form onsubmit="return false">
+    <h2>YOUR INITIALS</h2>
+    <p>Up to 3 letters, shown on the scoreboard.</p>
+    <input id="nameInput" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <div class="row"><button type="button" id="nameSkip">SKIP</button><button type="button" id="nameOk">SAVE</button></div>
+  </form>
+</div>
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
