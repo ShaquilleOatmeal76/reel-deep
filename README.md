@@ -34,8 +34,9 @@ Today's bounty fish (shown on the title screen) weighs triple, and touching the 
 
 ## Coins, tasks and the shop
 
-Every haul pays coins, and three daily tasks and two weekly tasks pay more. Coins buy looks only: characters, hats,
-boats, hooks, line colours, bubble trails and things for your fish to wear. Titles are earned, not bought, by
+Every haul pays a few coins, and three daily tasks and two weekly tasks pay more. Coins buy looks only: characters,
+hats, boats, pets, flags, hooks, line colours, bubble trails and things for your fish to wear (175 items in all).
+The best of it is priced to take weeks of regular play. Titles are earned, not bought, by
 filling pages of the log and a few other feats. Nothing in the shop changes your score.
 
 Coins, purchases and the fish log are saved in each player's own browser.

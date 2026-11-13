@@ -142,8 +142,8 @@ function catchSound(n) { const f = [392, 440, 494, 523, 587, 659][Math.min(5, n)
 
 // --------------------------------------------------------------- saved data
 let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, mythic: 0, titles: ["rookie"],
-  own: { char: [0], hat: [0], boat: [0], hook: [0], line: [0], trail: [0], flair: [0] },
-  eq: { char: 0, hat: 0, boat: 0, hook: 0, line: 0, trail: 0, flair: 0, title: "rookie" }, tasks: null };
+  own: { char: [0], hat: [0], boat: [0], hook: [0], line: [0], trail: [0], flair: [0], pet: [0], flag: [0] },
+  eq: { char: 0, hat: 0, boat: 0, hook: 0, line: 0, trail: 0, flair: 0, pet: 0, flag: 0, title: "rookie" }, tasks: null };
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
   store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}) });
@@ -152,18 +152,26 @@ function saveStore() { try { localStorage.setItem("reeldeep", JSON.stringify(sto
 const LOGGED = SPECIES.filter(s => s[0] !== "poop");                  // the mythic never shows in the log
 
 // Everything you can buy is for looks only. [name, price] per item; index 0 of each kind is the free default.
-const LINES = [["WHITE LINE", 0, "#ecf0fa"], ["CYAN LINE", 100, "#5ae6ff"], ["PINK LINE", 100, "#ff8cd2"], ["LIME LINE", 150, "#82f082"], ["GOLD LINE", 250, "#ffd246"], ["RAINBOW LINE", 600, null]];
-const TRAILS = [["BUBBLES", 0, ["#c8ecff"]], ["GOLD DUST", 200, ["#ffd246", "#fff0a0"]], ["PINK FIZZ", 200, ["#ff8cd2", "#ffd2f0"]], ["EMBERS", 250, ["#ff965a", "#ffdc5a"]],
-  ["STARDUST", 300, ["#ffffff", "#5ae6ff", "#c8a0ff"]], ["RAINBOW FIZZ", 500, ["#f05050", "#ffa046", "#ffd246", "#82f082", "#5ae6ff", "#c8a0ff"]]];
+// Line colours: a plain colour, or "@name" for an animated one (see lineCol).
+const LINES = [["WHITE LINE", 0, "#ecf0fa"], ["CYAN LINE", 400, "#5ae6ff"], ["PINK LINE", 400, "#ff8cd2"], ["LIME LINE", 500, "#82f082"], ["GOLD LINE", 1500, "#ffd246"], ["RAINBOW LINE", 5000, "@rainbow"],
+  ["RED LINE", 400, "#f05050"], ["ORANGE LINE", 400, "#ffa046"], ["VIOLET LINE", 500, "#b48cff"], ["SILVER LINE", 800, "#c8d2e6"], ["SHADOW LINE", 900, "#3c3450"],
+  ["FIRE LINE", 3000, "@fire"], ["ICE LINE", 2500, "@ice"], ["SPARKLE LINE", 4000, "@sparkle"]];
+const TRAILS = [["BUBBLES", 0, ["#c8ecff"]], ["GOLD DUST", 1000, ["#ffd246", "#fff0a0"]], ["PINK FIZZ", 1000, ["#ff8cd2", "#ffd2f0"]], ["EMBERS", 1500, ["#ff965a", "#ffdc5a"]],
+  ["STARDUST", 2000, ["#ffffff", "#5ae6ff", "#c8a0ff"]], ["RAINBOW FIZZ", 4000, ["#f05050", "#ffa046", "#ffd246", "#82f082", "#5ae6ff", "#c8a0ff"]],
+  ["TOXIC", 1200, ["#82f082", "#c8ff5a", "#46c846"]], ["DEEP BLUE", 1000, ["#3c78ff", "#5ae6ff"]], ["CANDY", 1500, ["#ff8cd2", "#ffffff", "#5ae6ff"]],
+  ["SHADOW", 1500, ["#3c3450", "#6e5a96"]], ["CONFETTI", 3000, ["#f05050", "#ffd246", "#5ae6ff", "#82f082", "#ff8cd2"]], ["GOLDEN RAIN", 5000, ["#ffd246", "#ffffff", "#ffb428"]]];
 const price = (names, list) => names.map((n, i) => [n, list[i]]);
+// Prices are set so the good stuff takes weeks of regular play, not an afternoon.
 const SHOP = [
-  ["CHARACTER", "char", price(DATA.chars, [0, 150, 150, 300, 400, 500, 300, 300, 500, 400, 600, 600])],
-  ["HAT", "hat", price(DATA.hats, [0, 80, 200, 600, 300, 120, 250, 200, 500, 450, 150, 400, 250, 350])],
-  ["BOAT", "boat", price(DATA.boats, [0, 150, 150, 250, 400, 300, 600, 1200])],
-  ["HOOK", "hook", price(DATA.hooks, [0, 200, 200, 300, 250, 400, 500, 350])],
+  ["CHARACTER", "char", price(DATA.chars, [0, 500, 500, 1200, 1500, 1800, 1200, 1000, 2000, 1500, 1800, 1800, 6000, 4000, 3500, 2500, 2500, 3000, 4500, 3000, 6000, 5000])],
+  ["HAT", "hat", price(DATA.hats, [0, 300, 800, 4000, 1500, 400, 1000, 800, 3000, 2500, 500, 2000, 1000, 1800, 600, 1200, 900, 1500, 1800, 1200, 1400, 2500, 3500, 1400, 2200, 7500])],
+  ["BOAT", "boat", price(DATA.boats, [0, 700, 700, 1000, 1800, 1500, 4000, 8000, 1500, 1500, 3000, 2500, 5000, 3500, 4000, 3000, 2000, 4500])],
+  ["PET", "pet", price(DATA.pets, [0, 1500, 1500, 2500, 2500, 3000, 3000, 2000, 2500, 5000, 1800, 7000, 6000, 4500])],
+  ["FLAG", "flag", price(DATA.flags, [0, 600, 1500, 1200, 1500, 3000, 1500, 2000, 2500, 2000, 1500, 4000])],
+  ["HOOK", "hook", price(DATA.hooks, [0, 1200, 900, 1500, 1100, 1800, 2500, 1500, 5000, 3000, 2000, 2500, 1500, 3500])],
   ["LINE", "line", LINES.map(l => [l[0], l[1]])],
   ["BUBBLE TRAIL", "trail", TRAILS.map(l => [l[0], l[1]])],
-  ["FISH FLAIR", "flair", price(DATA.flair, [0, 200, 250, 500, 200, 350, 300, 400, 450, 250])],
+  ["FISH FLAIR", "flair", price(DATA.flair, [0, 1200, 1500, 4000, 1000, 2000, 1800, 3000, 2500, 1200, 1500, 1000, 2000, 1200, 1800, 1500, 3500, 2500, 2000, 6000])],
 ];
 // Titles are earned, never bought. [id, name, how to get it (null = a secret)]
 const ZONE_TITLES = ["BEACH BUM", "KELP KEEPER", "TWILIGHT RANGER", "WRECK DIVER", "ABYSS WALKER", "CRYSTAL SEER", "VENT WARDEN", "BONE COLLECTOR", "TRENCH RAT", "FLOOR MANAGER"];
@@ -193,16 +201,16 @@ function hashStr(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c
 function makeTasks(key, weekly) {
   const r = RNG(hashStr(key));
   const pool = weekly
-    ? [["floor", 0, 1, 400], ["legend", 0, 1, 350], ["species", 0, 20, 300], ["weight", 0, 2500, 300], ["trophy", 0, 3, 300], ["depth", 900, 900, 350]]
-    : [["zone", r.randint(1, 6), 4, 60], ["trophy", 0, 1, 70], ["depth", r.choice([300, 450, 600, 750]), 0, 50], ["score", r.choice([150, 250, 400]), 0, 60],
-       ["bounty", 0, 1, 50], ["set", 0, 1, 50], ["fish", 0, 8, 40]];
+    ? [["floor", 0, 3, 150], ["legend", 0, 3, 150], ["species", 0, 40, 120], ["weight", 0, 6000, 120], ["trophy", 0, 8, 130], ["zone", 8, 10, 140], ["zone", 7, 12, 120]]
+    : [["zone", r.randint(3, 8), 6, 25], ["trophy", 0, 2, 30], ["depth", r.choice([600, 750, 900, 1000]), 0, 25], ["score", r.choice([300, 450, 600]), 0, 30],
+       ["bounty", 0, 2, 20], ["set", 0, 1, 25], ["fish", 0, 15, 15]];
   const out = [];
   for (let n = weekly ? 2 : 3; n > 0; n--) { const t = pool.splice(Math.floor(r.random() * pool.length), 1)[0]; out.push({ k: t[0], a: t[1], n: t[2] || t[1], p: 0, r: t[3], done: false, seen: [] }); }
   return out;
 }
 function tasks() {                                         // today's and this week's, made fresh when the date rolls over
   const day = dayString(), wk = weekString();
-  if (!store.tasks) store.tasks = {};
+  if (!store.tasks || store.tasks.v !== 2) store.tasks = { v: 2 };          // v2: harder tasks, smaller rewards
   if (store.tasks.day !== day) { store.tasks.day = day; store.tasks.d = makeTasks("d" + day, false); }
   if (store.tasks.week !== wk) { store.tasks.week = wk; store.tasks.w = makeTasks("w" + wk, true); }
   return store.tasks;
@@ -210,8 +218,8 @@ function tasks() {                                         // today's and this w
 function taskText(t) {
   const zs = ["SHALLOWS", "KELP", "TWILIGHT", "WRECK", "ABYSS", "CAVES", "VENTS", "BONE YARD", "TRENCH", "FLOOR"];
   return { zone: t.n + " " + zs[t.a] + " FISH", trophy: t.n > 1 ? "LAND " + t.n + " TROPHIES" : "LAND A TROPHY", depth: "DIVE TO " + t.a + " M", score: "ONE DIVE: " + t.a + " LB",
-    bounty: "CATCH THE BOUNTY", set: "EARN A SET BONUS", fish: "CATCH " + t.n + " FISH", floor: "TOUCH THE FLOOR", legend: "LAND A LEGENDARY", species: "CATCH " + t.n + " SPECIES",
-    weight: "HAUL " + t.n + " LB" }[t.k];
+    bounty: "CATCH " + t.n + " BOUNTY FISH", set: "SET BONUS X2 OR MORE", fish: "CATCH " + t.n + " FISH", floor: t.n > 1 ? "FLOOR " + t.n + " TIMES" : "TOUCH THE FLOOR", legend: t.n > 1 ? "LAND " + t.n + " LEGENDS" : "LAND A LEGENDARY", species: "CATCH " + t.n + " SPECIES",
+    weight: "HAUL " + t.n + " LB", }[t.k];
 }
 function progressTasks(dive) {                             // -> [text, coins] for each task finished by this dive
   const T_ = tasks(), done = [];
@@ -223,7 +231,7 @@ function progressTasks(dive) {                             // -> [text, coins] f
     else if (t.k === "depth") t.p = Math.max(t.p, Math.min(t.n, Math.floor(dive.reached)));
     else if (t.k === "score") t.p = Math.max(t.p, Math.min(t.n, dive.total));
     else if (t.k === "bounty") t.p += ids.filter(i => i === dive.bounty).length;
-    else if (t.k === "set") t.p += dive.sets.length ? 1 : 0;
+    else if (t.k === "set") t.p += dive.mult >= 2 ? 1 : 0;
     else if (t.k === "fish") t.p += ids.length;
     else if (t.k === "floor") t.p += dive.bottom ? 1 : 0;
     else if (t.k === "legend") t.p += ids.filter(i => SPEC[i][7]).length;
@@ -605,8 +613,8 @@ function beginHaul() {
   const extra = [];
   if (sets.length) { const long = sets.map(s => s[1]).join("+"), short = sets.map(s => SHORT[s[1]]).join("+"); extra.push([(sets.length === 1 ? long : short.length <= 13 ? short : sets.length + " BONUSES") + " X" + mult, LIME]); }
   if (S.bottom) extra.push(["SEA FLOOR +" + C.BOTTOM_BONUS, CYAN]);
-  const dive = { total, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty };
-  let coins = total > 0 ? Math.round(total / 10) + 5 : 0;
+  const dive = { total, mult, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty };
+  let coins = total > 0 ? Math.floor(total / 25) + 1 : 0;
   if (ids.includes("poop")) coins += 500;
   store.coins += coins;
   if (coins) extra.push(["+" + coins + " COINS", GOLD]);
@@ -741,10 +749,10 @@ function draw() {
   if (a > 0.02) {
     dg.globalCompositeOperation = "source-over"; dg.clearRect(0, 0, LW, LH);
     dg.fillStyle = "rgba(0,0,8," + a + ")"; dg.fillRect(0, 0, LW, LH);
-    const lights = [[Math.floor(S.hx), Math.floor(S.hy - cam), LURES[S.lure][0] === "glow" ? 56 : 42]];
+    const lights = [[Math.floor(S.hx), Math.floor(S.hy - cam), LURES[S.lure][0] === "glow" ? 74 : 58]];
     for (const [, f] of vis) if (C.GLOWS.includes(f.id) || f.tr) {
       const w = fishSize(f)[0], lx = f.id === "angler" ? f.x + (f.v >= 0 ? w - 3 : 3) : f.x + w / 2;
-      lights.push([Math.floor(lx), Math.floor(f.y - cam), ["levi", "ancient", "colossal"].includes(f.id) ? 26 : 13]);
+      lights.push([Math.floor(lx), Math.floor(f.y - cam), SPEC[f.id] && SPEC[f.id][7] ? 30 : 18]);
     }
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
@@ -766,19 +774,28 @@ function draw() {
   (ov || drawHud)();
 }
 
-function lineCol(i) { return LINES[store.eq.line][2] || "hsl(" + Math.floor((T * 140 + i * 14) % 360) + ",90%,66%)"; }
-function angler(x, y, eq) {                                // the boat with whoever is fishing today, and their hat
+function lineCol(i) {
+  const c = LINES[store.eq.line][2];
+  if (c[0] !== "@") return c;
+  if (c === "@rainbow") return "hsl(" + Math.floor((T * 140 + i * 14) % 360) + ",90%,66%)";
+  if (c === "@fire") return "hsl(" + Math.floor(18 + 22 * Math.sin(T * 9 + i * 0.8)) + ",100%," + Math.floor(55 + 10 * Math.sin(T * 13 + i)) + "%)";
+  if (c === "@ice") return (i + Math.floor(T * 6)) % 4 ? "#bfeaff" : "#ffffff";
+  return (i * 7 + Math.floor(T * 10)) % 9 === 0 ? "#ffd246" : (i + Math.floor(T * 4)) % 5 === 0 ? "#ffffff" : "#a0a8c8";      // sparkle
+}
+function angler(x, y, eq) {                                // the boat, whoever is fishing today, their hat, pet and flag
   const [cw] = sprSize("char" + eq.char);
+  if (eq.flag) { rect("#785432", x + 2, y - 17, 1, 17); const wav = Math.floor(T * 3) % 2; spr("flag" + eq.flag, x + 3, y - 17 + wav, false); }
   spr("char" + eq.char, x + 10, y - 12);
   if (eq.hat) { const [hw, hh] = sprSize("hat" + eq.hat); spr("hat" + eq.hat, x + 10 + Math.floor((cw - hw) / 2) + 1, y - 12 - hh + 3); }
+  if (eq.pet) { const [, ph] = sprSize("pet" + eq.pet); spr("pet" + eq.pet, x + 22, y - ph + 2 + (Math.floor(T * 2) % 2)); }
   spr("boat" + eq.boat, x, y);
 }
 function flair(w, h) {                                     // whatever the fish are wearing; drawn in the fish's own space
   const i = store.eq.flair;
   if (!i) return;
-  const [fw, fh] = sprSize("flair" + i), face = [1, 6, 9].includes(i);
-  if (face) spr("flair" + i, w - fw - 1, Math.floor(h / 2) - 2);
-  else if (i === 4) spr("flair" + i, w - fw - 5, h - 3);
+  const [fw, fh] = sprSize("flair" + i), pos = DATA.flairPos[i];
+  if (pos === "face") spr("flair" + i, w - fw - 1, Math.floor(h / 2) - 2);
+  else if (pos === "chin") spr("flair" + i, w - fw - 5, h - 3);
   else spr("flair" + i, w - fw - 3, -fh + 2);
 }
 const KEYS = window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches;      // a computer, not a touch screen
@@ -974,42 +991,54 @@ function shopAct() {                                       // buy or wear the se
   else play("miss");
   saveStore();
 }
+const PER_PAGE = 20;
+function shopPreview(kind, i, x, y, owned) {               // a small picture of one item, fitted into a 22 x 19 cell
+  const cx = x + 11, cy = y + 9, t = T;
+  g.save(); if (!owned) g.globalAlpha = 0.45;
+  const fit = (name, maxw, maxh, k) => { const a = DATA.atlas[name]; const s = Math.min(k || 2, maxw / a[2], maxh / a[3]); const w = Math.round(a[2] * s), h = Math.round(a[3] * s); g.drawImage(atlas, a[0], a[1], a[2], a[3], cx - (w >> 1), cy - (h >> 1), w, h); };
+  if (kind === "char") fit("char" + i, 18, 16, 1);
+  else if (kind === "boat") fit("boat" + i, 20, 10, 1);
+  else if (["hat", "pet", "flag", "hook", "flair"].includes(kind)) { if (i) fit(kind + i, 18, 15, 2); else text("-", cx, cy, 1, GREY, "center", null); }
+  else if (kind === "line") { const keep = store.eq.line; store.eq.line = i; for (let q = 0; q < 13; q++) rect(lineCol(q), cx + Math.round(Math.sin(q * 0.7) * 2), y + 3 + q, 1, 1); store.eq.line = keep; }
+  else if (kind === "trail") { const tc = TRAILS[i][2]; for (let q = 0; q < 7; q++) rect(tc[q % tc.length], x + 4 + (q * 7) % 15, y + 3 + (q * 5 + Math.floor(t * 6)) % 13, q % 2 ? 2 : 1, q % 2 ? 2 : 1); }
+  else text(owned ? "*" : "?", cx, cy, 1, owned ? "#c8a0ff" : GREY, "center", null);
+  g.restore();
+}
 function drawShop() {
   rect("#080e28", 0, 0, LW, LH);
   g.save(); g.translate(OX, 0);
-  const [cname, kind, items] = CATS[S.shopCat], t = T;
+  const [cname, kind, items] = CATS[S.shopCat], pages = Math.ceil(items.length / PER_PAGE), page = Math.floor(S.shopSel / PER_PAGE);
   box(2, 2, 16, 13, ORANGE); text("<", 10, 8, 1, ORANGE, "center", null);
   box(102, 2, 16, 13, ORANGE); text(">", 110, 8, 1, ORANGE, "center", null);
   text(cname, 60, 8, 1, GOLD, "center", null);
-  text(store.coins + " COINS", 60, 21, 1, GOLD, "center", null);
-  items.forEach((it, i) => {
-    const x = 4 + (i % 4) * 28, y = 28 + Math.floor(i / 4) * 20, [owned, worn] = shopState(S.shopCat, i);
-    rect(owned ? "#1e285a" : "#141a36", x, y, 27, 19);
-    g.fillStyle = i === S.shopSel ? WHITE : worn ? GOLD : INK; g.fillRect(x, y, 27, 1); g.fillRect(x, y + 18, 27, 1); g.fillRect(x, y, 1, 19); g.fillRect(x + 26, y, 1, 19);
-    const cx = x + 13, cy = y + 9;
-    g.save(); if (!owned) g.globalAlpha = 0.5;
-    if (kind === "char") { const [w, h] = sprSize("char" + i); spr("char" + i, cx - (w >> 1), cy - (h >> 1) + 1); }
-    else if (kind === "hat") { if (i) { const [w, h] = sprSize("hat" + i); spr("hat" + i, cx - (w >> 1), cy - (h >> 1)); } else text("-", cx, cy, 1, GREY, "center", null); }
-    else if (kind === "boat") { const a = DATA.atlas["boat" + i]; g.drawImage(atlas, a[0], a[1], a[2], a[3], x + 2, cy - 4, 23, Math.round(a[3] * 23 / a[2])); }
-    else if (kind === "hook") { const a = DATA.atlas["hook" + i]; g.drawImage(atlas, a[0], a[1], a[2], a[3], cx - a[2], cy - a[3], a[2] * 2, a[3] * 2); }
-    else if (kind === "line") { for (let q = 0; q < 13; q++) rect(LINES[i][2] || "hsl(" + ((t * 140 + q * 28) % 360) + ",90%,66%)", cx + Math.round(Math.sin(q * 0.7) * 2), y + 3 + q, 1, 1); }
-    else if (kind === "trail") { const tc = TRAILS[i][2]; for (let q = 0; q < 7; q++) rect(tc[q % tc.length], x + 5 + (q * 7) % 18, y + 3 + (q * 5 + Math.floor(t * 6)) % 13, q % 2 ? 2 : 1, q % 2 ? 2 : 1); }
-    else if (kind === "flair") { if (i) { const a = DATA.atlas["flair" + i]; g.drawImage(atlas, a[0], a[1], a[2], a[3], cx - a[2], cy - a[3], a[2] * 2, a[3] * 2); } else text("-", cx, cy, 1, GREY, "center", null); }
-    else text(owned ? "*" : "?", cx, cy, 1, owned ? "#c8a0ff" : GREY, "center", null);
-    g.restore();
-  });
+  const ownedN = items.filter((it, i) => shopState(S.shopCat, i)[0]).length;
+  text(store.coins + " COINS", 4, 21, 1, GOLD, "left", null);
+  text(ownedN + "/" + items.length, 116, 21, 1, GREY, "right", null);
+  for (let k = 0; k < PER_PAGE; k++) {
+    const i = page * PER_PAGE + k;
+    if (i >= items.length) break;
+    const x = 2 + (k % 5) * 23, y = 27 + Math.floor(k / 5) * 20, [owned, worn] = shopState(S.shopCat, i);
+    rect(owned ? "#1e285a" : "#141a36", x, y, 22, 19);
+    g.fillStyle = i === S.shopSel ? WHITE : worn ? GOLD : INK; g.fillRect(x, y, 22, 1); g.fillRect(x, y + 18, 22, 1); g.fillRect(x, y, 1, 19); g.fillRect(x + 21, y, 1, 19);
+    shopPreview(kind, i, x, y, owned);
+  }
+  if (pages > 1) {
+    box(28, 108, 16, 11, CYAN); text("<", 36, 113, 1, CYAN, "center", null);
+    text((page + 1) + "/" + pages, 60, 113, 1, WHITE, "center", null);
+    box(76, 108, 16, 11, CYAN); text(">", 84, 113, 1, CYAN, "center", null);
+  }
   const i = Math.min(S.shopSel, items.length - 1), [owned, worn] = shopState(S.shopCat, i), cost = items[i][1];
-  box(2, 131, 116, 30, ORANGE);
+  box(2, 122, 116, 28, ORANGE);
   if (kind === "title") {
-    text(owned || TITLES[i][2] ? items[i][0] : "???", 60, 139, 1, owned ? "#c8a0ff" : GREY, "center", null);
-    text(owned ? "EARNED" : TITLES[i][2] || "A SECRET", 60, 151, 1, owned ? LIME : GREY, "center", null);
+    text(owned || TITLES[i][2] ? items[i][0] : "???", 60, 129, 1, owned ? "#c8a0ff" : GREY, "center", null);
+    text(owned ? "EARNED" : TITLES[i][2] || "A SECRET", 60, 141, 1, owned ? LIME : GREY, "center", null);
   } else {
-    text(items[i][0], 60, 139, 1, WHITE, "center", null);
-    text(owned ? "OWNED" : cost + " COINS", 60, 151, 1, owned ? LIME : GOLD, "center", null);
+    text(items[i][0], 60, 129, 1, WHITE, "center", null);
+    text(owned ? "OWNED" : cost + " COINS", 60, 141, 1, owned ? LIME : GOLD, "center", null);
   }
   const lab = worn ? "WEARING" : owned ? (kind === "title" ? "USE TITLE" : "PUT ON") : kind === "title" ? "LOCKED" : store.coins >= cost ? "BUY" : "NEED " + (cost - store.coins) + " MORE";
   const bc = worn || (!owned && (kind === "title" || store.coins < cost)) ? GREY : owned ? CYAN : GOLD;
-  box(24, 164, 72, 15, bc); text(lab, 60, 172, 1, bc, "center", null);
+  box(18, 154, 84, 15, bc); text(lab, 60, 162, 1, bc, "center", null);
   text("TAP HERE TO CLOSE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -1094,10 +1123,11 @@ function overlayTap(lx, ly) {
     if (ly >= 16 && ly < 34) { S.tab = lx < 60 ? 0 : 1; S.scoreSel = -1; play("tick"); }
     else if (ly >= 35 && ly < 146) { const i = Math.floor((ly - 35) / 11), rows = (S.tab === 0 ? LB.today : LB.all) || []; S.scoreSel = i < rows.length ? i : -1; play("tick"); }
   } else if (S.overlay === "shop") {
-    const d = arrows(CATS.length), n = CATS[S.shopCat][2].length;
+    const d = arrows(CATS.length), n = CATS[S.shopCat][2].length, pages = Math.ceil(n / PER_PAGE), page = Math.floor(S.shopSel / PER_PAGE);
     if (d) { S.shopCat = (S.shopCat + d) % CATS.length; S.shopSel = 0; }
-    else if (ly >= 28 && ly < 128) { const i = Math.floor((ly - 28) / 20) * 4 + clamp(Math.floor((lx - 4) / 28), 0, 3); if (i < n) { if (i === S.shopSel) shopAct(); else { S.shopSel = i; play("tick"); } } }
-    else if (ly >= 162 && ly < 182) shopAct();
+    else if (ly >= 27 && ly < 107) { const i = page * PER_PAGE + Math.floor((ly - 27) / 20) * 5 + clamp(Math.floor((lx - 2) / 23), 0, 4); if (i < n) { if (i === S.shopSel) shopAct(); else { S.shopSel = i; play("tick"); } } }
+    else if (ly >= 106 && ly < 121 && pages > 1 && (lx < 48 || lx > 72)) { S.shopSel = ((page + (lx > 72 ? 1 : pages - 1)) % pages) * PER_PAGE; play("tick"); }
+    else if (ly >= 152 && ly < 172) shopAct();
   }
 }
 canvas.addEventListener("pointerdown", e => {
