@@ -935,7 +935,11 @@ function drawBoss() {                                        // the arena, the S
   for (let i = 0; i < 14; i++) rect(lerpCol([18, 14, 40], [8, 6, 20], i / 13), 0, i * 15, LW, 15);       // the deep water around it
   for (let k = 0; k < Math.round(30 * LW / UW); k++) if ((k * 7 + Math.floor(t * 2)) % 9) rect("#3a3060", (k * 53) % LW, (k * 37 + Math.floor(t * 4 * (1 + k % 3))) % 180, 1, 1);   // drifting specks
   const top = b.bodyY, BW = Math.min(LW * 1.2, 190), RX = BW / 2, RY = 200 - top;   // the body: a horned, spiked hulk rising out of the floor, the same size on any screen
-  const edge = a => [cx + Math.cos(a) * RX, 200 - Math.sin(a) * RY];                     // a point on its outline (a = 0 right, PI/2 top, PI left)
+  // Its outline, one side mirrored: a lumpy skull, a neck, hunched shoulders, then arms sloping down to the claws.
+  const PROF = [[0, 1], [0.1, 0.96], [0.2, 1.01], [0.3, 0.94], [0.38, 0.8], [0.44, 0.64], [0.52, 0.6], [0.6, 0.7], [0.68, 0.74], [0.76, 0.66], [0.84, 0.46], [0.92, 0.24], [1, 0.02]];
+  const shape = u => { u = Math.min(1, Math.abs(u)); let i = 1; while (i < PROF.length - 1 && PROF[i][0] < u) i++; const [u0, h0] = PROF[i - 1], [u1, h1] = PROF[i], k = (u - u0) / (u1 - u0), e = (1 - Math.cos(k * Math.PI)) / 2; return h0 + (h1 - h0) * e; };
+  const olY = x => 200 - RY * shape((x - cx) / RX) + Math.round(Math.sin(x * 0.7) * 0.8 + Math.sin(x * 0.23) * 1.2);
+  const edgeAt = u => { const x = cx + u * RX, y = olY(x), d = (olY(x + 2) - olY(x - 2)) / 4, n = Math.hypot(1, d); return [x, y, d / n, -1 / n]; };   // a point on the outline and its outward normal
   if (b.phase > 0) {
     [[-1, 0.9], [1, 1.1], [-1, 1.35]].forEach(([sd, k], i) => {                          // tentacles writhing up from behind it
       for (let j = 0; j < 16; j++) {
@@ -943,23 +947,27 @@ function drawBoss() {                                        // the arena, the S
         disc(j % 3 ? "#1c1430" : "#2a1e44", x, y, Math.max(1, Math.round(7 - u * 6)));
       }
     });
-    for (let k = 0; k < 9; k++) {                                                         // spikes along its back
-      const a = Math.PI * (0.18 + k * 0.08), [x, y] = edge(a), nx = Math.cos(a), ny = -Math.sin(a), L = 9 + (k % 2) * 6 + (k === 4 ? 6 : 0);
+    for (const [u, L] of [[-0.86, 8], [-0.72, 12], [-0.62, 15], [-0.16, 10], [0, 14], [0.16, 10], [0.62, 15], [0.72, 12], [0.86, 8]]) {   // spikes on its skull and shoulders
+      const [x, y, nx, ny] = edgeAt(u);
       poly("#3c2c5c", [[x - ny * 5, y + nx * 5], [x + nx * L, y + ny * L], [x + ny * 5, y - nx * 5]]);
       line("#6a5a92", x - ny * 4, y + nx * 4, x + nx * L, y + ny * L);
       poly("#b4a4d4", [[x + nx * (L - 4) - ny, y + ny * (L - 4) + nx], [x + nx * L, y + ny * L], [x + nx * (L - 4) + ny, y + ny * (L - 4) - nx]]);
     }
     [-1, 1].forEach(sd => {                                                               // two curling horns
-      const [hx0, hy0] = edge(Math.PI / 2 - sd * 0.62);
+      const [hx0, hy0] = edgeAt(sd * 0.33);
       for (let j = 0; j < 14; j++) { const u = j / 13, x = hx0 + sd * (j * 2.2 - u * u * 10), y = hy0 - j * 2.4 + u * u * 4; disc(j % 3 === 2 ? "#a89c84" : "#d8ccb0", x, y, Math.max(1, Math.round(5 - u * 4))); }
     });
-    ell(SL_DARK, cx - RX - 2, top - 2, BW + 4, RY * 2 + 4);
-    ell(SL_BODY, cx - RX, top, BW, RY * 2);
-    for (let k = 0; k < 9; k++) { const [rx, ry] = edge(Math.PI * (0.08 + k * 0.105)); ell(SL_LIGHT, rx - 5, ry + 4, 10, 4); }     // crust
-    for (let k = 0; k < 6; k++) { const x = cx + ((k * 47) % 90 - 45) * BW / 120, y = top + 12 + (k * 29) % Math.max(8, RY - 30); disc("#5a4a7e", x, y, 2); rect("#2a1e44", x, y, 1, 1); }   // barnacles
+    const pts = [[cx - RX - 2, 201]];
+    for (let x = Math.floor(cx - RX); x <= cx + RX; x += 2) pts.push([x, olY(x)]);
+    pts.push([cx + RX + 2, 201]);
+    poly(SL_DARK, pts.map(([x, y]) => [x + (x < cx ? -2 : 2), y - 2]));                // a dark rim, then the hide
+    poly(SL_BODY, pts);
+    for (let x = Math.floor(cx - RX); x <= cx + RX; x += 2) rect("#2e2248", x, olY(x) + 1, 2, 2);                       // light catching the top edge
+    for (let k = 0; k < 10; k++) { const [rx, ry] = edgeAt(-0.9 + k * 0.2); ell(SL_LIGHT, rx - 4, ry + 5, 8, 3); }     // crust
+    for (let k = 0; k < 6; k++) { const x = cx + ((k * 47) % 90 - 45) * BW / 120, y = top + 12 + (k * 29) % Math.max(8, RY - 30); if (y > olY(x) + 4) { disc("#5a4a7e", x, y, 2); rect("#2a1e44", x, y, 1, 1); } }   // barnacles
     if (b.phase >= 2) {                                                                   // veins that glow once it is angry
       g.globalAlpha = 0.45 + 0.35 * Math.sin(t * (b.phase >= 3 ? 9 : 4));
-      [[-0.32, 0], [0.3, 1], [-0.1, 2], [0.12, 3]].forEach(([fx, i]) => { let x = cx + fx * BW, y = top + 8 + i * 3; for (let j = 0; j < 7; j++) { const nx = x + ((i + j) % 2 ? 4 : -3), ny = y + 5; line("#ff3c8c", x, y, nx, ny); x = nx; y = ny; } });
+      [[-0.32, 0], [0.3, 1], [-0.1, 2], [0.12, 3]].forEach(([fx, i]) => { let x = cx + fx * BW, y = olY(x) + 5 + i * 3; for (let j = 0; j < 7; j++) { const nx = x + ((i + j) % 2 ? 4 : -3), ny = y + 5; line("#ff3c8c", x, y, nx, ny); x = nx; y = ny; } });
       g.globalAlpha = 1;
     }
     const my = Math.min(190, top + RY * 0.68), mw = Math.round(BW * 0.26), open = b.phase < 2 ? 0 : b.lunge > 0 ? 12 : 5;   // the mouth, never quite shut
