@@ -906,8 +906,12 @@ function fireworks(y0, cols) {                             // bursts over the bo
 // A boss arena under the sea floor. BOSS holds the fight (mock-up data for now).
 let BOSS = null;
 const SL_BODY = "#241a3a", SL_DARK = "#140e24", SL_LIGHT = "#3c2c5a", SL_TENT = "#5a3c7a", SL_SUCK = "#c8a0e6";
-function slEye(x, y, r, open, hx, hy) {                     // one of its eyes: closed is a seam, open is gold with a slit that follows the hook
+function slEye(x, y, r, open, hx, hy, cx, phase) {          // one of its eyes: closed is a seam, open is gold with a slit that follows the hook
+  if (open >= 0.1 && phase >= 3) { g.globalAlpha = 0.35; disc("#ff3c3c", x, y, r + 5); g.globalAlpha = 1; }
   ell(SL_DARK, x - r - 3, y - Math.round(r * 0.65) - 2, r * 2 + 6, Math.round(r * 1.3) + 4);
+  const sl = Math.abs(x - cx) < 3 ? 0 : x < cx ? 1 : -1, by = y - Math.round(r * 0.65) - 3, bw = r + 4;   // a heavy brow, slanted into a scowl
+  if (sl) poly("#08040e", [[x - bw, by - 3 - sl * 3], [x + bw, by - 3 + sl * 3], [x + bw, by + 1 + sl * 3], [x - bw, by + 1 - sl * 3]]);
+  else poly("#08040e", [[x - bw, by - 6], [x, by], [x + bw, by - 6], [x + bw, by - 2], [x, by + 4], [x - bw, by - 2]]);
   if (open < 0.1) { for (let k = -r; k <= r; k++) rect("#5a4a7e", x + k, y + Math.round(2 - k * k / (r * 4)), 1, 1); return; }
   const h = Math.max(2, Math.round(r * 1.3 * open));
   ell("#463e6e", x - r - 1, y - (h >> 1) - 1, r * 2 + 2, h + 2);
@@ -930,18 +934,50 @@ function drawBoss() {                                        // the arena, the S
   g.save(); g.translate(shake, 0);
   for (let i = 0; i < 14; i++) rect(lerpCol([18, 14, 40], [8, 6, 20], i / 13), 0, i * 15, LW, 15);       // the deep water around it
   for (let k = 0; k < Math.round(30 * LW / UW); k++) if ((k * 7 + Math.floor(t * 2)) % 9) rect("#3a3060", (k * 53) % LW, (k * 37 + Math.floor(t * 4 * (1 + k % 3))) % 180, 1, 1);   // drifting specks
-  const top = b.bodyY, BW = Math.min(LW * 1.2, 190);       // the body: a crusted dome rising out of the floor, the same size on any screen
+  const top = b.bodyY, BW = Math.min(LW * 1.2, 190), RX = BW / 2, RY = 200 - top;   // the body: a horned, spiked hulk rising out of the floor, the same size on any screen
+  const edge = a => [cx + Math.cos(a) * RX, 200 - Math.sin(a) * RY];                     // a point on its outline (a = 0 right, PI/2 top, PI left)
   if (b.phase > 0) {
-    ell(SL_DARK, cx - BW * 0.52, top - 2, BW * 1.04, (200 - top) * 2 + 4);
-    ell(SL_BODY, cx - BW * 0.5, top, BW, (200 - top) * 2);
-    for (let k = 0; k < 9; k++) { const a = Math.PI * (0.08 + k * 0.105), rx = cx + Math.cos(a) * BW * 0.46, ry = top + (200 - top) * (1 - Math.sin(a)) * 0.9 + 6; ell(SL_LIGHT, rx - 5, ry - 2, 10, 4); }    // crust
-    for (let k = 0; k < 14; k++) { const x = cx + ((k * 37) % 100 - 50) * BW / 144, y = top + 14 + (k * 23) % Math.max(8, 190 - top - 14); if ((Math.floor(t * 2) + k) % 5) rect(k % 2 ? "#5ae6ff" : "#c8a0ff", x, y, 1, 1); }   // its own lights
-    if (b.phase >= 2) {                                      // a mouth, once it is angry
-      const my = Math.min(192, top + (200 - top) * 0.72), mw = Math.round(BW * 0.24), open = b.lunge > 0 ? 8 : 2;
-      ell("#0a0612", cx - mw, my - open, mw * 2, open * 2);
-      for (let k = -mw + 4; k < mw - 2; k += 6) { poly("#e6e0d0", [[cx + k, my - open], [cx + k + 2, my - open + 4], [cx + k + 4, my - open]]); poly("#e6e0d0", [[cx + k + 3, my + open], [cx + k + 5, my + open - 4], [cx + k + 7, my + open]]); }
+    [[-1, 0.9], [1, 1.1], [-1, 1.35]].forEach(([sd, k], i) => {                          // tentacles writhing up from behind it
+      for (let j = 0; j < 16; j++) {
+        const u = j / 15, x = cx + sd * (RX * k - j * 1.5) + Math.sin(t * 1.6 + j * 0.5 + i * 2) * (2 + u * 9), y = 196 - j * (RY * 0.07 + 3);
+        disc(j % 3 ? "#1c1430" : "#2a1e44", x, y, Math.max(1, Math.round(7 - u * 6)));
+      }
+    });
+    for (let k = 0; k < 9; k++) {                                                         // spikes along its back
+      const a = Math.PI * (0.18 + k * 0.08), [x, y] = edge(a), nx = Math.cos(a), ny = -Math.sin(a), L = 9 + (k % 2) * 6 + (k === 4 ? 6 : 0);
+      poly("#3c2c5c", [[x - ny * 5, y + nx * 5], [x + nx * L, y + ny * L], [x + ny * 5, y - nx * 5]]);
+      line("#6a5a92", x - ny * 4, y + nx * 4, x + nx * L, y + ny * L);
+      poly("#b4a4d4", [[x + nx * (L - 4) - ny, y + ny * (L - 4) + nx], [x + nx * L, y + ny * L], [x + nx * (L - 4) + ny, y + ny * (L - 4) - nx]]);
     }
-    b.eyes.forEach(e => slEye(cx + e.x, e.y, e.r, e.open, b.hx, b.hy));
+    [-1, 1].forEach(sd => {                                                               // two curling horns
+      const [hx0, hy0] = edge(Math.PI / 2 - sd * 0.62);
+      for (let j = 0; j < 14; j++) { const u = j / 13, x = hx0 + sd * (j * 2.2 - u * u * 10), y = hy0 - j * 2.4 + u * u * 4; disc(j % 3 === 2 ? "#a89c84" : "#d8ccb0", x, y, Math.max(1, Math.round(5 - u * 4))); }
+    });
+    ell(SL_DARK, cx - RX - 2, top - 2, BW + 4, RY * 2 + 4);
+    ell(SL_BODY, cx - RX, top, BW, RY * 2);
+    for (let k = 0; k < 9; k++) { const [rx, ry] = edge(Math.PI * (0.08 + k * 0.105)); ell(SL_LIGHT, rx - 5, ry + 4, 10, 4); }     // crust
+    for (let k = 0; k < 6; k++) { const x = cx + ((k * 47) % 90 - 45) * BW / 120, y = top + 12 + (k * 29) % Math.max(8, RY - 30); disc("#5a4a7e", x, y, 2); rect("#2a1e44", x, y, 1, 1); }   // barnacles
+    if (b.phase >= 2) {                                                                   // veins that glow once it is angry
+      g.globalAlpha = 0.45 + 0.35 * Math.sin(t * (b.phase >= 3 ? 9 : 4));
+      [[-0.32, 0], [0.3, 1], [-0.1, 2], [0.12, 3]].forEach(([fx, i]) => { let x = cx + fx * BW, y = top + 8 + i * 3; for (let j = 0; j < 7; j++) { const nx = x + ((i + j) % 2 ? 4 : -3), ny = y + 5; line("#ff3c8c", x, y, nx, ny); x = nx; y = ny; } });
+      g.globalAlpha = 1;
+    }
+    const my = Math.min(190, top + RY * 0.68), mw = Math.round(BW * 0.26), open = b.phase < 2 ? 0 : b.lunge > 0 ? 12 : 5;   // the mouth, never quite shut
+    if (open) { ell("#0a0612", cx - mw, my - open, mw * 2, open * 2); g.globalAlpha = 0.5 + 0.3 * Math.sin(t * 5); ell("#8c1e3c", cx - mw * 0.6, my - open * 0.5, mw * 1.2, open); g.globalAlpha = 1; }
+    else for (let k = -mw; k <= mw; k++) rect("#0a0612", cx + k, my + Math.round(Math.abs(Math.sin(k * 0.5)) * 2), 1, 2);
+    for (let k = -mw + 4; k < mw - 3; k += 6) { poly("#e6e0d0", [[cx + k, my - open], [cx + k + 2, my - open + 4], [cx + k + 4, my - open]]); poly("#e6e0d0", [[cx + k + 3, my + open + 1], [cx + k + 5, my + open - 3], [cx + k + 7, my + open + 1]]); }
+    [-1, 1].forEach(sd => {                                                               // big fangs at the corners, showing even when shut
+      const fx = cx + sd * (mw - 5);
+      poly("#f0eadc", [[fx - 3, my - open], [fx, my - open + 9], [fx + 3, my - open]]);
+      poly("#f0eadc", [[fx - 2 + sd * 6, my + open + 2], [fx + sd * 6, my + open - 7], [fx + 2 + sd * 6, my + open + 2]]);
+    });
+    if (b.lunge > 0) for (let k = 0; k < 3; k++) rect("#a0c8dc", cx - mw + 8 + k * mw * 0.7, my + open, 1, 3 + Math.round((t * 8 + k * 3) % 6));   // drool
+    [-1, 1].forEach(sd => {                                                               // claws gripping the floor
+      const kx = cx + sd * (RX - 4);
+      ell(SL_BODY, kx - 10, 178, 20, 14); ell(SL_DARK, kx - 10, 186, 20, 6);
+      for (let j = 0; j < 3; j++) { const x = kx - sd * 6 + sd * j * 6; poly("#d8ccb0", [[x - 2, 186], [x + sd * 4, 194], [x + 2, 186]]); }
+    });
+    b.eyes.forEach(e => slEye(cx + e.x, e.y, e.r, e.open, b.hx, b.hy, cx, b.phase));
   }
   for (let x = 0; x < LW; x += 1) { const h = Math.round(4 + 3 * Math.sin(x * 0.21) + 2 * Math.sin(x * 0.07 + 2)); rect("#10102a", x, 194 - h, 1, h + 6); }   // the floor
   if (b.crack) {                                             // the crack it leaves behind: faint, and off to one side
