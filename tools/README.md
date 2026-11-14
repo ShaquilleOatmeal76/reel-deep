@@ -29,3 +29,13 @@ every time for the same inputs.
 
 The tests also need `pip install playwright` and `playwright install chromium`. They expect the game at a fixed
 path near the top of each file; change that path before running them.
+
+## How hard is the Sleeper?
+
+`tests/test_sleeper.py` fights the Sleeper hundreds of times with two bots and prints their win rates, on phone and
+widescreen. The careful bot reads every warning and reacts in 0.12 s; the sloppy one reacts in 0.4 s and ignores the
+warnings and the gaps in the shockwaves. Serve the game folder first (`python3 -m http.server 8765 --bind 127.0.0.1`),
+then run `python3 tests/test_sleeper.py 100`. The fight's numbers live in `SL_TUNE` in `game.js`; you can try others
+without editing anything by passing them as JSON, for example `python3 tests/test_sleeper.py 100 '{"ring": 3.2}'`.
+As shipped: careful bot about 30-36%, sloppy bot about 2-3%.
+

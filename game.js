@@ -166,9 +166,9 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   own: { char: [0], hat: [0], boat: [0], hook: [0], line: [0], trail: [0], flair: [0], pet: [0], flag: [0] },
   eq: { char: 0, hat: 0, boat: 0, hook: 0, line: 0, trail: 0, flair: 0, pet: 0, flag: 0, title: "rookie" }, tasks: null,
   dives: 0,                                              // dives finished, for things that open up with experience
-  sec: { found: [], bottles: [], lastBottle: 0, konami: 0, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
+  sec: { found: [], bottles: [], lastBottle: 0, konami: 0, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "",
-    stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0 } };   // the Rusty Hook
+    stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} } };   // the Rusty Hook
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
   store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}) });
@@ -202,6 +202,7 @@ const SECRETS = [
   ["fools", "APRIL FOOLS", "EVERYTHING BACKWARDS", null],
   ["july4", "FOURTH OF JULY", "FIREWORKS OVER THE BOAT", null],
   ["october", "OCTOBER", "PUMPKINS AND GHOSTS", null],
+  ["sleeper", "THE THING BELOW", "WOKE UP THE SLEEPER", null],
 ];
 function findSecret(id) {                                  // -> true the first time; puts a note on screen and gives the reward
   if (store.sec.found.includes(id)) return false;
@@ -306,7 +307,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat([["floor", "BOTTOM FEEDER", "TOUCH THE SEA FLOOR"], ["legends", "LEGEND HUNTER", "LOG EVERY LEGENDARY"], ["trophies", "TROPHY ROOM", "A TROPHY OF EVERY FISH"],
     ["all", "COMPLETIONIST", "LOG EVERY SPECIES"], ["baiter", "MASTER BAITER", null], ["mythic", "HOLY CRAP", null], ["soggy", "SOGGY", null],
     ["roller", "HIGH ROLLER", "1,000 TAVERN CHIPS"], ["shark", "CARD SHARK", "WIN 25 HANDS OF 21"], ["derbyking", "DERBY KING", "WIN 10 DERBY BETS"],
-    ["longshot", "LONG SHOT", "WIN A X8 DIVE BET"], ["regular", "REGULAR", "TAKE FREE CHIPS 14 DAYS"]]);
+    ["longshot", "LONG SHOT", "WIN A X8 DIVE BET"], ["regular", "REGULAR", "TAKE FREE CHIPS 14 DAYS"],
+    ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"]]);
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy");   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
 function award(id) { if (store.titles.includes(id)) return false; store.titles.push(id); return true; }
@@ -552,7 +554,10 @@ function splash(x, y, n, col) { for (let k = 0; k < (n || 8); k++) S.bubbles.pus
 function say(key, txt, col, secs) { if (!S.said.has(key)) { S.said.add(key); S.popups.push([txt, secs || 2.2, col || CYAN]); } }
 
 function pulse() {                                       // scatter everything near the hook
+  if (S.state === "boss") { bossPulse(); return; }
   if (!["down", "rise"].includes(S.state) || S.pulses <= 0) return;
+  if (!S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; startBoss(false); return; }   // knock on the eye with an empty hook
+  if (store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) say("crack", "THE CRACK HUMS. NOT YET.", "#c8a0ff", 2.6);
   S.pulses--; S.ring = 0; S.immune = Math.max(S.immune, 0.5);
   play("pulse");
   for (const [i, f] of visible()) {
@@ -632,6 +637,7 @@ function darknessAt(m) {
   return d[d.length - 1][1];
 }
 function update(dt) {
+  if (S.state === "boss" && BOSS) { bossUpdate(dt); S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt); return; }
   S.immune = Math.max(0, S.immune - dt); S.flash = Math.max(0, S.flash - dt);
   if (S.ring !== null) { S.ring += dt; if (S.ring > 0.5) S.ring = null; }
   for (const b of S.bubbles) { b[0] += b[2] * dt; b[1] += b[3] * dt; b[3] += b[6] * dt; b[4] -= dt; }
@@ -801,6 +807,7 @@ function beginHaul() {
   const total = Math.round(base * mult) + (S.bottom ? C.BOTTOM_BONUS : 0);
   const extra = [];
   if (sets.length) { const long = sets.map(s => s[1]).join("+"), short = sets.map(s => SHORT[s[1]]).join("+"); extra.push([(sets.length === 1 ? long : short.length <= 13 ? short : sets.length + " BONUSES") + " X" + mult, LIME]); }
+  if (S.bossWon) extra.push(["THE SLEEPER SLEEPS", "#c8a0ff"]);
   if (S.bottom) extra.push(["SEA FLOOR +" + C.BOTTOM_BONUS, CYAN]);
   const dive = { total, mult, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty };
   let coins = total > 0 ? Math.floor(total / 25) + 1 : 0;
@@ -902,6 +909,258 @@ function fireworks(y0, cols) {                             // bursts over the bo
   }
 }
 
+// ------------------------------------------------------------- the Sleeper
+// A boss arena under the sea floor. BOSS holds the fight (mock-up data for now).
+let BOSS = null;
+const SL_BODY = "#241a3a", SL_DARK = "#140e24", SL_LIGHT = "#3c2c5a", SL_TENT = "#5a3c7a", SL_SUCK = "#c8a0e6";
+function slEye(x, y, r, open, hx, hy, cx, phase) {          // one of its eyes: closed is a seam, open is gold with a slit that follows the hook
+  if (open >= 0.1 && phase >= 3) { g.globalAlpha = 0.35; disc("#ff3c3c", x, y, r + 5); g.globalAlpha = 1; }
+  ell(SL_DARK, x - r - 3, y - Math.round(r * 0.65) - 2, r * 2 + 6, Math.round(r * 1.3) + 4);
+  const sl = Math.abs(x - cx) < 3 ? 0 : x < cx ? 1 : -1, by = y - Math.round(r * 0.65) - 3, bw = r + 4;   // a heavy brow, slanted into a scowl
+  if (sl) poly("#08040e", [[x - bw, by - 3 - sl * 3], [x + bw, by - 3 + sl * 3], [x + bw, by + 1 + sl * 3], [x - bw, by + 1 - sl * 3]]);
+  else poly("#08040e", [[x - bw, by - 6], [x, by], [x + bw, by - 6], [x + bw, by - 2], [x, by + 4], [x - bw, by - 2]]);
+  if (open < 0.1) { for (let k = -r; k <= r; k++) rect("#5a4a7e", x + k, y + Math.round(2 - k * k / (r * 4)), 1, 1); return; }
+  const h = Math.max(2, Math.round(r * 1.3 * open));
+  ell("#463e6e", x - r - 1, y - (h >> 1) - 1, r * 2 + 2, h + 2);
+  ell("#fad246", x - r, y - (h >> 1), r * 2, h);
+  ell("#ffeea0", x - r + 2, y - (h >> 1) + 1, Math.round(r * 0.8), Math.max(1, h >> 2));
+  const px = x + Math.round(clamp((hx - x) / 10, -r / 2, r / 2)), py = y + Math.round(clamp((hy - y) / 20, -h / 4, h / 4));
+  ell("#140a14", px - Math.max(1, r >> 2), py - (h >> 1) + 1, Math.max(2, r >> 1), Math.max(1, h - 2));
+}
+function slTentacle(t) {                                     // a tentacle sweeping in from one side: a chain of shrinking discs
+  const n = 22, side = t.dir > 0 ? -1 : 1;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), x = t.x + t.dir * i * 6, y = t.y + Math.sin(T * 3 + i * 0.45 + t.ph) * (3 + u * 6), r = Math.max(1, Math.round(9 * (1 - u * 0.85)));
+    disc(SL_TENT, x, y, r);
+    if (i % 2 === 0 && r > 2) disc(SL_SUCK, x, y + r - 2, 1);
+    if (i === 0) disc(SL_DARK, x + side * 2, y, r - 2);
+  }
+}
+// The Sleeper's outline, one side mirrored: a lumpy skull, a neck, hunched shoulders, then arms sloping down to the claws.
+const SL_PROF = [[0, 1], [0.1, 0.96], [0.2, 1.01], [0.3, 0.94], [0.38, 0.8], [0.44, 0.64], [0.52, 0.6], [0.6, 0.7], [0.68, 0.74], [0.76, 0.66], [0.84, 0.46], [0.92, 0.24], [1, 0.02]];
+function slShape(u) { u = Math.min(1, Math.abs(u)); let i = 1; while (i < SL_PROF.length - 1 && SL_PROF[i][0] < u) i++; const [u0, h0] = SL_PROF[i - 1], [u1, h1] = SL_PROF[i], k = (u - u0) / (u1 - u0); return h0 + (h1 - h0) * (1 - Math.cos(k * Math.PI)) / 2; }
+const slRX = () => Math.min(LW * 1.2, 190) / 2;
+function slY(b, x) { return 200 - (200 - b.bodyY) * slShape((x - LW / 2) / slRX()) + Math.round(Math.sin(x * 0.7) * 0.8 + Math.sin(x * 0.23) * 1.2); }   // the top of its body at screen x
+
+// ---- the fight. Reach the floor with an empty hook and pulse at the eye to wake it.
+// Hard on purpose: three hits and you're thrown back; tuned with bots in tools/tests (see tools/README.md).
+const SL_PHASES = [null,
+  { body: 132, need: 4, eyes: [[0, 20, 14]] },
+  { body: 124, need: 5, eyes: [[-24, 18, 11], [24, 18, 11]] },
+  { body: 110, need: 6, eyes: [[-30, 20, 6], [30, 22, 6], [-12, 12, 5], [14, 14, 5], [0, 28, 6]] }];
+const SL_TOTAL = 15, SL_REACH = 46, SL_SPEED = 95, SL_RECHARGE = 1.5;
+// Tuned with tools/tests/test_sleeper.py: a careful bot (sees everything, reacts in 0.12 s) wins about a third of fights,
+// a sloppy one (0.4 s, ignores warnings) about 2-3%. Real players land between. Re-run it after changing these.
+const SL_TUNE = { tent: [0, 2.0, 1.6, 1.7], tentSpeed: [0, 205, 270, 300], double: [0, 0.15, 0.45, 0.55], ink: 4.5, ring: 2.8, ringSpeed: 72, ringGap: 1.25, lunge: 5.5,
+  eye1: [2.4, 4.2], eye2: [1.5, 2.2], eye3: [0.9, 1.3] };   // eye1: open for, out of every; eye2: each eye open for, then the other after; eye3: open for, every
+function slEyes(b) { b.eyes = SL_PHASES[b.phase].eyes.map(([x, dy, r]) => ({ x, dy, r, y: b.bodyY + dy, open: 0, want: 0, cool: 0 })); b.eyeT = 0; b.eyeIdx = -1; }
+function startBoss(dream) {
+  BOSS = { dream: !!dream, mode: "wake", mt: 0, phase: 1, hits: 0, phaseHits: 0, hp: 1, lives: 3, charge: 1, hx: LW / 2, hy: 56, keys: new Set(), touch: null, inv: 0, shake: 2.2,
+    base: 210, lift: 0, bodyY: 210, eyes: [], tentacles: [], warn: [], ink: [], rings: [], lunge: 0, lungeT: -1, ring: null, crack: false,
+    rubble: Array.from({ length: 8 }, (_, i) => [Math.round(Math.random() * LW), 30 + i * 9, i * 7]), msg: "SOMETHING WAKES...", tm: { tent: 2.4, ink: 3, ring: 2, lunge: 4.5 } };
+  slEyes(BOSS);
+  S.touchX = null; S.keys.clear(); setState("boss"); play("thunder"); SOUNDS.roar = [[90, 1.2, "sawtooth", 0.35, 40], [60, 1.4, "square", 0.2, 30, 0.1]]; play("roar");
+  if (!dream && !store.sec.woke) { store.sec.woke = true; saveStore(); findSecret("sleeper"); }
+}
+function bossHurt(b) {
+  if (b.inv > 0 || b.mode !== "fight") return;
+  b.lives--; b.inv = 1.3; b.shake = 0.4; S.flash = 0.25; play("zap");
+  if (b.lives <= 0) { b.mode = "lose"; b.mt = 0; b.msg = "THROWN BACK!"; b.tentacles = []; b.rings = []; play("miss"); }
+}
+function bossPulse() {
+  const b = BOSS;
+  if (!b || b.mode !== "fight" || b.charge < 1) return;
+  b.charge = 0; b.ring = 0; play("pulse");
+  for (const e of b.eyes) {
+    if (e.open < 0.6 || Math.hypot(b.hx - (LW / 2 + e.x), b.hy - e.y) > SL_REACH + e.r) continue;
+    e.open = 0; e.want = 0; e.cool = 0.9; b.hits++; b.phaseHits++; b.shake = 0.3; b.hp = 1 - b.hits / SL_TOTAL; play("hit");
+    if (b.phaseHits >= SL_PHASES[b.phase].need) {
+      b.tentacles = []; b.warn = []; b.rings = []; b.ink = []; b.lungeT = -1; b.lift = 0; b.shake = 1.4; play("roar");
+      if (b.phase === 3) { b.mode = "win"; b.mt = 0; b.msg = "IT SINKS BACK DOWN"; b.crack = !b.dream; }
+      else { b.mode = "roar"; b.mt = 0; b.phase++; b.phaseHits = 0; b.msg = b.phase === 2 ? "IT'S ANGRY!" : "IT'S FURIOUS!"; slEyes(b); }
+    }
+    break;                                                  // one eye per pulse
+  }
+}
+function bossMove(b, dt) {
+  let dx = 0, dy = 0;
+  if (b.touch) { const tx = b.touch[0] - b.hx, ty = b.touch[1] - 14 - b.hy, d = Math.hypot(tx, ty); if (d > 1) { const v = Math.min(d, SL_SPEED * 1.35 * dt); dx = tx / d * v; dy = ty / d * v; } }
+  else { for (const k of b.keys) { if (k === "L") dx -= 1; if (k === "R") dx += 1; if (k === "U") dy -= 1; if (k === "D") dy += 1; } const n = Math.hypot(dx, dy) || 1; dx = dx / n * SL_SPEED * dt; dy = dy / n * SL_SPEED * dt; }
+  b.hx = clamp(b.hx + dx, 4, LW - 4); b.hy = Math.max(32, b.hy + dy);
+  const floor = slY(b, b.hx) - 5;
+  if (b.hy > floor) { if (b.lift > 2 && b.mode === "fight") bossHurt(b); b.hy = floor; }       // its body pushes you away; a lunge hurts
+}
+function tentPoints(t) {                                    // the tentacle's discs: [x, y, r]
+  const out = [];
+  for (let i = 0; i < 22; i++) { const u = i / 21; out.push([t.x + t.dir * i * 6, t.y + Math.sin(T * 3 + i * 0.45 + t.ph) * (3 + u * 6), Math.max(1, Math.round(9 * (1 - u * 0.85)))]); }
+  return out;
+}
+function bossUpdate(dt) {
+  const b = BOSS, P = SL_PHASES[b.phase], cx = LW / 2;
+  b.mt += dt; b.shake = Math.max(0, b.shake - dt); b.inv = Math.max(0, b.inv - dt);
+  if (b.ring !== null) { b.ring += dt * 2; if (b.ring > 1) b.ring = null; }
+  b.charge = Math.min(1, b.charge + dt / SL_RECHARGE);
+  bossMove(b, dt);
+  if (b.mode === "wake" || b.mode === "roar") {             // rising up, or rising higher in a rage
+    b.base += (P.body - b.base) * Math.min(1, dt * 2.5);
+    if (b.mt > (b.mode === "wake" ? 2.4 : 1.6)) { b.mode = "fight"; b.msg = ""; b.base = P.body; }
+  } else if (b.mode === "win") { b.base += dt * 60; if (b.mt > 3) endBoss(true); }
+  else if (b.mode === "lose") { if (b.mt > 1.8) endBoss(false); }
+  else {                                                     // the fight itself
+    const ph = b.phase, tm = b.tm;
+    b.eyeT += dt;                                            // which eyes are open
+    const E1 = SL_TUNE.eye1, E2 = SL_TUNE.eye2, E3 = SL_TUNE.eye3;
+    if (ph === 1) b.eyes[0].want = b.eyeT % E1[1] < E1[0] ? 1 : 0;
+    else if (ph === 2) { const c = b.eyeT % (E2[1] * 2); b.eyes[0].want = c < E2[0] ? 1 : 0; b.eyes[1].want = c >= E2[1] && c < E2[1] + E2[0] ? 1 : 0; }
+    else if (b.eyeT >= E3[1] || b.eyeIdx < 0) { b.eyeT = 0; let i; do i = Math.floor(Math.random() * b.eyes.length); while (i === b.eyeIdx); b.eyeIdx = i; b.eyes.forEach((e, k) => { e.want = k === i ? 1 : 0; }); }
+    if (ph === 3 && b.eyeT > E3[0]) b.eyes.forEach(e => { e.want = 0; });
+    if ((tm.tent -= dt) <= 0) {                              // tentacle sweeps, warned a moment before
+      tm.tent = SL_TUNE.tent[ph] * (0.8 + Math.random() * 0.4);
+      const sides = Math.random() < SL_TUNE.double[ph] ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1], used = [];
+      for (const sd of sides) {                              // a second tentacle only if there's room for a gap between them
+        let y, n = 0;
+        do y = 40 + Math.random() * Math.max(10, b.base - 60); while (used.some(u => Math.abs(u - y) < 30) && ++n < 20);
+        if (n >= 20) break;
+        used.push(y); b.warn.push({ sd, y, t: 0.75 });
+      }
+    }
+    b.warn.forEach(w => { if ((w.t -= dt) <= 0) b.tentacles.push({ x: w.sd < 0 ? -132 : LW + 132, y: w.y, dir: w.sd < 0 ? 1 : -1, ph: Math.random() * 6, v: SL_TUNE.tentSpeed[ph] * (LW / 2 + 132) / (UW / 2 + 132) }); });   // reaches the middle at the same moment on any screen
+    b.warn = b.warn.filter(w => w.t > 0);
+    b.tentacles.forEach(t => { t.x += t.dir * t.v * dt; });
+    b.tentacles = b.tentacles.filter(t => (t.dir > 0 ? t.x < LW + 10 : t.x > -10));
+    if (ph >= 2 && (tm.ink -= dt) <= 0) { tm.ink = SL_TUNE.ink; for (let k = 0; k < 2; k++) b.ink.push([20 + Math.random() * (LW - 40), 40 + Math.random() * Math.max(10, b.base - 70), 18 + Math.random() * 6, 4]); }
+    b.ink.forEach(q => { q[3] -= dt; }); b.ink = b.ink.filter(q => q[3] > 0);
+    if (ph === 3 && (tm.ring -= dt) <= 0) { tm.ring = SL_TUNE.ring; b.rings.push({ r: 10, gap: -Math.PI / 2 + (Math.random() - 0.5) * 2.2 }); }   // shockwaves, each with a gap to slip through
+    b.rings.forEach(r => { r.r += SL_TUNE.ringSpeed * dt; }); b.rings = b.rings.filter(r => r.r < 300);
+    if (ph === 3) {                                           // the lunge: a rumble, then it surges up
+      if (b.lungeT < 0 && (tm.lunge -= dt) <= 0) { tm.lunge = SL_TUNE.lunge; b.lungeT = 0; }
+      if (b.lungeT >= 0) {
+        b.lungeT += dt; const u = b.lungeT;
+        if (u < 0.9) { b.shake = 0.1; b.lift = 0; } else if (u < 1.2) b.lift = (u - 0.9) / 0.3 * 70; else if (u < 1.55) b.lift = 70; else if (u < 2.15) b.lift = 70 * (1 - (u - 1.55) / 0.6); else { b.lift = 0; b.lungeT = -1; }
+        b.lunge = b.lift > 5 ? 1 : 0;
+      }
+    }
+    for (const t of b.tentacles) for (const [x, y, r] of tentPoints(t)) if (Math.hypot(b.hx - x, b.hy - y) < r + 2) { bossHurt(b); break; }
+    const ry = b.bodyY + 10;
+    for (const r of b.rings) {
+      const d = Math.hypot(b.hx - cx, b.hy - ry), a = Math.atan2(b.hy - ry, b.hx - cx);
+      let da = Math.abs(a - r.gap); if (da > Math.PI) da = 2 * Math.PI - da;
+      if (Math.abs(d - r.r) < 3.5 && da > SL_TUNE.ringGap / 2) bossHurt(b);
+    }
+  }
+  b.bodyY = b.base - b.lift;
+  b.eyes.forEach(e => { e.cool = Math.max(0, e.cool - dt); if (e.cool > 0) e.want = 0; e.open += (e.want - e.open) * Math.min(1, dt * 9); e.y = b.bodyY + e.dy; });
+}
+function endBoss(won) {
+  const b = BOSS;
+  BOSS = null;
+  if (b.dream) { newDive(); S.overlay = "tavern"; TAV.say = won ? "NOT BAD. FOR A DREAM." : "WAKE UP, KID."; return; }
+  S.catch = []; S.rising = false; S.immune = 99;
+  if (won) {
+    S.bossWon = true;
+    if (!store.sec.sleeper) { store.sec.sleeper = true; S.popups.push(["THE FLOOR CRACKS...", 4, "#c8a0ff"]); }
+    if (award("wakeup")) S.popups.push(["NEW TITLE: WAKE-UP CALL", 5, GOLD]);
+    earnSong(9); saveStore();
+  } else { S.bottom = false; S.popups.push(["NOTHING TO SHOW FOR IT", 2.6, ORANGE]); }
+  setState("up");
+}
+function drawCrack(cam) {                                    // once the Sleeper is beaten: a faint crack in the floor, off to one side
+  if (!store.sec.sleeper) return;
+  const x0 = OX + 108, fy = Math.floor(DEPTH_PX + 6 - cam);
+  if (fy < -20 || fy > LH + 20) return;
+  g.globalAlpha = 0.22 + 0.15 * Math.sin(T * 1.7); ell("#c8a0ff", x0 - 6, fy - 4, 12, 9); g.globalAlpha = 1;
+  [[0, -2], [1, 1], [-1, 3], [1, 5], [0, 8]].forEach(([dx, dy], i, a) => { if (i) line("#08040e", x0 + a[i - 1][0], fy + a[i - 1][1], x0 + dx, fy + dy); });
+}
+function drawBoss() {                                        // the arena, the Sleeper, its attacks and the fight's HUD
+  const b = BOSS, t = T, cx = LW / 2, shake = b.shake > 0 ? Math.round(Math.sin(t * 50) * 2) : 0;
+  g.save(); g.translate(shake, 0);
+  for (let i = 0; i < 14; i++) rect(lerpCol([18, 14, 40], [8, 6, 20], i / 13), 0, i * 15, LW, 15);       // the deep water around it
+  for (let k = 0; k < Math.round(30 * LW / UW); k++) if ((k * 7 + Math.floor(t * 2)) % 9) rect("#3a3060", (k * 53) % LW, (k * 37 + Math.floor(t * 4 * (1 + k % 3))) % 180, 1, 1);   // drifting specks
+  const top = b.bodyY, BW = Math.min(LW * 1.2, 190), RX = BW / 2, RY = 200 - top;   // the body: a horned, spiked hulk rising out of the floor, the same size on any screen
+  const olY = x => slY(b, x);
+  const edgeAt = u => { const x = cx + u * RX, y = olY(x), d = (olY(x + 2) - olY(x - 2)) / 4, n = Math.hypot(1, d); return [x, y, d / n, -1 / n]; };   // a point on the outline and its outward normal
+  if (b.phase > 0) {
+    [[-1, 0.9], [1, 1.1], [-1, 1.35]].forEach(([sd, k], i) => {                          // tentacles writhing up from behind it
+      for (let j = 0; j < 16; j++) {
+        const u = j / 15, x = cx + sd * (RX * k - j * 1.5) + Math.sin(t * 1.6 + j * 0.5 + i * 2) * (2 + u * 9), y = 196 - j * (RY * 0.07 + 3);
+        disc(j % 3 ? "#1c1430" : "#2a1e44", x, y, Math.max(1, Math.round(7 - u * 6)));
+      }
+    });
+    for (const [u, L] of [[-0.86, 8], [-0.72, 12], [-0.62, 15], [-0.16, 10], [0, 14], [0.16, 10], [0.62, 15], [0.72, 12], [0.86, 8]]) {   // spikes on its skull and shoulders
+      const [x, y, nx, ny] = edgeAt(u);
+      poly("#3c2c5c", [[x - ny * 5, y + nx * 5], [x + nx * L, y + ny * L], [x + ny * 5, y - nx * 5]]);
+      line("#6a5a92", x - ny * 4, y + nx * 4, x + nx * L, y + ny * L);
+      poly("#b4a4d4", [[x + nx * (L - 4) - ny, y + ny * (L - 4) + nx], [x + nx * L, y + ny * L], [x + nx * (L - 4) + ny, y + ny * (L - 4) - nx]]);
+    }
+    [-1, 1].forEach(sd => {                                                               // two curling horns
+      const [hx0, hy0] = edgeAt(sd * 0.33);
+      for (let j = 0; j < 14; j++) { const u = j / 13, x = hx0 + sd * (j * 2.2 - u * u * 10), y = hy0 - j * 2.4 + u * u * 4; disc(j % 3 === 2 ? "#a89c84" : "#d8ccb0", x, y, Math.max(1, Math.round(5 - u * 4))); }
+    });
+    const pts = [[cx - RX - 2, 201]];
+    for (let x = Math.floor(cx - RX); x <= cx + RX; x += 2) pts.push([x, olY(x)]);
+    pts.push([cx + RX + 2, 201]);
+    poly(SL_DARK, pts.map(([x, y]) => [x + (x < cx ? -2 : 2), y - 2]));                // a dark rim, then the hide
+    poly(SL_BODY, pts);
+    for (let x = Math.floor(cx - RX); x <= cx + RX; x += 2) rect("#2e2248", x, olY(x) + 1, 2, 2);                       // light catching the top edge
+    for (let k = 0; k < 10; k++) { const [rx, ry] = edgeAt(-0.9 + k * 0.2); ell(SL_LIGHT, rx - 4, ry + 5, 8, 3); }     // crust
+    for (let k = 0; k < 6; k++) { const x = cx + ((k * 47) % 90 - 45) * BW / 120, y = top + 12 + (k * 29) % Math.max(8, RY - 30); if (y > olY(x) + 4) { disc("#5a4a7e", x, y, 2); rect("#2a1e44", x, y, 1, 1); } }   // barnacles
+    if (b.phase >= 2) {                                                                   // veins that glow once it is angry
+      g.globalAlpha = 0.45 + 0.35 * Math.sin(t * (b.phase >= 3 ? 9 : 4));
+      [[-0.32, 0], [0.3, 1], [-0.1, 2], [0.12, 3]].forEach(([fx, i]) => { let x = cx + fx * BW, y = olY(x) + 5 + i * 3; for (let j = 0; j < 7; j++) { const nx = x + ((i + j) % 2 ? 4 : -3), ny = y + 5; line("#ff3c8c", x, y, nx, ny); x = nx; y = ny; } });
+      g.globalAlpha = 1;
+    }
+    const my = Math.min(190, top + RY * 0.68), mw = Math.round(BW * 0.26), open = b.phase < 2 ? 0 : b.lunge > 0 ? 12 : 5;   // the mouth, never quite shut
+    if (open) { ell("#0a0612", cx - mw, my - open, mw * 2, open * 2); g.globalAlpha = 0.5 + 0.3 * Math.sin(t * 5); ell("#8c1e3c", cx - mw * 0.6, my - open * 0.5, mw * 1.2, open); g.globalAlpha = 1; }
+    else for (let k = -mw; k <= mw; k++) rect("#0a0612", cx + k, my + Math.round(Math.abs(Math.sin(k * 0.5)) * 2), 1, 2);
+    for (let k = -mw + 4; k < mw - 3; k += 6) { poly("#e6e0d0", [[cx + k, my - open], [cx + k + 2, my - open + 4], [cx + k + 4, my - open]]); poly("#e6e0d0", [[cx + k + 3, my + open + 1], [cx + k + 5, my + open - 3], [cx + k + 7, my + open + 1]]); }
+    [-1, 1].forEach(sd => {                                                               // big fangs at the corners, showing even when shut
+      const fx = cx + sd * (mw - 5);
+      poly("#f0eadc", [[fx - 3, my - open], [fx, my - open + 9], [fx + 3, my - open]]);
+      poly("#f0eadc", [[fx - 2 + sd * 6, my + open + 2], [fx + sd * 6, my + open - 7], [fx + 2 + sd * 6, my + open + 2]]);
+    });
+    if (b.lunge > 0) for (let k = 0; k < 3; k++) rect("#a0c8dc", cx - mw + 8 + k * mw * 0.7, my + open, 1, 3 + Math.round((t * 8 + k * 3) % 6));   // drool
+    [-1, 1].forEach(sd => {                                                               // claws gripping the floor
+      const kx = cx + sd * (RX - 4);
+      ell(SL_BODY, kx - 10, 178, 20, 14); ell(SL_DARK, kx - 10, 186, 20, 6);
+      for (let j = 0; j < 3; j++) { const x = kx - sd * 6 + sd * j * 6; poly("#d8ccb0", [[x - 2, 186], [x + sd * 4, 194], [x + 2, 186]]); }
+    });
+    b.eyes.forEach(e => slEye(cx + e.x, e.y, e.r, e.open, b.hx, b.hy, cx, b.phase));
+  }
+  for (let x = 0; x < LW; x += 1) { const h = Math.round(4 + 3 * Math.sin(x * 0.21) + 2 * Math.sin(x * 0.07 + 2)); rect("#10102a", x, 194 - h, 1, h + 6); }   // the floor
+  if (b.crack) {                                             // the crack it leaves behind: faint, and off to one side
+    const x0 = Math.round(LW * 0.86), gl = 0.35 + 0.25 * Math.sin(t * 2);
+    g.globalAlpha = gl; ell("#c8a0ff", x0 - 9, 182, 18, 14); g.globalAlpha = 1;
+    [[0, 184], [2, 187], [-1, 190], [1, 193], [-2, 196]].forEach(([dx, dy], i, a) => { if (i) line("#05030a", x0 + a[i - 1][0], a[i - 1][1], x0 + dx, dy); });
+    rect("#e6d2ff", x0, 189, 1, 1);
+  }
+  (b.rubble || []).forEach(r => rect("#4a4070", r[0], r[1] + Math.round((t * 30 + r[2]) % 40), 2, 2));
+  b.tentacles.forEach(slTentacle);
+  b.rings.forEach(r => {                                    // shockwaves, each with a gap to slip through
+    for (let a = 0; a < Math.PI * 2; a += 1 / Math.max(8, r.r)) {
+      let da = Math.abs(a - Math.PI * 2 * (a > Math.PI ? 1 : 0) - r.gap); if (da > Math.PI) da = 2 * Math.PI - da;
+      if (da < SL_TUNE.ringGap / 2) continue;
+      rect("#c8a0ff", cx + Math.cos(a) * r.r, top + 10 + Math.sin(a) * r.r, 2, 2);
+      if (r.r > 6) rect("#5a3c7a", cx + Math.cos(a) * (r.r - 3), top + 10 + Math.sin(a) * (r.r - 3), 1, 1);
+    }
+  });
+  (b.warn || []).forEach(w => { if (Math.floor(T * 10) % 2) { const x = w.sd < 0 ? 6 : LW - 10; box(x - 2, w.y - 6, 8, 12, RED); text("!", x + 2, w.y, 1, RED, "center", null); } });   // a tentacle is coming
+  b.ink.forEach(([x, y, r]) => { for (let k = 0; k < 6; k++) disc(k % 2 ? "#05040c" : "#0c0818", x + Math.round(Math.cos(k * 1.1) * r * 0.5), y + Math.round(Math.sin(k * 1.7) * r * 0.4), Math.round(r * (0.6 + (k % 3) * 0.15))); });
+  line(lineCol(0), b.hx, 0, b.hx, b.hy - 4);               // the hook, free to move in any direction now
+  if (!(b.inv > 0 && Math.floor(T * 14) % 2)) spr("hook" + store.eq.hook, b.hx - 1, b.hy - 4);
+  if (b.ring !== null && b.ring !== undefined) { const r = Math.floor(6 + b.ring * SL_REACH); ring(CYAN, b.hx, b.hy, r); if (r > 10) ring(WHITE, b.hx, b.hy, r - 5); }
+  g.restore();
+  text("THE SLEEPER", LW / 2, 7, 1, "#c8a0ff", "center");                                   // the HUD
+  const bw = Math.min(110, LW - 60), bx = Math.round(LW / 2 - bw / 2);
+  rect(INK, bx - 1, 13, bw + 2, 5); rect("#3c1e3c", bx, 14, bw, 3); rect(b.phase >= 3 ? RED : b.phase === 2 ? ORANGE : "#c8a0ff", bx, 14, Math.round(bw * b.hp), 3);
+  [1, 2].forEach(k => rect(INK, bx + Math.round(bw * k / 3), 13, 1, 5));
+  text(["", "WAKING", "ANGRY", "FURIOUS"][b.phase] || "", LW / 2, 24, 1, b.phase >= 3 ? RED : "#a090c0", "center", null);
+  for (let k = 0; k < 3; k++) { const x = 4 + k * 8; if (k < b.lives) spr("hook" + store.eq.hook, x, 21); else rect("#3c3450", x + 1, 24, 3, 1); }   // hits you can still take
+  const k = clamp(b.charge, 0, 1);
+  box(2, 176, 36, 22, k >= 1 ? CYAN : "#505678"); text("PULSE", 20, 183, 1, k >= 1 ? CYAN : "#6e7496", "center", null);
+  rect("#3c4264", 6, 190, 28, 3); rect(k >= 1 ? CYAN : "#5a8ca0", 6, 190, Math.round(28 * k), 3);
+  if (b.dream) { g.globalAlpha = 0.14; rect("#78b4ff", 0, 0, LW, LH); g.globalAlpha = 1; text("A DREAM", LW - 4, 192, 1, "#a0c8ff", "right", null); }
+  if (b.msg) { const tw = textW(b.msg, 1); box(Math.round(LW / 2 - tw / 2) - 5, 40, tw + 10, 13, GOLD); text(b.msg, LW / 2, 46, 1, GOLD, "center", null); }
+}
 function drawGiant() {                                   // something very large is asleep in the sea floor. It notices the hook.
   const ey = Math.floor(DEPTH_PX + 52 - S.cam);
   if (ey > LH + 20) { S.eye = 0; return; }
@@ -918,6 +1177,7 @@ function drawGiant() {                                   // something very large
 }
 
 function draw() {
+  if (S.state === "boss" && BOSS) { drawBoss(); return; }
   const t = T, cam = S.cam, wl = Math.round(-cam), srcY = Math.max(0, Math.round(cam));
   g.save();
   if (KON === "mirror") { g.translate(LW, 0); g.scale(-1, 1); }           // the world flips; menus and buttons stay readable
@@ -944,6 +1204,7 @@ function draw() {
   }
   if (S.whale) spr("whale", S.whale.x, S.whale.y - 22 - cam + Math.sin(t * 1.5) * 3, S.whale.d < 0);
   drawGiant();
+  drawCrack(cam);
   const vis = visible();
   for (const [, f] of vis) {
     const sy = f.y - cam;
@@ -1014,6 +1275,7 @@ function draw() {
     }
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
     if (bt && !bt.got) lights.push([Math.floor(bt.x + 3), Math.floor(bt.y - cam), 14]);       // bottles catch the light a little
+    if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), 10]);       // the crack glows, faintly
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
     for (const gl of DATA.glows) if (gl[1] > cam - 20 && gl[1] < cam + LH + 20) lights.push([gl[0] - BG_O + OX, Math.floor(gl[1] - cam), gl[2]]);   // crystals and vent mouths
     dg.globalCompositeOperation = "destination-out";
@@ -1036,7 +1298,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { vip: drawVip, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -1072,7 +1334,7 @@ function claimDaily() {                                     // the free daily st
   addChips(DAILY_CHIPS);
   return true;
 }
-function stakeStep(st, d) { return clamp(st + d * 5, 5, Math.max(5, Math.min(MAX_STAKE, Math.floor(tav().chips / 5) * 5))); }
+function stakeStep(st, d, max) { const big = (max || MAX_STAKE) > 100 ? 10 : 5; return clamp(st + d * big, 5, Math.max(5, Math.min(max || MAX_STAKE, Math.floor(tav().chips / 5) * 5))); }   // the back room allows bigger bets
 
 // ---- betting on your own dive
 function betLine() {                                        // over / under line: the middle of your recent hauls, to the nearest 10
@@ -1137,7 +1399,8 @@ function c21Card() {
   return [C21_POOL[Math.floor(Math.random() * C21_POOL.length)], w, Math.random() < 0.08 ? "t" : ""];
 }
 const c21Sum = h => h.reduce((a, q) => a + (q[2] === "t" ? q[1] * 2 : q[1]), 0);
-function c21New() { TAV.c21 = { phase: "stake", dealer: [], you: [], hide: true, bet: stakeStep(TAV.c21 ? TAV.c21.bet : 10, 0), msg: "PLACE YOUR BET", t: 0, win: 0 }; }
+// VIP rules (the back room): bets to 200, a legendary card pays 2 to 1, ties push. House edge about 0.5-2.6%.
+function c21New(vip) { const max = vip ? 200 : MAX_STAKE; TAV.c21 = { vip: !!vip, max, phase: "stake", dealer: [], you: [], hide: true, bet: stakeStep(TAV.c21 && !!TAV.c21.vip === !!vip ? TAV.c21.bet : vip ? 50 : 10, 0, max), msg: "PLACE YOUR BET", t: 0, win: 0 }; }
 function c21Deal() {
   const c = TAV.c21;
   if (tav().chips < c.bet || c.bet < 5) { play("miss"); c.msg = "NOT ENOUGH CHIPS"; return; }
@@ -1145,7 +1408,7 @@ function c21Deal() {
   c.you = [c21Card(), c21Card()]; c.dealer = [c21Card(), c21Card()]; c.hide = true; c.phase = "play"; c.staked = c.bet;
   play("tick");
   const nat = h => h.length === 2 && c21Sum(h) === 21;
-  if (c.you.some(q => q[2] === "l")) return c21End(2, "A LEGEND! YOU WIN");
+  if (c.you.some(q => q[2] === "l")) return c21End(c.vip ? 3 : 2, c.vip ? "A LEGEND! PAYS 2 TO 1" : "A LEGEND! YOU WIN");
   if (c.dealer.some(q => q[2] === "l")) { c.hide = false; return c21End(0, "HIS LEGEND WINS"); }
   if (nat(c.you)) { c.hide = false; return nat(c.dealer) ? c21End(1, "TWO 21S: A PUSH") : c21End(2.5, "CATCH 21! 3 TO 2"); }
   if (nat(c.dealer)) { c.hide = false; return c21End(0, "HE HAS 21"); }
@@ -1157,7 +1420,7 @@ function c21Hit(dbl) {
   if (c.phase !== "play") return;
   if (dbl) { if (c.you.length !== 2 || tav().chips < c.staked) { play("miss"); return; } addChips(-c.staked); c.staked *= 2; }
   const q = c21Card(); c.you.push(q); play("tick");
-  if (q[2] === "l") return c21End(2, "A LEGEND! YOU WIN");
+  if (q[2] === "l") return c21End(c.vip ? 3 : 2, c.vip ? "A LEGEND! PAYS 2 TO 1" : "A LEGEND! YOU WIN");
   const t = c21Sum(c.you);
   if (t > 21) { c.hide = false; return c21End(0, "BUST AT " + t); }
   c.msg = "YOU HAVE " + t;
@@ -1171,6 +1434,7 @@ function c21Tick(dt) {                                       // the old man draw
   const d = c21Sum(c.dealer), y = c21Sum(c.you);
   if (d < 17) { const q = c21Card(); c.dealer.push(q); play("tick"); if (q[2] === "l") c21End(0, "HIS LEGEND WINS"); return; }
   if (d > 21) c21End(2, "HE BUSTS! YOU WIN");
+  else if (y === d && c.vip) c21End(1, "A TIE: STAKE BACK");
   else if (y >= d) c21End(2, y === d ? "A TIE GOES TO YOU" : "YOU WIN, " + y + " TO " + d);
   else c21End(0, "HE WINS, " + d + " TO " + y);
 }
@@ -1179,11 +1443,12 @@ function c21End(mult, msg) {                                 // mult: what comes
   c.phase = "stake"; c.msg = msg; c.win = back - c.staked;
   if (back) addChips(back, back > c.staked ? "win" : "");
   if (back > c.staked) { tav().stats.hands++; tavTitles(); play("chime"); } else if (!back) play("miss");
-  c.bet = stakeStep(c.bet, 0);
+  c.bet = stakeStep(c.bet, 0, c.max);
 }
 
 // ---- the Derby: five fish race with bursts and stalls; each has hidden speed, stamina and burst, and odds to match
-function racerStats(rng) { return { spd: rng.uniform(0.94, 1.06), sta: rng.uniform(0.6, 0.85), bur: rng.uniform(0.2, 0.8) }; }   // close enough that every fish has a chance
+function racerStats(rng, vip) { if (vip) return { spd: rng.uniform(0.97, 1.03), sta: rng.uniform(0.65, 0.82), bur: rng.uniform(0.3, 0.7) };   // the VIP field is closer still
+  return { spd: rng.uniform(0.94, 1.06), sta: rng.uniform(0.6, 0.85), bur: rng.uniform(0.2, 0.8) }; }   // close enough that every fish has a chance
 function myRacer() { const f = tav().fish; return f && { id: f.id, name: f.name, spd: 0.78 + f.lv[0] * 0.045, sta: 0.5 + f.lv[1] * 0.045, bur: f.lv[2] * 0.1, mine: true }; }
 function raceStep(r, dt, rng) {                              // move one racer along; -> an event for the commentator, or null
   let ev = null;
@@ -1191,27 +1456,29 @@ function raceStep(r, dt, rng) {                              // move one racer a
   else if (rng.random() < r.bur * 0.45 * dt) { r.burst = 0.8; ev = "burst"; }
   else if (rng.random() < (1 - r.sta) * 0.35 * dt) { r.stall = 0.6; ev = "stall"; }
   const tired = 1 - r.pos * (1 - r.sta) * 0.55;
-  r.pos += dt / 8.5 * r.spd * tired * (r.burst > 0 ? 1.7 : r.stall > 0 ? 0.25 : 1);
+  r.pos += dt / (8.5 * (r.len || 1)) * r.spd * tired * (r.burst > 0 ? 1.7 : r.stall > 0 ? 0.25 : 1);
   return ev;
 }
-function derbyNew(withMine) {
-  const rng = RNG((Math.random() * 4294967296) >>> 0), ids = [], racers = [];
+function derbyNew(withMine, vip) {                           // VIP (the back room): seven racers, a longer course, bets to 200
+  const rng = RNG((Math.random() * 4294967296) >>> 0), ids = [], racers = [], N = vip ? 7 : 5, len = vip ? 1.5 : 1;
   const mine = withMine && myRacer();
   if (mine) racers.push(mine);
-  while (racers.length < 5) {
+  while (racers.length < N) {
     const id = rng.choice(C21_POOL);
     if (ids.includes(id)) continue;
-    ids.push(id); racers.push(Object.assign({ id, name: SPEC[id][1] }, racerStats(rng)));
+    ids.push(id); racers.push(Object.assign({ id, name: SPEC[id][1] }, racerStats(rng, vip)));
   }
-  const wins = [0, 0, 0, 0, 0], sim = RNG(rng.randint(1, 1e9));        // odds from a few hundred practice races
+  racers.forEach(r => { r.len = len; });
+  const wins = racers.map(() => 0), sim = RNG(rng.randint(1, 1e9));        // odds from practice races
   for (let n = 0; n < 1500; n++) {
-    const rs = racers.map(r => ({ spd: r.spd, sta: r.sta, bur: r.bur, pos: 0, burst: 0, stall: 0 }));
+    const rs = racers.map(r => ({ spd: r.spd, sta: r.sta, bur: r.bur, len, pos: 0, burst: 0, stall: 0 }));
     let done = -1;
-    while (done < 0) for (let i = 0; i < 5 && done < 0; i++) { raceStep(rs[i], 0.05, sim); if (rs[i].pos >= 1) done = i; }
+    while (done < 0) for (let i = 0; i < N && done < 0; i++) { raceStep(rs[i], 0.05, sim); if (rs[i].pos >= 1) done = i; }
     wins[done]++;
   }
   racers.forEach((r, i) => { r.pays = Math.min(50, Math.max(1.1, Math.floor(EDGE / ((wins[i] + 0.5) / 1502.5) * 10) / 10)); r.pos = 0; r.burst = 0; r.stall = 0; });
-  TAV.derby = { phase: "pick", racers, mine: mine ? 0 : -1, pick: 0, bet: stakeStep(TAV.derby ? TAV.derby.bet : 10, 0), call: "PICK A FISH AND PLACE YOUR BET", t: 0, lead: -1, rng, withMine: !!mine };
+  const max = vip ? 200 : MAX_STAKE;
+  TAV.derby = { vip: !!vip, max, phase: "pick", racers, mine: mine ? 0 : -1, pick: 0, bet: stakeStep(TAV.derby && !!TAV.derby.vip === !!vip ? TAV.derby.bet : vip ? 50 : 10, 0, max), call: "PICK A FISH AND PLACE YOUR BET", t: 0, lead: -1, rng, withMine: !!mine };
 }
 function derbyGo() {
   const d = TAV.derby;
@@ -1267,6 +1534,7 @@ const SONGS = [
   ["FIRST LEGEND", null, "LAND YOUR FIRST LEGENDARY", 132, "C5 - E5 - G5 - C6 - - - G5 - C6 - - - - - E5 - F5 - G5 - A5 - G5 - E5 - C5 - - -", "C3 - G2 - C3 - G2 - E3 - G2 - C3 - - - F2 - C3 - G2 - D3 - C3 - G2 - C3 - - -"],
   ["BAITER'S BOOGIE", null, "EARN MASTER BAITER", 140, "C4 - E4 G4 A4 - G4 E4 C4 - E4 G4 A4 - G4 - F4 - A4 C5 D5 - C5 A4 G4 - E4 C4 D4 - C4 -", "C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 F2 F3 F2 F3 F2 F3 F2 F3 G2 G3 G2 G3 C2 C3 C2 -"],
   ["FULL LOG", null, "LOG EVERY SPECIES", 120, "G4 - C5 - E5 - G5 - - - E5 - G5 - - - A5 - G5 - E5 - C5 - D5 - E5 - C5 - - - - -", "C3 - - - G2 - - - C3 - - - E3 - - - F2 - - - G2 - - - C3 - - - - - - -"],
+  ["LULLABY", null, "PUT THE SLEEPER BACK TO SLEEP", 72, "E4 - G4 - B4 - - - A4 - G4 - E4 - - - D4 - E4 - G4 - - - D4 - E4 - - - - -", "E2 - - - B2 - - - C3 - - - G2 - - - A2 - - - E2 - - - B1 - - - E2 - - -"],
 ];
 const songOwned = i => tav().songs.includes(i);
 function earnSong(i) { if (songOwned(i)) return; tav().songs.push(i); saveStore(); if (S) S.popups.push(["NEW SONG: " + SONGS[i][0], 4, CHIP]); }
@@ -1278,6 +1546,7 @@ const SHOP_ROWS = [                                         // [label, price (or
   ["A STORY", 50, "TIP THE OLD MAN"],
   ["A DERBY FISH", 200, "YOUR OWN RACER"],
   ["JUKEBOX", 150, "MUSIC HERE AND ON THE TITLE"],
+  ["DREAM SLEEPER", 20, "FIGHT A GHOST OF IT. PRACTICE ONLY"],
 ];
 function shopRowState(i) {                                  // -> [label shown, price or null, note]
   const q = tav(), [lab, price, note] = SHOP_ROWS[i];
@@ -1286,6 +1555,7 @@ function shopRowState(i) {                                  // -> [label shown, 
   if (i === 2) return [lab, q.map === weekString() ? null : price, q.map === weekString() ? "BOOT AROUND " + bootDepth() + " M" : note];
   if (i === 3) return [q.stories ? "STORIES (" + q.stories + ")" : lab, q.stories < STORIES.length ? price : null, q.stories < STORIES.length ? (q.stories ? "TIP HIM FOR THE NEXT ONE" : note) : "THAT'S ALL HE KNOWS"];
   if (i === 4) return [q.fish ? "YOUR RACER" : lab, q.fish ? null : price, q.fish ? q.fish.name + ": TRAIN IT" : note];
+  if (i === 6) return store.sec.woke ? [lab, price, note] : ["???", null, "WAKE SOMETHING UP FIRST"];
   return [lab, q.jukebox ? null : price, q.jukebox ? "PICK A SONG" : note];
 }
 function rumourPool() { return BOTTLES.map((b, i) => i).filter(i => bottleOpen(i) && !store.sec.bottles.includes(i)); }
@@ -1297,6 +1567,7 @@ function shopBuy(i) {
   if (i === 5 && q.jukebox) { openOverlay("jukebox"); return; }
   if (price === null) { play("miss"); return; }
   if (q.chips < price) { play("miss"); TAV.say = "COME BACK WITH CHIPS"; return; }
+  if (i === 6) { addChips(-price); S.overlay = null; startBoss(true); return; }          // the Dream Sleeper: a practice fight
   addChips(-price); play("fanfare");
   if (i === 0) { const pool = rumourPool(), b = pool[Math.floor(Math.random() * pool.length)]; store.sec.bottles.push(b); findSecret("bottle"); S.overlay = "note"; S.noteIdx = store.sec.bottles.length - 1; S.noteBack = "chipshop"; }
   else if (i === 1) q.magnet += 5;
@@ -1349,7 +1620,7 @@ let MUS = { song: -1, step: 0, next: 0 };
 function noteHz(n) { const m = /^([A-G])(\d)$/.exec(n); return m ? 440 * Math.pow(2, ({ C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 }[m[1]] + (m[2] - 4) * 12) / 12) : 0; }
 function tone(f, t0, dur, wave, vol) { const o = AC.createOscillator(), ga = AC.createGain(); o.type = wave; o.frequency.setValueAtTime(f, t0); ga.gain.setValueAtTime(vol, t0); ga.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(ga); ga.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 function musicTick() {
-  const want = AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
+  const want = AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
   if (want !== MUS.song) { MUS = { song: want, step: 0, next: AC ? AC.currentTime + 0.1 : 0 }; }
   if (want < 0 || AC.state !== "running") return;
   const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), dt = 30 / bpm;
@@ -1399,9 +1670,14 @@ function stakeRow(y, stake, go) {                            // [-] stake [+] an
   box(48, y, 16, 15, CHIP); text("+", 56, y + 7, 1, CHIP, "center", null);
   box(68, y, 50, 15, GOLD); text(go, 93, y + 7, 1, GOLD, "center", null);
 }
-function stakeTap(lx, obj, key, go) { if (lx < 20) { obj[key] = stakeStep(obj[key], -1); play("tick"); } else if (lx >= 46 && lx < 66) { obj[key] = stakeStep(obj[key], 1); play("tick"); } else if (lx >= 68) go(); }
+function stakeTap(lx, obj, key, go) { if (lx < 20) { obj[key] = stakeStep(obj[key], -1, obj.max); play("tick"); } else if (lx >= 46 && lx < 66) { obj[key] = stakeStep(obj[key], 1, obj.max); play("tick"); } else if (lx >= 68) go(); }
 function chipsLine(y) { const s = tav().chips + " CHIPS", x = 60 - (textW(s, 1) >> 1) + 3; chipIcon(x - 6, y); text(s, x, y, 1, CHIP, "left", null); }
 function bestCatches() { return LOGGED.filter(s => store.log[s[0]]).sort((a, b) => store.log[b[0]].rec - store.log[a[0]].rec).slice(0, 2); }
+function tavRows() {
+  const dr = dailyReady(), r = [["CATCH 21", CHIP], ["THE DERBY", CHIP], ["BUY THINGS", GOLD], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY]];
+  if (store.sec.sleeper) r.push(["THE BACK ROOM", "#ff6e6e"]);                    // opens once you've beaten the Sleeper
+  return r;
+}
 function drawTavern() {
   tavernBg();
   g.save(); g.translate(OX, 0);
@@ -1419,10 +1695,8 @@ function drawTavern() {
   box(96, 2, 22, 11, CYAN); text("TOP", 107, 7, 1, CYAN, "center", null);
   text(TAV.say, 60, 76, 1, WHITE, "center", null);
   chipsLine(88);
-  const dr = dailyReady();
-  [["CATCH 21", CHIP], ["THE DERBY", CHIP], ["BUY THINGS", GOLD], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY]].forEach(([lab, col], i) => {
-    const y = 98 + i * 19; box(14, y, 92, 15, col); text(lab, 60, y + 7, 1, col, "center", null);
-  });
+  const dr = dailyReady(), rows = tavRows(), [y0, st] = rows.length > 4 ? [94, 18] : [98, 19];
+  rows.forEach(([lab, col], i) => { const y = y0 + i * st; box(14, y, 92, 15, col); text(lab, 60, y + 7, 1, col, "center", null); });
   text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -1430,7 +1704,7 @@ function drawC21() {
   rect(FELT, 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
   g.save(); g.translate(OX, 0);
   const c = TAV.c21;
-  text("CATCH 21", 60, 9, 1, GOLD, "center", null);
+  text(c.vip ? "VIP CATCH 21" : "CATCH 21", 60, 9, 1, GOLD, "center", null);
   text("THE OLD MAN", 4, 20, 1, "#c8e6d2", "left", null);
   if (c.dealer.length) text(c.hide ? "?" : c21Sum(c.dealer), 116, 20, 1, WHITE, "right", null);
   c.dealer.slice(0, 6).forEach((q, i) => fishCard(4 + i * Math.min(20, 94 / Math.max(1, c.dealer.length - 1)), 25, q, c.hide && i === 1));
@@ -1446,23 +1720,24 @@ function drawC21() {
   else if (c.phase === "stake") stakeRow(128, c.bet, "DEAL");
   else text("...", 60, 135, 1, WHITE, "center", null);
   text("TROPHIES COUNT X2", 60, 154, 1, "#8cc8a8", "center", null);
-  text("LEGENDS WIN AT ONCE", 60, 164, 1, "#8cc8a8", "center", null);
+  text(c.vip ? "LEGENDS PAY 2 TO 1" : "LEGENDS WIN AT ONCE", 60, 164, 1, c.vip ? GOLD : "#8cc8a8", "center", null);
   text("HE STOPS AT 17", 60, 174, 1, "#8cc8a8", "center", null);
-  text("TIES GO TO YOU", 60, 184, 1, "#8cc8a8", "center", null);
+  text(c.vip ? "TIES PUSH" : "TIES GO TO YOU", 60, 184, 1, "#8cc8a8", "center", null);
   text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
+const derbyLane = d => d.racers.length > 5 ? 15 : 20;
 function drawDerby() {
   const d = TAV.derby, t = T;
   for (let i = 0; i < 14; i++) rect(lerpCol([40, 120, 200], [20, 70, 150], i / 13), 0, i * 15, LW, 15);
-  const x0 = 16, x1 = LW - 14;
-  text("THE DERBY", LW / 2, 9, 1, GOLD, "center");
-  for (let i = 0; i <= 5; i++) for (let x = 0; x < LW; x += 6) rect("#8cc8f0", x, 22 + i * 20, 3, 1);
-  for (let y = 22; y < 122; y += 3) { const o = Math.floor(y / 3) % 2; rect(o ? WHITE : INK, x1, y, 3, 3); rect(o ? INK : WHITE, x1 + 3, y, 3, 3); }   // the finish line
+  const x0 = 16, x1 = LW - 14, n = d.racers.length, LH_ = derbyLane(d), y1 = 22 + n * LH_, by = y1 + 4;
+  text(d.vip ? "VIP DERBY" : "THE DERBY", LW / 2, 9, 1, GOLD, "center");
+  for (let i = 0; i <= n; i++) for (let x = 0; x < LW; x += 6) rect("#8cc8f0", x, 22 + i * LH_, 3, 1);
+  for (let y = 22; y < y1; y += 3) { const o = Math.floor(y / 3) % 2; rect(o ? WHITE : INK, x1, y, 3, 3); rect(o ? INK : WHITE, x1 + 3, y, 3, 3); }   // the finish line
   d.racers.forEach((r, i) => {
-    const y = 32 + i * 20, [w, h] = sprSize(r.id), moving = d.phase === "race";
+    const y = 22 + (LH_ >> 1) + i * LH_, [w, h] = sprSize(r.id), moving = d.phase === "race";
     const x = Math.floor(lerp(x0, x1 - w, Math.min(1, r.pos))) + (moving ? Math.round(Math.sin(t * 8 + i)) : 0);
-    if (i === d.pick) rect("#2a5a9a", 0, y - 9, LW, 19);
+    if (i === d.pick) rect("#2a5a9a", 0, y - (LH_ >> 1) + 1, LW, LH_ - 1);
     text(String(i + 1), 6, y, 1, i === d.pick ? GOLD : r.mine ? CHIP : WHITE, "center");
     spr(r.id, x, y - (h >> 1) + (moving ? Math.round(Math.sin(t * 6 + i * 2)) : 0), false);
     if (moving) for (let k = 1; k < 4; k++) rect(r.burst > 0 ? WHITE : "#c8ecff", x - k * (r.burst > 0 ? 6 : 4), y + ((k + i) % 2), r.burst > 0 ? 2 : 1, 1);   // its wake
@@ -1470,15 +1745,15 @@ function drawDerby() {
     if (d.phase === "done" && i === d.winner) text("WINNER", x - 3, y, 1, GOLD, "right");
   });
   g.save(); g.translate(OX, 0);
-  box(2, 126, 116, 24, WHITE);
-  wrap(d.call, 18).slice(0, 2).forEach((l, i) => text(l, 60, 132 + i * 10, 1, WHITE, "center", null));
-  if (d.phase === "pick") stakeRow(153, d.bet, "RACE");
+  box(2, by, 116, 24, WHITE);
+  wrap(d.call, 18).slice(0, 2).forEach((l, i) => text(l, 60, by + 6 + i * 10, 1, WHITE, "center", null));
+  if (d.phase === "pick") stakeRow(by + 27, d.bet, "RACE");
   else {
     const r = d.racers[d.pick];
-    text("YOU: " + (d.pick + 1) + " " + r.name.slice(0, 13), 60, 164, 1, GOLD, "center", null);
-    text(d.phase === "done" ? (d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME") : "BET " + d.bet + " PAYS X" + r.pays, 60, 175, 1, CHIP, "center", null);
+    text("YOU: " + (d.pick + 1) + " " + r.name.slice(0, 13), 60, by + 35, 1, GOLD, "center", null);
+    text(d.phase === "done" ? (d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME") : "BET " + d.bet + " PAYS X" + r.pays, 60, by + 46, 1, CHIP, "center", null);
   }
-  if (tav().fish && d.phase === "pick") { box(8, 172, 104, 11, d.withMine ? CHIP : "#2a4a6a"); text(d.withMine ? "YOUR RACER IS IN" : "RACE YOUR FISH", 60, 177, 1, d.withMine ? CHIP : "#8cb4dc", "center", null); }
+  if (tav().fish && d.phase === "pick" && !d.vip) { box(8, 172, 104, 11, d.withMine ? CHIP : "#2a4a6a"); text(d.withMine ? "YOUR RACER IS IN" : "RACE YOUR FISH", 60, 177, 1, d.withMine ? CHIP : "#8cb4dc", "center", null); }
   text(d.phase === "race" ? "" : d.phase === "done" ? "TAP FOR ANOTHER RACE" : "TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -1508,16 +1783,16 @@ function drawChipShop() {
   text("BUY THINGS", 60, 8, 1, GOLD, "center", null);
   chipsLine(19);
   SHOP_ROWS.forEach((r, i) => {
-    const [lab, price] = shopRowState(i), y = 27 + i * 17, sel = i === TAV.shopSel;
-    box(4, y, 112, 15, sel ? GOLD : "#5a3a22"); text(lab, 8, y + 7, 1, sel ? WHITE : "#d8c8b0", "left", null);
-    if (price !== null) text(price, 112, y + 7, 1, CHIP, "right", null);
+    const [lab, price] = shopRowState(i), y = 27 + i * 15, sel = i === TAV.shopSel;
+    box(4, y, 112, 13, sel ? GOLD : "#5a3a22"); text(lab, 8, y + 6, 1, sel ? WHITE : "#d8c8b0", "left", null);
+    if (price !== null) text(price, 112, y + 6, 1, CHIP, "right", null);
   });
   const [, price, note] = shopRowState(TAV.shopSel);
-  box(4, 132, 112, 34, GOLD);
-  wrap(note, 18).slice(0, 2).forEach((l, i) => text(l, 60, 139 + i * 9, 1, "#e8dcc4", "center", null));
+  box(4, 134, 112, 34, GOLD);
+  wrap(note, 18).slice(0, 2).forEach((l, i) => text(l, 60, 141 + i * 9, 1, "#e8dcc4", "center", null));
   const opens = (TAV.shopSel === 4 && tav().fish) || (TAV.shopSel === 5 && tav().jukebox);
   const lab = opens ? "TAP AGAIN TO OPEN" : price === null ? (TAV.shopSel === 3 && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? "TAP AGAIN: BUY " : "NEEDS ") + price;
-  if (lab) text(lab, 60, 158, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
+  if (lab) text(TAV.shopSel === 6 && price !== null && tav().chips >= price ? "DREAM FOR " + price : lab, 60, 160, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -1540,8 +1815,8 @@ function drawJukebox() {
   text("JUKEBOX", 60, 8, 1, "#ff8cd2", "center", null);
   chipsLine(19);
   SONGS.forEach((sg, i) => {
-    const y = 26 + i * 15, own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
-    rect(sel ? "#3a2440" : "#24160e", 4, y, 112, 13);
+    const y = 26 + i * 13, own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
+    rect(sel ? "#3a2440" : "#24160e", 4, y, 112, 12);
     text(own || sg[1] ? sg[0] : "???", 7, y + 6, 1, on ? "#ff8cd2" : own ? WHITE : GREY, "left", null);
     text(on ? "ON" : own ? "" : sg[1] ? sg[1] : "", 113, y + 6, 1, on ? "#ff8cd2" : CHIP, "right", null);
   });
@@ -1589,17 +1864,80 @@ function drawTavBoard() {
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
+const nameOf = fid => (tav().names && tav().names[fid]) || SPEC[fid][1];   // your own name for a species, if you bought one
+const RENAME = 100, REN_PER = 10;
+function velvetBg() { for (let x = 0; x < LW; x += 6) rect(x % 12 ? "#3a0e18" : "#481420", x, 0, 6, LH); rect("#c8a03c", 0, 0, LW, 2); rect("#c8a03c", 0, LH - 2, LW, 2); }
+function drawVip() {
+  velvetBg();
+  g.save(); g.translate(OX, 0);
+  text("THE BACK ROOM", 60, 8, 1, GOLD, "center");
+  spr("oldman", 46, 16, false, 2);
+  rect("#2a0a10", 0, 48, 120, 4);
+  text(TAV.vipSay || "", 60, 60, 1, WHITE, "center", null);
+  chipsLine(72);
+  [["VIP CATCH 21", GOLD, "BETS UP TO 200"], ["VIP DERBY", GOLD, "7 RACERS, LONGER"], ["RENAME A FISH", "#ff8cd2", RENAME + " CHIPS"]].forEach(([lab, col, sub], i) => {
+    const y = 82 + i * 28; box(10, y, 100, 25, col); text(lab, 60, y + 7, 1, col, "center", null); text(sub, 60, y + 17, 1, "#d8b4b4", "center", null);
+  });
+  text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
+  g.restore();
+}
+function renameList() { return LOGGED.filter(s => store.log[s[0]]); }
+function drawRename() {
+  velvetBg();
+  g.save(); g.translate(OX, 0);
+  const list = renameList(), pages = Math.max(1, Math.ceil(list.length / REN_PER)), sel = TAV.renSel || 0, page = Math.floor(sel / REN_PER);
+  if (pages > 1) { box(2, 2, 16, 13, GOLD); text("<", 10, 8, 1, GOLD, "center", null); box(102, 2, 16, 13, GOLD); text(">", 110, 8, 1, GOLD, "center", null); }
+  text("RENAME A FISH", 60, 8, 1, "#ff8cd2", "center", null);
+  chipsLine(19);
+  list.slice(page * REN_PER, page * REN_PER + REN_PER).forEach((sp, k) => {
+    const i = page * REN_PER + k, y = 27 + k * 13, own = tav().names && tav().names[sp[0]];
+    rect(i === sel ? "#6a1e2c" : "#2a0a10", 4, y, 112, 12);
+    text(nameOf(sp[0]).slice(0, 18), 7, y + 6, 1, own ? "#ff8cd2" : WHITE, "left", null);
+  });
+  if (!list.length) text("CATCH SOMETHING FIRST", 60, 60, 1, GREY, "center", null);
+  else { const sp = list[sel]; text(tav().names && tav().names[sp[0]] ? "REALLY: " + sp[1] : "", 60, 164, 1, GREY, "center", null); text(tav().chips >= RENAME ? "TAP AGAIN: " + RENAME : "NEEDS " + RENAME + " CHIPS", 60, 175, 1, tav().chips >= RENAME ? CHIP : GREY, "center", null); }
+  text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
+  g.restore();
+}
+function renameFish(fid) {
+  let nm = null;
+  try { nm = window.prompt("NEW NAME FOR " + SPEC[fid][1] + " (LEAVE EMPTY TO PUT IT BACK)", nameOf(fid)); } catch (e) { return; }
+  if (nm === null) return;
+  nm = nm.toUpperCase().replace(/[^A-Z0-9 '!?-]/g, "").trim().slice(0, 18);
+  const q = tav(); q.names = q.names || {};
+  if (!nm || nm === SPEC[fid][1]) { delete q.names[fid]; saveStore(); play("back"); return; }   // putting the real name back is free
+  if (q.chips < RENAME) { play("miss"); return; }
+  addChips(-RENAME); q.names[fid] = nm; saveStore(); play("fanfare");
+}
 function tavernTap(lx, ly) {                                 // -> true if handled
-  const o = S.overlay, back = () => { S.overlay = o === "tavern" ? null : "tavern"; play("back"); };
+  const o = S.overlay, back = () => { S.overlay = o === "tavern" ? null : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip" : "tavern"; play("back"); };
   if (o === "tavern") {
     if (ly < 15 && lx >= 94) { TAV.board = 0; BOARDS.forEach(([k]) => tavLoad(k)); openOverlay("tavboard"); return true; }
-    const i = Math.floor((ly - 98) / 19);
-    if (ly >= 98 && i < 4 && (ly - 98) % 19 < 15 && lx >= 14 && lx < 106) {
-      if (i === 0) { if (!TAV.c21) c21New(); openOverlay("c21"); }
-      else if (i === 1) { if (!TAV.derby || TAV.derby.phase === "done") derbyNew(false); openOverlay("derby"); }
+    const nr = tavRows().length, [y0, st] = nr > 4 ? [94, 18] : [98, 19], i = Math.floor((ly - y0) / st);
+    if (ly >= y0 && i < nr && (ly - y0) % st < 15 && lx >= 14 && lx < 106) {
+      if (i === 4) { TAV.vipSay = "KEEP YOUR VOICE DOWN"; openOverlay("vip"); }
+      else if (i === 0) { if (!TAV.c21 || TAV.c21.vip) c21New(false); openOverlay("c21"); }
+      else if (i === 1) { if (!TAV.derby || TAV.derby.phase === "done" || TAV.derby.vip) derbyNew(false); openOverlay("derby"); }
       else if (i === 2) { TAV.shopSel = 0; openOverlay("chipshop"); }
       else if (claimDaily()) { TAV.say = "DON'T SPEND IT ALL"; play("fanfare"); } else { TAV.say = "COME BACK TOMORROW"; play("miss"); }
     } else if (ly > 186) back();
+    return true;
+  }
+  if (o === "vip") {
+    const i = Math.floor((ly - 82) / 28);
+    if (ly >= 82 && i < 3 && (ly - 82) % 28 < 25 && lx >= 10 && lx < 110) {
+      if (i === 0) { if (!TAV.c21 || !TAV.c21.vip) c21New(true); openOverlay("c21"); }
+      else if (i === 1) { if (!TAV.derby || TAV.derby.phase === "done" || !TAV.derby.vip) derbyNew(false, true); openOverlay("derby"); }
+      else { TAV.renSel = 0; openOverlay("rename"); }
+    } else if (ly > 186) { S.overlay = "tavern"; play("back"); }
+    return true;
+  }
+  if (o === "rename") {
+    const list = renameList(), n = list.length, pages = Math.max(1, Math.ceil(n / REN_PER)), page = Math.floor((TAV.renSel || 0) / REN_PER);
+    if (pages > 1 && ly < 17 && (lx < 24 || lx > 96)) { TAV.renSel = ((page + (lx > 96 ? 1 : pages - 1)) % pages) * REN_PER; play("tick"); }
+    else if (ly >= 27 && ly < 27 + REN_PER * 13) { const i = page * REN_PER + Math.floor((ly - 27) / 13); if (i < n) { if (i === TAV.renSel) renameFish(list[i][0]); else { TAV.renSel = i; play("tick"); } } }
+    else if (ly >= 168 && ly < 182 && n) renameFish(list[TAV.renSel || 0][0]);
+    else if (ly > 186) back();
     return true;
   }
   if (o === "c21") {
@@ -1613,17 +1951,18 @@ function tavernTap(lx, ly) {                                 // -> true if handl
   if (o === "derby") {
     const d = TAV.derby;
     if (d.phase === "race") return true;
-    if (d.phase === "done") { derbyNew(d.withMine); return true; }
-    if (ly >= 22 && ly < 122) { d.pick = clamp(Math.floor((ly - 22) / 20), 0, 4); play("tick"); }
-    else if (ly >= 151 && ly < 170) stakeTap(lx, d, "bet", derbyGo);
-    else if (ly >= 170 && ly < 186 && tav().fish) { derbyNew(!d.withMine); play("tick"); }
+    const L_ = derbyLane(d), n = d.racers.length, by = 22 + n * L_ + 4;
+    if (d.phase === "done") { derbyNew(d.withMine, d.vip); return true; }
+    if (ly >= 22 && ly < 22 + n * L_) { d.pick = clamp(Math.floor((ly - 22) / L_), 0, n - 1); play("tick"); }
+    else if (ly >= by + 25 && ly < by + 44) stakeTap(lx, d, "bet", derbyGo);
+    else if (ly >= 170 && ly < 186 && tav().fish && !d.vip) { derbyNew(!d.withMine); play("tick"); }
     else if (ly > 189) back();
     return true;
   }
   if (o === "chipshop") {
-    const i = Math.floor((ly - 27) / 17);
+    const i = Math.floor((ly - 27) / 15);
     if (ly >= 27 && i < SHOP_ROWS.length) { if (i === TAV.shopSel) shopBuy(i); else { TAV.shopSel = i; play("tick"); } }
-    else if (ly >= 132 && ly < 168) shopBuy(TAV.shopSel);
+    else if (ly >= 134 && ly < 170) shopBuy(TAV.shopSel);
     else if (ly > 186) back();
     return true;
   }
@@ -1634,7 +1973,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     return true;
   }
   if (o === "jukebox") {
-    const i = Math.floor((ly - 26) / 15);
+    const i = Math.floor((ly - 26) / 13);
     if (ly >= 26 && i < SONGS.length) {
       if (i !== TAV.songSel) { TAV.songSel = i; play("tick"); return true; }
       const sg = SONGS[i];
@@ -1938,7 +2277,7 @@ function drawLog() {
   const s = page[Math.min(S.logSel, page.length - 1)], e = store.log[s[0]];
   box(2, 106, 116, 34, CYAN);
   if (e) {
-    text(s[1], 60, 113, 1, s[7] ? GOLD : WHITE, "center", null);
+    text(nameOf(s[0]), 60, 113, 1, tav().names && tav().names[s[0]] ? "#ff8cd2" : s[7] ? GOLD : WHITE, "center", null);
     text("X" + e.n + " BEST " + e.rec + " LB", 60, 123, 1, CYAN, "center", null);
     text(s[7] ? "! LEGENDARY !" : e.star ? "* TROPHY CAUGHT" : "NO TROPHY YET", 60, 133, 1, s[7] ? LEGEND : e.star ? TROPHY : GREY, "center", null);
   } else {
@@ -2186,7 +2525,8 @@ function pointerPos(e) { const r = canvas.getBoundingClientRect(); return [(e.cl
 function closeOverlay() {
   if (S.overlay === "help") { store.seenHelp = true; saveStore(); }
   const o = S.overlay;
-  S.overlay = o === "note" && S.noteBack ? S.noteBack : ["c21", "derby", "chipshop", "tavboard"].includes(o) ? "tavern" : ["story", "jukebox", "myfish"].includes(o) ? "chipshop" : null;
+  S.overlay = o === "note" && S.noteBack ? S.noteBack : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip"
+    : ["c21", "derby", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish"].includes(o) ? "chipshop" : null;
   play("back");
 }
 function overlayTap(lx, ly) {
@@ -2280,6 +2620,7 @@ canvas.addEventListener("pointerdown", e => {
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) { AC = null; } }
   if (AC && AC.state === "suspended") AC.resume();
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
+  if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
   if (S.state === "title") { if (titleTap(rx, lx, ly)) return; }
   if (S.state === "down" && rx < 16 && ly < 14) { newDive(); return; }          // give up this dive
@@ -2287,10 +2628,11 @@ canvas.addEventListener("pointerdown", e => {
   if (S.state !== "fight") { S.touchX = KON === "mirror" ? LW - rx : rx; S.drift = 0; }
   tapAction();
 });
-canvas.addEventListener("pointermove", e => { if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
+canvas.addEventListener("pointermove", e => { if (BOSS && BOSS.touch) BOSS.touch = pointerPos(e); if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
 window.addEventListener("pointerup", e => {
   if (!S) return;
   S.touchX = null;
+  if (BOSS) BOSS.touch = null;
   if (swipeAt && S.state === "title" && !S.overlay) {      // a swipe in the sky is an arrow key; a tap is a tap
     const [x, y] = pointerPos(e), dx = x - swipeAt[0], dy = y - swipeAt[1];
     konamiKey(Math.max(Math.abs(dx), Math.abs(dy)) < 8 ? "TAP" : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "ArrowRight" : "ArrowLeft") : (dy > 0 ? "ArrowDown" : "ArrowUp"));
@@ -2310,6 +2652,11 @@ window.addEventListener("keydown", e => {
   if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"].includes(c)) e.preventDefault();
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
+  if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
+    const k = { ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[c];
+    if (k) BOSS.keys.add(k); else if (["Space", "ShiftLeft", "ShiftRight", "Enter"].includes(c)) bossPulse();
+    e.preventDefault(); return;
+  }
   if (S.state === "title" && konamiKey(c)) { S.overlay = null; return; }   // the Konami code, even with a menu open
   if (S.overlay) {
     if (c === "Escape") closeOverlay();
@@ -2322,7 +2669,7 @@ window.addEventListener("keydown", e => {
   else if (c === "ShiftLeft" || c === "ShiftRight" || c === "ArrowDown") pulse();
   else if (c === "Space" || c === "Enter" || (c === "ArrowUp" && S.state !== "title")) { tapAction(); }   // Up doesn't cast: it starts a certain code
 });
-window.addEventListener("keyup", e => { if (S) { S.keys.delete(keyDir(e)); S.keys.delete(-keyDir(e)); } });
+window.addEventListener("keyup", e => { if (BOSS) BOSS.keys.delete({ ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[e.code]); if (S) { S.keys.delete(keyDir(e)); S.keys.delete(-keyDir(e)); } });
 window.addEventListener("blur", () => { if (S) S.keys.clear(); });
 
 // --------------------------------------------------------------------- loop
@@ -2358,7 +2705,7 @@ function start() {
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id) && !store.sec.found.includes(id)) store.sec.found.push(id); });   // earned before the Secrets page existed
   newDive();
   LB.load();
-  window.REEL = { c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
