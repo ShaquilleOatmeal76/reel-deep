@@ -16,9 +16,9 @@ async def main():
             await pg.route("**/*firebase*", lambda r: r.abort())
             await pg.goto("http://127.0.0.1:8765/index.html"); await pg.wait_for_function("window.REEL && window.REEL.S")
             await pg.evaluate("t => Object.assign(REEL.SL_TUNE, t)", json.loads(TUNE))
-            for skill in ("good", "bad"):
+            for skill in ("good", "hug", "bad"):
                 res = await pg.evaluate(f"(() => {{ const f = {BOT}; const out = []; for (let i = 0; i < {N}; i++) out.push(f('{skill}')); return out; }})()")
-                wins = sum(r[0] for r in res); ph = [sum(1 for r in res if r[1] >= k) for k in (2, 3)]
+                wins = sum(r[0] for r in res); ph = [sum(1 for r in res if r[1] >= k) for k in (2, 3)]  # fights that got to phase 2, and to phase 3
                 print(f"{tag:5} {skill:4}: won {wins}/{N} ({wins*100//N}%), reached phase 2: {ph[0]}, phase 3: {ph[1]}, avg hits {sum(r[2] for r in res)/N:.1f}, avg {sum(r[3] for r in res)/N:.0f}s")
                 print("   hits taken by cause:", await pg.evaluate("JSON.stringify(window.CAUSES||{})")); await pg.evaluate("window.CAUSES={}")
             if errs: print("errors", errs[:3])
