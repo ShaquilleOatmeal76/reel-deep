@@ -248,6 +248,9 @@ function todaysBounty() {                              // one ordinary species i
   const d = new Date(), pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && s[2] <= 6 && s[5] >= 2).map(s => s[0]);
   return RNG((d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 7 + 1).choice(pool);
 }
+function stormNow() {                                 // the weather follows the clock: each hour is stormy or not, the same for everybody
+  return RNG(Math.floor(Date.now() / 3600000) * 2654435761 + 17).random() < 0.14;
+}
 function zoneOf(m) { for (let i = 0; i < ZONES.length; i++) if (m < ZONES[i][2]) return i; return ZONES.length - 1; }
 
 // ------------------------------------------------------------- leaderboard
@@ -297,13 +300,13 @@ function newDive() {
     haul: null, zoneSeen: 0, prepared: false, eye: 0, reached: 0, resume: "down",
     chunks: {}, special: {},
   };
-  const r = S.rng.random();                              // one thing out of the ordinary on some dives
-  S.storm = r < 0.14;
-  if (r >= 0.14 && r < 0.32) {
+  S.storm = stormNow();                                  // weather comes from the clock, so refreshing can't reroll it
+  const r = S.rng.random();                              // frenzies and whales are still rolled per dive, as before
+  if (!S.storm && r >= 0.14 && r < 0.32) {
     const z = S.rng.randint(1, 8), a = S.rng.uniform(ZONES[z][1] + 20, ZONES[z][2] - 50);
     const pool = SPECIES.filter(s => s[2] === z && s[4] > 0 && s[5] >= 3 && s[6] === null).map(s => s[0]);
     S.frenzy = [a, a + 30, S.rng.choice(pool), S.rng.choice([-1, 1])];
-  } else if (r >= 0.32 && r < 0.45) S.whaleAt = S.rng.uniform(150, 420);
+  } else if (!S.storm && r >= 0.32 && r < 0.45) S.whaleAt = S.rng.uniform(150, 420);
 }
 function setState(st, msg) { S.state = st; S.stT = 0; S.msg = msg || null; }
 
@@ -533,7 +536,7 @@ function update(dt) {
     while (h.shown < h.n && S.stT > 0.5 + h.shown * 0.42) { h.shown++; play("weigh", 0.8); splash(LW / 2, 0, 5); }
     if (h.shown >= h.n && !h.fanfare && S.stT > h.end) { h.fanfare = true; play(h.sets.length || h.record ? "fanfare" : "chime"); h.news.forEach(n => S.popups.push(n)); }
   }
-  if (S.state === "title") S.cam = -46;
+  if (S.state === "title") { S.cam = -46; S.storm = stormNow(); }   // the sky changes on the hour even while waiting to cast
   S.cam = Math.max(S.cam, -74);
 }
 function land(i, f) {
