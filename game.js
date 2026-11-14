@@ -41,7 +41,21 @@ let ghostAtlas = null;                                 // ...and as pale ghosts,
 // The Konami code: each time it is entered, the next silly effect, for the rest of the session
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "KeyB", "KeyA"];
 const KON_FX = [["ducks", "RUBBER DUCKS"], ["googly", "GOOGLY EYES"], ["gameboy", "POCKET GREEN"], ["glasses", "COOL FISH"], ["disco", "DISCO WATER"], ["tiny", "TINY FISH"], ["mirror", "MIRROR MODE"], ["quack", "QUACK"]];
-let KON = null, konPos = 0, konLure = 0;
+let KON = null, konBuf = [], swipeAt = null;              // the last few keys (or swipes) entered on the title screen, with the lure before each
+function konamiKey(code) {                                 // -> true when this key finishes the code
+  konBuf.push([code, S.lure]);
+  if (konBuf.length > KONAMI.length) konBuf.shift();
+  const keys = konBuf.map(k => k[0]), n = KONAMI.length;
+  const typed = keys.length === n && keys.every((k, i) => k === KONAMI[i]);
+  const touched = keys.length === n && keys.every((k, i) => i < n - 2 ? k === KONAMI[i] : k === "TAP");   // on a phone: eight swipes, then two taps
+  if (!typed && !touched) return false;
+  S.lure = konBuf[0][1]; konBuf = [];                      // the left-rights and the A don't change your lure
+  const fx = KON_FX[store.sec.konami % KON_FX.length];
+  KON = fx[0]; store.sec.konami++; saveStore();
+  S.popups.push(["CODE: " + fx[1] + "!", 4.5, LIME]); play("fanfare"); S.flash = 0.25;
+  findSecret("konami");
+  return true;
+}
 
 // ------------------------------------------------------------------ helpers
 function RNG(seed) {
@@ -2249,7 +2263,7 @@ function titleTap(rx, lx, ly) {                            // -> true if the tap
     else { S.popups.push(["CLOSED. " + (TAV_OPEN_AT - store.dives) + " DIVES TO GO", 2.4, ORANGE]); play("miss"); }
     return true;
   }
-  if (ly < wl) return true;                                // the rest of the sky does nothing
+  if (ly < wl) { swipeAt = [rx, ly]; return true; }       // the rest of the sky: swipes and taps there can enter a certain code
   if (ly >= 159 && ly < 173 && lx >= 8 && lx < 106) { openBet(); return true; }
   if (ly >= 96 && ly < 124 && lx >= 6 && lx < 114) { S.lure = clamp(Math.floor((lx - 6) / 27), 0, LURES.length - 1); play("tick"); return true; }
   if (ly >= 174 && ly < 192) {
@@ -2274,7 +2288,15 @@ canvas.addEventListener("pointerdown", e => {
   tapAction();
 });
 canvas.addEventListener("pointermove", e => { if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
-window.addEventListener("pointerup", () => { if (S) S.touchX = null; });
+window.addEventListener("pointerup", e => {
+  if (!S) return;
+  S.touchX = null;
+  if (swipeAt && S.state === "title" && !S.overlay) {      // a swipe in the sky is an arrow key; a tap is a tap
+    const [x, y] = pointerPos(e), dx = x - swipeAt[0], dy = y - swipeAt[1];
+    konamiKey(Math.max(Math.abs(dx), Math.abs(dy)) < 8 ? "TAP" : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "ArrowRight" : "ArrowLeft") : (dy > 0 ? "ArrowDown" : "ArrowUp"));
+  }
+  swipeAt = null;
+});
 function keyDir(e) { return e.code === "ArrowLeft" || e.code === "KeyA" ? -1 : e.code === "ArrowRight" || e.code === "KeyD" ? 1 : 0; }
 function toggleFullscreen() {
   const d = document, el = d.documentElement;
@@ -2288,18 +2310,7 @@ window.addEventListener("keydown", e => {
   if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"].includes(c)) e.preventDefault();
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
-  if (S.state === "title" && !S.overlay) {                // the Konami code
-    if (c === KONAMI[konPos]) { if (konPos === 0) konLure = S.lure; konPos++; }
-    else konPos = c === KONAMI[0] ? 1 : 0;
-    if (konPos === KONAMI.length) {
-      konPos = 0; S.lure = konLure;                         // the left-rights and the A don't change your lure
-      const fx = KON_FX[store.sec.konami % KON_FX.length];
-      KON = fx[0]; store.sec.konami++; saveStore();
-      S.popups.push(["CODE: " + fx[1] + "!", 3, LIME]); play("fanfare");
-      findSecret("konami");
-      return;
-    }
-  }
+  if (S.state === "title" && konamiKey(c)) { S.overlay = null; return; }   // the Konami code, even with a menu open
   if (S.overlay) {
     if (c === "Escape") closeOverlay();
     else if (c === "Space" || c === "Enter") { if (S.overlay === "shop") shopAct(); else overlayTap(60, S.overlay === "help" ? 100 : 190); }
