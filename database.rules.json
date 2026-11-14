@@ -10,6 +10,13 @@
         }
       }
     },
+    "saves": {
+      "$code": {
+        ".read": true,
+        ".write": "!data.exists()",
+        ".validate": "$code.matches(/^[A-HJ-NP-Z2-9]{8}$/) && newData.isString() && newData.val().length <= 20000"
+      }
+    },
     "all": {
       ".read": true,
       ".indexOn": ["s"],
