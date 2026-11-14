@@ -902,6 +902,73 @@ function fireworks(y0, cols) {                             // bursts over the bo
   }
 }
 
+// ------------------------------------------------------------- the Sleeper
+// A boss arena under the sea floor. BOSS holds the fight (mock-up data for now).
+let BOSS = null;
+const SL_BODY = "#241a3a", SL_DARK = "#140e24", SL_LIGHT = "#3c2c5a", SL_TENT = "#5a3c7a", SL_SUCK = "#c8a0e6";
+function slEye(x, y, r, open, hx, hy) {                     // one of its eyes: closed is a seam, open is gold with a slit that follows the hook
+  ell(SL_DARK, x - r - 3, y - Math.round(r * 0.65) - 2, r * 2 + 6, Math.round(r * 1.3) + 4);
+  if (open < 0.1) { for (let k = -r; k <= r; k++) rect("#5a4a7e", x + k, y + Math.round(2 - k * k / (r * 4)), 1, 1); return; }
+  const h = Math.max(2, Math.round(r * 1.3 * open));
+  ell("#463e6e", x - r - 1, y - (h >> 1) - 1, r * 2 + 2, h + 2);
+  ell("#fad246", x - r, y - (h >> 1), r * 2, h);
+  ell("#ffeea0", x - r + 2, y - (h >> 1) + 1, Math.round(r * 0.8), Math.max(1, h >> 2));
+  const px = x + Math.round(clamp((hx - x) / 10, -r / 2, r / 2)), py = y + Math.round(clamp((hy - y) / 20, -h / 4, h / 4));
+  ell("#140a14", px - Math.max(1, r >> 2), py - (h >> 1) + 1, Math.max(2, r >> 1), Math.max(1, h - 2));
+}
+function slTentacle(t) {                                     // a tentacle sweeping in from one side: a chain of shrinking discs
+  const n = 22, side = t.dir > 0 ? -1 : 1;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1), x = t.x + t.dir * i * 6, y = t.y + Math.sin(T * 3 + i * 0.45 + t.ph) * (3 + u * 6), r = Math.max(1, Math.round(9 * (1 - u * 0.85)));
+    disc(SL_TENT, x, y, r);
+    if (i % 2 === 0 && r > 2) disc(SL_SUCK, x, y + r - 2, 1);
+    if (i === 0) disc(SL_DARK, x + side * 2, y, r - 2);
+  }
+}
+function drawBoss() {                                        // the arena, the Sleeper, its attacks and the fight's HUD
+  const b = BOSS, t = T, cx = LW / 2, shake = b.shake > 0 ? Math.round(Math.sin(t * 50) * 2) : 0;
+  g.save(); g.translate(shake, 0);
+  for (let i = 0; i < 14; i++) rect(lerpCol([18, 14, 40], [8, 6, 20], i / 13), 0, i * 15, LW, 15);       // the deep water around it
+  for (let k = 0; k < Math.round(30 * LW / UW); k++) if ((k * 7 + Math.floor(t * 2)) % 9) rect("#3a3060", (k * 53) % LW, (k * 37 + Math.floor(t * 4 * (1 + k % 3))) % 180, 1, 1);   // drifting specks
+  const top = b.bodyY, BW = Math.min(LW * 1.2, 190);       // the body: a crusted dome rising out of the floor, the same size on any screen
+  if (b.phase > 0) {
+    ell(SL_DARK, cx - BW * 0.52, top - 2, BW * 1.04, (200 - top) * 2 + 4);
+    ell(SL_BODY, cx - BW * 0.5, top, BW, (200 - top) * 2);
+    for (let k = 0; k < 9; k++) { const a = Math.PI * (0.08 + k * 0.105), rx = cx + Math.cos(a) * BW * 0.46, ry = top + (200 - top) * (1 - Math.sin(a)) * 0.9 + 6; ell(SL_LIGHT, rx - 5, ry - 2, 10, 4); }    // crust
+    for (let k = 0; k < 14; k++) { const x = cx + ((k * 37) % 100 - 50) * BW / 144, y = top + 14 + (k * 23) % Math.max(8, 190 - top - 14); if ((Math.floor(t * 2) + k) % 5) rect(k % 2 ? "#5ae6ff" : "#c8a0ff", x, y, 1, 1); }   // its own lights
+    if (b.phase >= 2) {                                      // a mouth, once it is angry
+      const my = Math.min(192, top + (200 - top) * 0.72), mw = Math.round(BW * 0.24), open = b.lunge > 0 ? 8 : 2;
+      ell("#0a0612", cx - mw, my - open, mw * 2, open * 2);
+      for (let k = -mw + 4; k < mw - 2; k += 6) { poly("#e6e0d0", [[cx + k, my - open], [cx + k + 2, my - open + 4], [cx + k + 4, my - open]]); poly("#e6e0d0", [[cx + k + 3, my + open], [cx + k + 5, my + open - 4], [cx + k + 7, my + open]]); }
+    }
+    b.eyes.forEach(e => slEye(cx + e.x, e.y, e.r, e.open, b.hx, b.hy));
+  }
+  for (let x = 0; x < LW; x += 1) { const h = Math.round(4 + 3 * Math.sin(x * 0.21) + 2 * Math.sin(x * 0.07 + 2)); rect("#10102a", x, 194 - h, 1, h + 6); }   // the floor
+  if (b.crack) {                                             // the crack it leaves behind: faint, and off to one side
+    const x0 = Math.round(LW * 0.86), gl = 0.35 + 0.25 * Math.sin(t * 2);
+    g.globalAlpha = gl; ell("#c8a0ff", x0 - 9, 182, 18, 14); g.globalAlpha = 1;
+    [[0, 184], [2, 187], [-1, 190], [1, 193], [-2, 196]].forEach(([dx, dy], i, a) => { if (i) line("#05030a", x0 + a[i - 1][0], a[i - 1][1], x0 + dx, dy); });
+    rect("#e6d2ff", x0, 189, 1, 1);
+  }
+  (b.rubble || []).forEach(r => rect("#4a4070", r[0], r[1] + Math.round((t * 30 + r[2]) % 40), 2, 2));
+  b.tentacles.forEach(slTentacle);
+  b.rings.forEach(r => { ring("#c8a0ff", cx, top + 10, r); if (r > 6) ring("#5a3c7a", cx, top + 10, r - 3); });
+  b.ink.forEach(([x, y, r]) => { for (let k = 0; k < 6; k++) disc(k % 2 ? "#05040c" : "#0c0818", x + Math.round(Math.cos(k * 1.1) * r * 0.5), y + Math.round(Math.sin(k * 1.7) * r * 0.4), Math.round(r * (0.6 + (k % 3) * 0.15))); });
+  line(lineCol(0), b.hx, 0, b.hx, b.hy - 4);               // the hook, free to move in any direction now
+  spr("hook" + store.eq.hook, b.hx - 1, b.hy - 4);
+  if (b.ring !== null && b.ring !== undefined) { const r = Math.floor(8 + b.ring * 60); ring(CYAN, b.hx, b.hy, r); }
+  g.restore();
+  text("THE SLEEPER", LW / 2, 7, 1, "#c8a0ff", "center");                                   // the HUD
+  const bw = Math.min(110, LW - 60), bx = Math.round(LW / 2 - bw / 2);
+  rect(INK, bx - 1, 13, bw + 2, 5); rect("#3c1e3c", bx, 14, bw, 3); rect(b.phase >= 3 ? RED : b.phase === 2 ? ORANGE : "#c8a0ff", bx, 14, Math.round(bw * b.hp), 3);
+  [1, 2].forEach(k => rect(INK, bx + Math.round(bw * k / 3), 13, 1, 5));
+  text(["", "WAKING", "ANGRY", "FURIOUS"][b.phase] || "", LW / 2, 24, 1, b.phase >= 3 ? RED : "#a090c0", "center", null);
+  for (let k = 0; k < 3; k++) { const x = 4 + k * 8; if (k < b.lives) spr("hook" + store.eq.hook, x, 21); else rect("#3c3450", x + 1, 24, 3, 1); }   // hits you can still take
+  const k = clamp(b.charge, 0, 1);
+  box(2, 176, 36, 22, k >= 1 ? CYAN : "#505678"); text("PULSE", 20, 183, 1, k >= 1 ? CYAN : "#6e7496", "center", null);
+  rect("#3c4264", 6, 190, 28, 3); rect(k >= 1 ? CYAN : "#5a8ca0", 6, 190, Math.round(28 * k), 3);
+  if (b.msg) { const tw = textW(b.msg, 1); box(Math.round(LW / 2 - tw / 2) - 5, 40, tw + 10, 13, GOLD); text(b.msg, LW / 2, 46, 1, GOLD, "center", null); }
+}
 function drawGiant() {                                   // something very large is asleep in the sea floor. It notices the hook.
   const ey = Math.floor(DEPTH_PX + 52 - S.cam);
   if (ey > LH + 20) { S.eye = 0; return; }
@@ -1036,7 +1103,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { boss: drawBoss, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2358,7 +2425,7 @@ function start() {
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id) && !store.sec.found.includes(id)) store.sec.found.push(id); });   // earned before the Secrets page existed
   newDive();
   LB.load();
-  window.REEL = { c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
