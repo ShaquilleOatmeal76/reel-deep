@@ -102,12 +102,16 @@ items += [("bottle", outlined(pg, from_rows(pg, ["..mm..", "..mm..", ".cwwc.", "
           ("evturkey", from_rows(pg, ["r.e.y", ".rey.", ".mmm."], P)), ("evpumpkin", from_rows(pg, [".z.", "eee", "eke"], P))]
 # ---- the Flipside: the Crossing's creatures, the flesh jelly, and a monster version of every character, pet and hat
 import flipside as FS
-items += [("fc_" + c[0], outlined(pg, from_rows(pg, c[7], FS.PAL))) for c in FS.CREATURES]
+items += [("fc_" + c[0], outlined(pg, from_rows(pg, c[7], FS.PAL))) for c in FS.CREATURES[:FS.CROSSING_N]]
 items += [("flurker", outlined(pg, from_rows(pg, FS.LURKER, FS.PAL)))]
 _named = dict(items)
 items += [("mchar%d" % i, FS.monsterify(_named["char%d" % i], 100 + i)) for i in range(len(CHARS))]
 items += [("mpet%d" % i, FS.monsterify(_named["pet%d" % i], 500 + i, eyes=2, teeth=_named["pet%d" % i].get_width() >= 7)) for i in range(1, len(PETS))]
 items += [("mhat%d" % i, FS.monsterify(_named["hat%d" % i], 300 + i, eyes=0, teeth=False)) for i in range(1, len(HATS)) if "hat%d" % i in _named]
+# ---- the endgame (drop 5): the other seven zones' creatures, and the Bestiary's monster boat. Appended so nothing above moves.
+items += [("fc_" + c[0], outlined(pg, from_rows(pg, c[7], FS.PAL))) for c in FS.CREATURES[FS.CROSSING_N:]]
+MAW_BOAT = "MAW BOAT"            # a Bestiary reward, never in the shop: the rowboat, gone wrong
+items += [("boat%d" % len(BOATS), FS.monsterify(outlined(pg, from_rows(pg, BOAT_ROWS[0], {"b": (96, 22, 42), "w": (236, 228, 210), "r": (200, 100, 122), "d": (146, 32, 62)})), 777, eyes=5))]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()
@@ -226,8 +230,8 @@ F = fishing
 data = dict(atlas=pos, glyphs=ac._GLYPHS, species=[list(s[:3]) + [list(s[3])] + list(s[4:]) for s in F.SPECIES], zones=[list(z) for z in F.ZONES], zoneCol=F.ZONE_COL,
             lures=[["standard", "STANDARD", "BALANCED. 1 PULSE", 1.0, 1.0, 1, 1.0, 1.0, 0], ["sinker", "HEAVY SINKER", "FAST DROP. 1 PULSE", 1.35, 0.78, 1, 1.0, 1.0, 0],
                    ["glow", "GLOW LURE", "PULLS FISH+JELLIES", 1.0, 1.0, 1, 1.5, 1.2, 26], ["sonar", "SONAR", "3 PULSES. SLOW DROP", 0.85, 1.0, 3, 1.0, 1.0, 0]], vents=wide_vents, glows=wide_glows, waterH=wide_h, waterW=WW, water=[[a, list(c)] for a, c in F.WATER],
-            chars=CHARS, boats=[b[0] for b in BOATS], pets=[p[0] for p in PETS], flags=[f[0] for f in FLAGS], flairPos=FLAIR_POS, hooks=[h[0] for h in HOOKS], hats=[h[0] for h in HATS], flair=[f[0] for f in FLAIR],
-            flip=dict(zones=[list(z) for z in FS.ZONES], crossing=FS.CROSSING_M, junk=list(FS.JUNK), mythic=FS.MYTHIC,
+            chars=CHARS, boats=[b[0] for b in BOATS] + [MAW_BOAT], pets=[p[0] for p in PETS], flags=[f[0] for f in FLAGS], flairPos=FLAIR_POS, hooks=[h[0] for h in HOOKS], hats=[h[0] for h in HATS], flair=[f[0] for f in FLAIR],
+            flip=dict(zones=[list(z) for z in FS.ZONES], crossing=FS.CROSSING_M, junk=list(FS.JUNK), mythic=FS.MYTHIC, hunters=FS.HUNTERS, crossingN=FS.CROSSING_N,
                       species=[[c[0], c[1], c[2], list(c[3]), c[4], c[5], c[6]] for c in FS.CREATURES]),
             dark=[[300, 0], [480, 0.34], [570, 0.38], [600, 0.28], [690, 0.28], [720, 0.34], [830, 0.38], [960, 0.46], [1110, 0.46], [1160, 0.38]],
             consts=dict(MAX_M=F.MAX_M, BOTTOM_M=F.BOTTOM_M, BLEND=F.BLEND, BOTTOM_BONUS=F.BOTTOM_BONUS, BOUNTY_X=F.BOUNTY_X, JELLY_CHANCE=F.JELLY_CHANCE, PER_CHUNK=[list(p) for p in F.PER_CHUNK],
