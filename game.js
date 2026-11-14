@@ -947,19 +947,21 @@ function slY(b, x) { return 200 - (200 - b.bodyY) * slShape((x - LW / 2) / slRX(
 const SL_PHASES = [null,
   { body: 132, need: 4, eyes: [[0, 20, 14]] },
   { body: 124, need: 5, eyes: [[-24, 18, 11], [24, 18, 11]] },
-  { body: 110, need: 6, eyes: [[-30, 20, 6], [30, 22, 6], [-12, 12, 5], [14, 14, 5], [0, 28, 6]] }];
-const SL_TOTAL = 15, SL_REACH = 46, SL_SPEED = 95, SL_RECHARGE = 1.5;
-// Tuned with tools/tests/test_sleeper.py: a careful bot (sees everything, reacts in 0.12 s) wins about a third of fights,
-// a sloppy one (0.4 s, ignores warnings) about 2-3%. Real players land between. Re-run it after changing these.
-const SL_TUNE = { tent: [0, 2.0, 1.6, 1.7], tentSpeed: [0, 205, 270, 300], double: [0, 0.15, 0.45, 0.55], ink: 4.5, ring: 2.8, ringSpeed: 72, ringGap: 1.25, lunge: 5.5,
-  eye1: [2.4, 4.2], eye2: [1.5, 2.2], eye3: [0.9, 1.3] };   // eye1: open for, out of every; eye2: each eye open for, then the other after; eye3: open for, every
-function slEyes(b) { b.eyes = SL_PHASES[b.phase].eyes.map(([x, dy, r]) => ({ x, dy, r, y: b.bodyY + dy, open: 0, want: 0, cool: 0 })); b.eyeT = 0; b.eyeIdx = -1; }
+  { body: 110, need: 5, eyes: [[-30, 20, 6], [30, 22, 6], [-12, 12, 5], [14, 14, 5], [0, 28, 6]] }];
+const SL_TOTAL = 14, SL_REACH = 46, SL_SPEED = 95, SL_RECHARGE = 1.5;
+// Tuned with tools/tests/test_sleeper.py. Kade: phases 1-2 were too easy (you could sit against its head), phase 3 far
+// too hard. Now sweeps skim its head, hugging it gets you shrugged off, and phase 3 has fewer, slower attacks.
+// Careful bot: reaches phase 3 in 80-90% of fights, wins 25-35%. Sloppy bot: past phase 1 in ~75%, wins ~1-2%.
+// Parking against its head does clearly worse than playing properly. Re-run it after changing these.
+const SL_TUNE = { tent: [0, 1.6, 1.2, 2.6], tentSpeed: [0, 225, 295, 270], double: [0, 0.25, 0.6, 0.25], ink: 4.5, ring: 4.0, ringSpeed: 72, ringGap: 2.0,
+  lunge: 8, lungeWarn: 1.4, hug: 1.0, eye1: [2.0, 4.0], eye2: [1.3, 2.0], eye3: [1.25, 1.5] };   // eye1: open for, out of every; eye2: each eye open for, then the other after; eye3: open for, every
+function slEyes(b) { b.hug = 0; b.shrugT = -1; b.lungeLift = 0; b.shrugLift = 0; b.eyes = SL_PHASES[b.phase].eyes.map(([x, dy, r]) => ({ x, dy, r, y: b.bodyY + dy, open: 0, want: 0, cool: 0 })); b.eyeT = 0; b.eyeIdx = -1; }
 // Test link: add ?boss to the game's address to jump straight into the fight (?boss=2 or ?boss=3 starts at that phase).
 // A test fight is a dream: no rewards, no crack, nothing saved. It restarts when it ends; Escape quits to the title.
 const TEST_BOSS = (() => { try { const q = new URLSearchParams(location.search); return q.has("boss") ? clamp(parseInt(q.get("boss"), 10) || 1, 1, 3) : 0; } catch (e) { return 0; } })();
 function startBoss(dream, test) {
   BOSS = { dream: !!dream, test: test || 0, mode: "wake", mt: 0, phase: 1, hits: 0, phaseHits: 0, hp: 1, lives: 3, charge: 1, hx: LW / 2, hy: 56, keys: new Set(), touch: null, inv: 0, shake: 2.2,
-    base: 210, lift: 0, bodyY: 210, eyes: [], tentacles: [], warn: [], ink: [], rings: [], lunge: 0, lungeT: -1, ring: null, crack: false,
+    base: 210, lift: 0, lungeLift: 0, shrugLift: 0, hug: 0, shrugT: -1, bodyY: 210, eyes: [], tentacles: [], warn: [], ink: [], rings: [], lunge: 0, lungeT: -1, ring: null, crack: false,
     rubble: Array.from({ length: 8 }, (_, i) => [Math.round(Math.random() * LW), 30 + i * 9, i * 7]), msg: "SOMETHING WAKES...", tm: { tent: 2.4, ink: 3, ring: 2, lunge: 4.5 } };
   if (test > 1) { BOSS.phase = test; BOSS.hits = SL_PHASES.slice(1, test).reduce((a, q) => a + q.need, 0); BOSS.hp = 1 - BOSS.hits / SL_TOTAL; BOSS.msg = "TEST: PHASE " + test; }
   else if (test) BOSS.msg = "TEST FIGHT";
@@ -1024,7 +1026,7 @@ function bossUpdate(dt) {
       const sides = Math.random() < SL_TUNE.double[ph] ? [-1, 1] : [Math.random() < 0.5 ? -1 : 1], used = [];
       for (const sd of sides) {                              // a second tentacle only if there's room for a gap between them
         let y, n = 0;
-        do y = 40 + Math.random() * Math.max(10, b.base - 60); while (used.some(u => Math.abs(u - y) < 30) && ++n < 20);
+        do y = 36 + Math.random() * Math.max(10, b.base - 42); while (used.some(u => Math.abs(u - y) < 30) && ++n < 20);
         if (n >= 20) break;
         used.push(y); b.warn.push({ sd, y, t: 0.75 });
       }
@@ -1041,10 +1043,20 @@ function bossUpdate(dt) {
       if (b.lungeT < 0 && (tm.lunge -= dt) <= 0) { tm.lunge = SL_TUNE.lunge; b.lungeT = 0; }
       if (b.lungeT >= 0) {
         b.lungeT += dt; const u = b.lungeT;
-        if (u < 0.9) { b.shake = 0.1; b.lift = 0; } else if (u < 1.2) b.lift = (u - 0.9) / 0.3 * 70; else if (u < 1.55) b.lift = 70; else if (u < 2.15) b.lift = 70 * (1 - (u - 1.55) / 0.6); else { b.lift = 0; b.lungeT = -1; }
-        b.lunge = b.lift > 5 ? 1 : 0;
+        const w = SL_TUNE.lungeWarn;
+        if (u < w) { b.shake = 0.1; b.lungeLift = 0; } else if (u < w + 0.3) b.lungeLift = (u - w) / 0.3 * 70; else if (u < w + 0.65) b.lungeLift = 70; else if (u < w + 1.25) b.lungeLift = 70 * (1 - (u - w - 0.65) / 0.6); else { b.lungeLift = 0; b.lungeT = -1; }
+        b.lunge = b.lungeLift > 5 ? 1 : 0;
       }
     }
+    // Hug its body too long and it shrugs you off: a short rumble, then a heave that hurts.
+    b.hug = b.hy > slY(b, b.hx) - 9 ? b.hug + dt : Math.max(0, b.hug - dt * 2);
+    if (b.shrugT < 0 && b.lungeT < 0 && b.hug > SL_TUNE.hug) { b.shrugT = 0; b.hug = 0; }
+    b.shrugLift = 0;
+    if (b.shrugT >= 0) {
+      const u = (b.shrugT += dt);
+      if (u < 0.45) b.shake = 0.12; else if (u < 0.6) b.shrugLift = (u - 0.45) / 0.15 * 16; else if (u < 0.8) b.shrugLift = 16; else if (u < 1.1) b.shrugLift = 16 * (1 - (u - 0.8) / 0.3); else b.shrugT = -1;
+    }
+    b.lift = Math.max(b.lungeLift, b.shrugLift);
     for (const t of b.tentacles) for (const [x, y, r] of tentPoints(t)) if (Math.hypot(b.hx - x, b.hy - y) < r + 2) { bossHurt(b); break; }
     const ry = b.bodyY + 10;
     for (const r of b.rings) {
