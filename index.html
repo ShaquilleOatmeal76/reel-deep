@@ -28,6 +28,20 @@
   #nameModal .row { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
   #nameModal button { font: inherit; font-size: 15px; letter-spacing: 1px; padding: 9px 16px; background: #060a1e; color: #5ae6ff; border: 2px solid #5ae6ff; cursor: pointer; }
   #nameOk { color: #ffd246 !important; border-color: #ffd246 !important; }
+  #saveModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 20, .82); }
+  #saveModal.open { display: flex; }
+  #saveModal form { background: #1a1628; border: 3px solid #ffd246; padding: 20px 22px; text-align: center; color: #fafaff; width: min(320px, 84vw); }
+  #saveModal h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: 2px; color: #ffd246; }
+  #saveModal p { margin: 0 0 12px; font-size: 13px; color: #96a0c8; line-height: 1.45; }
+  #saveModal button { font: inherit; font-size: 14px; letter-spacing: 1px; padding: 8px 12px; background: #060a1e; color: #5ae6ff; border: 2px solid #5ae6ff; cursor: pointer; }
+  #saveModal .row { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+  #saveOut { display: none; width: 100%; box-sizing: border-box; font: inherit; font-size: 22px; letter-spacing: 3px; text-align: center; padding: 8px; margin: 10px 0 0;
+             background: #060a1e; color: #ffd246; border: 2px solid #ffd246; resize: none; }
+  #saveOut.long { font-size: 11px; letter-spacing: 0; text-align: left; height: 90px; }
+  #saveIn { width: 100%; box-sizing: border-box; font: inherit; font-size: 16px; letter-spacing: 2px; text-align: center; text-transform: uppercase; padding: 8px;
+            background: #060a1e; color: #fafaff; border: 2px solid #fafaff; border-radius: 0; outline: none; margin-top: 14px; }
+  #saveIn:focus { border-color: #ffd246; }
+  #saveNote { min-height: 18px; margin-top: 10px !important; color: #ffa046 !important; }
 </style>
 </head>
 <body>
@@ -40,6 +54,17 @@
     <p>Up to 3 letters, shown on the scoreboard.</p>
     <input id="nameInput" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
     <div class="row"><button type="button" id="nameSkip">SKIP</button><button type="button" id="nameOk">SAVE</button></div>
+  </form>
+</div>
+<div id="saveModal">
+  <form onsubmit="return false">
+    <h2>SAVE CODE</h2>
+    <p>Move your coins, log, looks and secrets to another browser or device, or get them back after clearing your browser.</p>
+    <button type="button" id="saveMake">MAKE A CODE</button>
+    <textarea id="saveOut" readonly rows="1"></textarea>
+    <input id="saveIn" placeholder="TYPE A CODE TO LOAD" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <div class="row"><button type="button" id="saveClose">CLOSE</button><button type="button" id="saveLoad">LOAD</button></div>
+    <p id="saveNote"></p>
   </form>
 </div>
 <script src="config.js"></script>

@@ -9,7 +9,8 @@ from hopper import outlined, from_rows
 scr = ac.Screen("x"); pg = scr.pg
 art = fishing.Art(pg)
 OUT = os.path.dirname(HERE)                # the game folder this tools folder sits in
-items = [(s[0], art.spr[s[0]][0]) for s in fishing.SPECIES]
+LATE = ("gboot", "werewolf", "lucky")         # added later: packed at the end so older sprites keep their places
+items = [(s[0], art.spr[s[0]][0]) for s in fishing.SPECIES if s[0] not in LATE]
 items += [("jelly0", art.jelly[0]), ("jelly1", art.jelly[1]), ("whale", art.whale[0])]
 # ---- cosmetics -----------------------------------------------------------------------------------
 INK = fishing.INK
@@ -74,8 +75,9 @@ FLAIR = [("NOTHING", None), ("SUNGLASSES", ["kkkkkk", "kk.kk."]), ("PARTY HATS",
 FLAIR += [("MUSTACHES", ["kk.kk", ".kkk."]), ("PINK BOWS", ["f.f", "fff", "f.f"]), ("SANTA HATS", ["..w", ".rr", "rrr", "www"]), ("FLOWERS", [".f.", "fyf", ".f."]),
           ("CHEF HATS", [".www.", "wwwww", ".www."]), ("NINJA BANDS", ["rrrrr", "....r"]), ("GOLD CHAINS", ["y.y.y", ".y.y."]), ("WIZARD HATS", ["..n", ".nn", "nyn", "nnn"]),
           ("SNORKELS", ["cccc", "c..c", "cccc", "...k"]), ("DIAMONDS", [".c.", "ccc", ".c."])]
-FLAIR_POS = ["", "face", "top", "top", "chin", "top", "face", "top", "top", "face", "face", "chin", "top", "top", "top", "face", "chin", "top", "face", "top"]
-items += [("flair%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAIR) if rows]
+FLAIR += [("TINY DUCKS", ["..y.", ".yyo", "yyy."])]          # secret: the Konami code. Secret rewards are appended past the shop's items
+FLAIR_POS = ["", "face", "top", "top", "chin", "top", "face", "top", "top", "face", "face", "chin", "top", "top", "top", "face", "chin", "top", "face", "top", "top"]
+items += [("flair%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAIR) if rows and i < 20]
 # ---- pets that ride in the boat, and flags for the stern
 PETS = [("NO PET", None), ("CRAB", ["r...r", ".rrr.", "rwkrr", ".r.r."]), ("RUBBER DUCKY", [".yy..", "ykyo.", "yyy..", "yyyy."]), ("CAT", ["e..e.", "eeee.", "ekek.", "eeeee", ".e.e."]),
         ("PUPPY", [".mm..", "mkmm.", "mmmmk", ".mmm.", ".m.m."]), ("PARROT", [".gg..", "gwkr.", "ggg..", ".gg..", ".rr.."]), ("OCTOPUS", [".ppp.", "pkpkp", "ppppp", "p.p.p"]),
@@ -86,7 +88,14 @@ FLAGS = [("NO FLAG", None), ("RED PENNANT", ["rrrrrr", "rrrr..", "rr...."]), ("P
          ("GOLD STAR", ["nnnnnn", "nnynnn", "nyyynn", "nnynnn"]), ("RAINBOW", ["rrrrrr", "eeeeee", "yyyyyy", "gggggg", "cccccc"]), ("FISH FLAG", ["cccccc", "ckyyyc", "cyyyyc", "cccccc"]),
          ("SKULL BONES", ["kkkkkk", "kwwwkk", "kwkwkk", "kkwkkk"]), ("FLAME", ["e.r...", "eeee..", "rrreee", "eeee.."]), ("MOON", ["nnnnnn", "nnywnn", "nnwnnn", "nnywnn"]),
          ("WAVE", ["cccccc", "cwccwc", "wcwwcw", "cccccc"]), ("CROWN FLAG", ["pppppp", "pyypyp", "pyyyyp", "pppppp"])]
-items += [("flag%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAGS) if rows]
+FLAGS += [("BOTTLE FLAG", ["cccccc", "ccbccc", "cwwwwc", "cccccc"]), ("GOLD BOOT", ["nnnnnn", "nnyynn", "nnyyyn", "nyyyyn"]), ("ECLIPSE", ["kkyykk", "kykkyk", "kykkyk", "kkyykk"])]   # secret rewards
+items += [("flag%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAGS) if rows and i < 12]
+items += [(fid, art.spr[fid][0]) for fid in LATE]
+items += [("flair%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAIR) if i >= 20]
+items += [("flag%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAGS) if i >= 12]
+# ---- secrets and events: a message in a bottle, and seasonal things fish wear
+items += [("bottle", outlined(pg, from_rows(pg, ["..mm..", "..mm..", ".cwwc.", "cwwwwc", "cwwwwc", "ccwwcc", "cccccc", ".cccc."], {"m": (150, 100, 60), "c": (110, 200, 170), "w": (250, 240, 210)}))),
+          ("evturkey", from_rows(pg, ["r.e.y", ".rey.", ".mmm."], P)), ("evpumpkin", from_rows(pg, [".z.", "eee", "eke"], P))]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()

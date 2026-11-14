@@ -16,7 +16,23 @@ Ten zones, 1,160 metres down, 123 species to log.
   and you keep fishing until it is full.
 - **F** switches full screen on and off.
 
-The HELP button in the game has the same thing in five short pages.
+The title screen has SCORES, LOG and SHOP along the bottom. **MORE** holds tasks, secrets, help, your initials and save codes.
+HELP has all of the above in a few short pages.
+
+## Secrets
+
+There are secrets in the sea, and a few on the title screen. Nobody will tell you how many. Messages in bottles drift
+by now and then and hint at them. Once you find your first, a **Secrets** page appears under MORE, listing what you
+have found and holding the rewards that come with them. Secret rewards are never sold in the shop.
+
+Some things also happen on their own, going by your device's clock: certain hours, certain nights and certain days of the year.
+
+## Save codes
+
+Progress lives in your browser. **MORE > SAVE CODE** makes a short code (like `K7QX-M2PD`) that loads your coins, log,
+looks and secrets on another device, or brings them back after clearing your browser. A code loads your progress as it
+was when the code was made. Anyone with your code can load it, so keep it to yourself. Without the shared database,
+the game gives you one long code that holds the whole save instead.
 
 ## Scoring
 
@@ -58,13 +74,14 @@ GitHub Pages only serves files, so the scores live in a free Firebase Realtime D
 4. On the **Data** tab, copy the database address at the top. It looks like `https://your-project-default-rtdb.firebaseio.com`.
 5. Paste it between the quotes in `config.js` and commit.
 
-**Updating from an earlier version:** the rules file has changed. Repeat step 3 with the new `database.rules.json`,
-or the All Time board stays empty and the scores screen says "UPDATE THE DATABASE RULES".
+**Updating from an earlier version:** the rules file has changed. Repeat step 3 with the new `database.rules.json`.
+The latest change adds a `saves` list for save codes. Until the new rules are published, the game hands out long codes instead of short ones.
 
 The boards show the top ten scores for today and of all time. Tap a score to see what was on the hook.
 
 What the rules allow: anyone can read the boards and add a score between 1 and 20,000 lb under 1 to 3 initials;
-nothing can be edited or deleted from the game. There is no login, so someone who finds the address could post a
+nothing can be edited or deleted from the game. Save codes can each be written once, are capped at 20 KB, and can only
+be read by asking for the exact code, so nobody can list them. There is no login, so someone who finds the address could post a
 made-up score. For a game between friends that is usually fine, and you can delete entries by hand on the Data tab.
 
 ## Files
