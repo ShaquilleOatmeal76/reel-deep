@@ -93,6 +93,10 @@ items += [("flag%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(F
 items += [(fid, art.spr[fid][0]) for fid in LATE]
 items += [("flair%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAIR) if i >= 20]
 items += [("flag%d" % i, from_rows(pg, rows, P)) for i, (_, rows) in enumerate(FLAGS) if i >= 12]
+# ---- the Rusty Hook: the grumpy old fisherman who runs it
+OLDMAN = ["...yyyyy....", "..yyyyyyy...", ".yyyyyyyyyy.", "...ssssss...", "...kkssskk..", "...skssks...", "..bssssssb..", "..bbbbbbbbm.",
+          "..bbbkkbbbmm", "...bbbbbb...", "..yyybbyyy..", ".yyyyyyyyyy.", ".yyyyyyyyyy.", ".yyyyyyyyyy.", "..aa....aa.."]
+items += [("oldman", outlined(pg, from_rows(pg, OLDMAN, {"y": (240, 196, 60), "s": (236, 190, 160), "k": INK, "b": (226, 226, 234), "m": (120, 80, 50), "a": (60, 60, 70)})))]
 # ---- secrets and events: a message in a bottle, and seasonal things fish wear
 items += [("bottle", outlined(pg, from_rows(pg, ["..mm..", "..mm..", ".cwwc.", "cwwwwc", "cwwwwc", "ccwwcc", "cccccc", ".cccc."], {"m": (150, 100, 60), "c": (110, 200, 170), "w": (250, 240, 210)}))),
           ("evturkey", from_rows(pg, ["r.e.y", ".rey.", ".mmm."], P)), ("evpumpkin", from_rows(pg, [".z.", "eee", "eke"], P))]
