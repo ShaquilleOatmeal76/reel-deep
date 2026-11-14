@@ -954,12 +954,17 @@ const SL_TOTAL = 15, SL_REACH = 46, SL_SPEED = 95, SL_RECHARGE = 1.5;
 const SL_TUNE = { tent: [0, 2.0, 1.6, 1.7], tentSpeed: [0, 205, 270, 300], double: [0, 0.15, 0.45, 0.55], ink: 4.5, ring: 2.8, ringSpeed: 72, ringGap: 1.25, lunge: 5.5,
   eye1: [2.4, 4.2], eye2: [1.5, 2.2], eye3: [0.9, 1.3] };   // eye1: open for, out of every; eye2: each eye open for, then the other after; eye3: open for, every
 function slEyes(b) { b.eyes = SL_PHASES[b.phase].eyes.map(([x, dy, r]) => ({ x, dy, r, y: b.bodyY + dy, open: 0, want: 0, cool: 0 })); b.eyeT = 0; b.eyeIdx = -1; }
-function startBoss(dream) {
-  BOSS = { dream: !!dream, mode: "wake", mt: 0, phase: 1, hits: 0, phaseHits: 0, hp: 1, lives: 3, charge: 1, hx: LW / 2, hy: 56, keys: new Set(), touch: null, inv: 0, shake: 2.2,
+// Test link: add ?boss to the game's address to jump straight into the fight (?boss=2 or ?boss=3 starts at that phase).
+// A test fight is a dream: no rewards, no crack, nothing saved. It restarts when it ends; Escape quits to the title.
+const TEST_BOSS = (() => { try { const q = new URLSearchParams(location.search); return q.has("boss") ? clamp(parseInt(q.get("boss"), 10) || 1, 1, 3) : 0; } catch (e) { return 0; } })();
+function startBoss(dream, test) {
+  BOSS = { dream: !!dream, test: test || 0, mode: "wake", mt: 0, phase: 1, hits: 0, phaseHits: 0, hp: 1, lives: 3, charge: 1, hx: LW / 2, hy: 56, keys: new Set(), touch: null, inv: 0, shake: 2.2,
     base: 210, lift: 0, bodyY: 210, eyes: [], tentacles: [], warn: [], ink: [], rings: [], lunge: 0, lungeT: -1, ring: null, crack: false,
     rubble: Array.from({ length: 8 }, (_, i) => [Math.round(Math.random() * LW), 30 + i * 9, i * 7]), msg: "SOMETHING WAKES...", tm: { tent: 2.4, ink: 3, ring: 2, lunge: 4.5 } };
+  if (test > 1) { BOSS.phase = test; BOSS.hits = SL_PHASES.slice(1, test).reduce((a, q) => a + q.need, 0); BOSS.hp = 1 - BOSS.hits / SL_TOTAL; BOSS.msg = "TEST: PHASE " + test; }
+  else if (test) BOSS.msg = "TEST FIGHT";
   slEyes(BOSS);
-  S.touchX = null; S.keys.clear(); setState("boss"); play("thunder"); SOUNDS.roar = [[90, 1.2, "sawtooth", 0.35, 40], [60, 1.4, "square", 0.2, 30, 0.1]]; play("roar");
+  S.overlay = null; S.touchX = null; S.keys.clear(); setState("boss"); play("thunder"); SOUNDS.roar = [[90, 1.2, "sawtooth", 0.35, 40], [60, 1.4, "square", 0.2, 30, 0.1]]; play("roar");
   if (!dream && !store.sec.woke) { store.sec.woke = true; saveStore(); findSecret("sleeper"); }
 }
 function bossHurt(b) {
@@ -1054,6 +1059,7 @@ function bossUpdate(dt) {
 function endBoss(won) {
   const b = BOSS;
   BOSS = null;
+  if (b.test) { newDive(); startBoss(true, b.test); BOSS.msg = won ? "YOU WON! AGAIN..." : "THROWN BACK. AGAIN..."; return; }   // test fights go round again
   if (b.dream) { newDive(); S.overlay = "tavern"; TAV.say = won ? "NOT BAD. FOR A DREAM." : "WAKE UP, KID."; return; }
   S.catch = []; S.rising = false; S.immune = 99;
   if (won) {
@@ -1158,7 +1164,8 @@ function drawBoss() {                                        // the arena, the S
   const k = clamp(b.charge, 0, 1);
   box(2, 176, 36, 22, k >= 1 ? CYAN : "#505678"); text("PULSE", 20, 183, 1, k >= 1 ? CYAN : "#6e7496", "center", null);
   rect("#3c4264", 6, 190, 28, 3); rect(k >= 1 ? CYAN : "#5a8ca0", 6, 190, Math.round(28 * k), 3);
-  if (b.dream) { g.globalAlpha = 0.14; rect("#78b4ff", 0, 0, LW, LH); g.globalAlpha = 1; text("A DREAM", LW - 4, 192, 1, "#a0c8ff", "right", null); }
+  if (b.test) { text("TEST", LW - 4, KEYS ? 182 : 192, 1, GREY, "right", null); if (KEYS) text("ESC: QUIT", LW - 4, 192, 1, GREY, "right", null); }
+  else if (b.dream) { g.globalAlpha = 0.14; rect("#78b4ff", 0, 0, LW, LH); g.globalAlpha = 1; text("A DREAM", LW - 4, 192, 1, "#a0c8ff", "right", null); }
   if (b.msg) { const tw = textW(b.msg, 1); box(Math.round(LW / 2 - tw / 2) - 5, 40, tw + 10, 13, GOLD); text(b.msg, LW / 2, 46, 1, GOLD, "center", null); }
 }
 function drawGiant() {                                   // something very large is asleep in the sea floor. It notices the hook.
@@ -2654,6 +2661,7 @@ window.addEventListener("keydown", e => {
   if (c === "KeyF") { toggleFullscreen(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
     const k = { ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[c];
+    if (c === "Escape" && BOSS.test) { BOSS = null; newDive(); return; }
     if (k) BOSS.keys.add(k); else if (["Space", "ShiftLeft", "ShiftRight", "Enter"].includes(c)) bossPulse();
     e.preventDefault(); return;
   }
@@ -2704,6 +2712,7 @@ function start() {
   window.addEventListener("resize", resize);
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id) && !store.sec.found.includes(id)) store.sec.found.push(id); });   // earned before the Secrets page existed
   newDive();
+  if (TEST_BOSS) startBoss(true, TEST_BOSS);
   LB.load();
   window.REEL = { nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
