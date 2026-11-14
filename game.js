@@ -987,6 +987,7 @@ function draw() {
   if (wl > -30) {                                        // the surface, boat and angler
     for (let x = 0; x < LW; x += 4) rect(WHITE, x + Math.floor(t * 3) % 4, wl + Math.floor(Math.sin(t * 2 + x * 0.3) * (S.storm ? 2.4 : 1.2)), 2, 1);
     const bob = Math.floor(Math.sin(t * (S.storm ? 3.4 : 2)) * (S.storm ? 3 : 1.5));
+    if (TAV) drawShack(wl, TAV.open);
     angler(OX + 30, wl - 9 + bob, store.eq, wl);
     line("#785432", OX + 50, wl - 12 + bob, OX + 63, wl - 22 + bob);
     if (["title", "haul"].includes(S.state)) line(lineCol(0), OX + 63, wl - 22 + bob, OX + 63, wl + 2);
@@ -998,7 +999,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -1009,6 +1010,115 @@ function draw() {
   }
 }
 
+// ------------------------------------------------------------ the Rusty Hook
+const CHIP = "#5ad2a0", WOOD = "#7a5232", FELT = "#0e4a2e";
+let TAV = null;                                            // what is going on in the tavern (mock-up data for now)
+function chipIcon(x, y) { disc(CHIP, x, y, 3); rect("#2a7a5a", x - 1, y - 1, 3, 3); rect(WHITE, x - 2, y - 2, 1, 1); }
+function drawShack(wl, open) {                             // the tavern on the shore, left of the boat
+  const x = OX - 6, t = T;
+  poly("#4a3a2a", [[x - 16, wl + 1], [x - 8, wl - 5], [x + 27, wl - 5], [x + 31, wl + 1]]);          // a bit of shore
+  for (let k = 0; k < 5; k++) rect("#5a4632", x + 1 + k * 6, wl - 6, 1, 2);
+  rect(WOOD, x, wl - 24, 26, 18);
+  for (let k = 0; k < 6; k++) rect("#6a4428", x, wl - 24 + k * 3 + 2, 26, 1);                       // planks
+  poly("#a03c32", [[x - 3, wl - 23], [x + 13, wl - 35], [x + 29, wl - 23]]);
+  rect("#7a2a24", x - 3, wl - 24, 32, 2);
+  rect("#5a4a40", x + 19, wl - 37, 4, 8);                                                           // chimney
+  if (open) for (let k = 0; k < 3; k++) { const u = (t * 0.5 + k / 3) % 1; g.globalAlpha = 0.6 * (1 - u); rect("#c8c8d2", x + 20 + Math.round(Math.sin(u * 6 + k) * 2 + u * 4), wl - 39 - Math.round(u * 14), 2 + Math.round(u * 2), 2); g.globalAlpha = 1; }
+  rect(open ? "#ffd27a" : "#2a2438", x + 15, wl - 20, 7, 6); rect("#3c2818", x + 18, wl - 20, 1, 6); rect("#3c2818", x + 15, wl - 17, 7, 1);   // window
+  rect("#2a1a10", x + 4, wl - 16, 7, 10);                                                           // door
+  if (!open) { line("#8a6a48", x + 4, wl - 16, x + 10, wl - 7); line("#8a6a48", x + 10, wl - 16, x + 4, wl - 7); }   // boarded up
+  rect(GOLD, x + 11, wl - 29, 3, 1); rect(GOLD, x + 12, wl - 28, 1, 3); rect(GOLD, x + 10, wl - 26, 2, 1);       // a little hook on the gable
+  if (open) spr("oldman", x + 1, wl - 23 + (Math.floor(t * 1.2) % 2));                             // the old fisherman in his doorway
+}
+function fishCard(x, y, card, down) {                       // a Catch 21 card: [fish id, weight, "t" trophy / "l" legend]
+  if (down) { rect("#1e285a", x, y, 22, 28); rect("#3c4a8a", x + 2, y + 2, 18, 24); for (let k = 0; k < 4; k++) rect("#1e285a", x + 4 + k * 4, y + 4, 2, 20); rect(INK, x, y, 22, 1); return; }
+  const [fid, lb, kind] = card, edge = kind ? GOLD : INK;
+  rect(kind === "l" ? "#fff2c0" : "#f6f2e6", x, y, 22, 28);
+  g.fillStyle = edge; g.fillRect(x, y, 22, 1); g.fillRect(x, y + 27, 22, 1); g.fillRect(x, y, 1, 28); g.fillRect(x + 21, y, 1, 28);
+  text(kind === "l" ? "!" : lb, x + 3, y + 5, 1, kind ? "#b0781a" : INK, "left", null);
+  const a = DATA.atlas[fid], k = Math.min(1, 18 / a[2], 12 / a[3]), w = Math.max(1, Math.floor(a[2] * k)), h = Math.max(1, Math.floor(a[3] * k));
+  g.drawImage(atlas, a[0], a[1], a[2], a[3], x + 11 - (w >> 1), y + 17 - (h >> 1), w, h);
+  if (kind === "t") text("X2", x + 20, y + 24, 1, TROPHY, "right", null);
+}
+function tavernBg() {
+  for (let x = 0; x < LW; x += 8) rect(x % 16 ? "#2a1a12" : "#321f15", x, 0, 8, LH);
+  for (let x = 4; x < LW; x += 8) rect("#1e120c", x, 0, 1, LH);
+}
+function drawTavern() {
+  tavernBg();
+  g.save(); g.translate(OX, 0);
+  rect("#4a2e1c", 4, 28, 112, 3);                                                                  // a shelf of bottles
+  ["#5ad2a0", "#c84a3c", "#ffd246", "#5a8cff", "#c8a0ff", "#82f082", "#ffa046"].forEach((c, i) => { rect(c, 10 + i * 15, 18 + (i % 2) * 2, 4, 10 - (i % 2) * 2); rect(c, 11 + i * 15, 15 + (i % 2) * 2, 2, 3); });
+  spr("oldman", 46, 30, false, 2);
+  rect("#6a4428", 0, 60, 120, 9); rect("#8a5c38", 0, 60, 120, 2);                                 // the bar
+  text("RUSTY HOOK", 60, 8, 1, GOLD, "center");
+  text(TAV.say, 60, 76, 1, WHITE, "center", null);
+  chipIcon(39, 88); text(TAV.chips + " CHIPS", 45, 88, 1, CHIP, "left", null);
+  [["CATCH 21", CHIP], ["THE DERBY", CHIP], ["BUY THINGS", GOLD], [TAV.daily ? "TAKE 50 FREE" : "MORE TOMORROW", TAV.daily ? LIME : GREY]].forEach(([lab, col], i) => {
+    const y = 98 + i * 19; box(14, y, 92, 15, col); text(lab, 60, y + 7, 1, col, "center", null);
+  });
+  text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
+  g.restore();
+}
+function drawC21() {
+  rect(FELT, 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
+  g.save(); g.translate(OX, 0);
+  const c = TAV.c21, sum = h => h.reduce((a, q) => a + (q[2] === "t" ? q[1] * 2 : q[1]), 0);
+  text("CATCH 21", 60, 9, 1, GOLD, "center", null);
+  text("THE OLD MAN", 4, 20, 1, "#c8e6d2", "left", null); text(c.hide ? "?" : sum(c.dealer), 116, 20, 1, WHITE, "right", null);
+  c.dealer.forEach((q, i) => fishCard(4 + i * 20, 25, q, c.hide && i === 1));
+  box(4, 58, 112, 13, CHIP); text(c.msg, 60, 64, 1, WHITE, "center", null);
+  text("YOU", 4, 78, 1, "#c8e6d2", "left", null); text(sum(c.you), 116, 78, 1, GOLD, "right", null);
+  c.you.forEach((q, i) => fishCard(4 + i * 20, 83, q));
+  chipIcon(42, 120); text("BET " + c.bet, 48, 120, 1, CHIP, "left", null);
+  [["HIT", 2, 36], ["STAND", 41, 38], ["DOUBLE", 82, 36]].forEach(([lab, x, w]) => { box(x, 128, w, 15, WHITE); text(lab, x + w / 2, 135, 1, WHITE, "center", null); });
+  text("TROPHIES COUNT X2", 60, 154, 1, "#8cc8a8", "center", null);
+  text("LEGENDS WIN AT ONCE", 60, 164, 1, "#8cc8a8", "center", null);
+  text("HE DRAWS TO 17", 60, 174, 1, "#8cc8a8", "center", null);
+  text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
+  g.restore();
+}
+function drawDerby() {
+  const d = TAV.derby, t = T;
+  for (let i = 0; i < 14; i++) rect(lerpCol([40, 120, 200], [20, 70, 150], i / 13), 0, i * 15, LW, 15);
+  const x0 = 16, x1 = LW - 14;
+  text("THE DERBY", LW / 2, 9, 1, GOLD, "center");
+  for (let i = 0; i <= 5; i++) for (let x = 0; x < LW; x += 6) rect("#8cc8f0", x, 22 + i * 20, 3, 1);
+  for (let y = 22; y < 122; y += 3) { const o = Math.floor(y / 3) % 2; rect(o ? WHITE : INK, x1, y, 3, 3); rect(o ? INK : WHITE, x1 + 3, y, 3, 3); }   // the finish line
+  d.racers.forEach(([fid, odds, pos], i) => {
+    const y = 32 + i * 20, [w, h] = sprSize(fid), x = Math.floor(lerp(x0, x1 - w, pos)) + Math.round(Math.sin(t * 8 + i) * 1);
+    text(String(i + 1), 6, y, 1, i === d.mine ? GOLD : WHITE, "center");
+    spr(fid, x, y - (h >> 1) + Math.round(Math.sin(t * 6 + i * 2)), false);
+    for (let k = 1; k < 4; k++) rect("#c8ecff", x - k * 4, y + ((k + i) % 2), 1, 1);              // its wake
+    if (i === d.mine) { rect(GOLD, x + (w >> 1) - 1, y - (h >> 1) - 5, 3, 3); }
+  });
+  g.save(); g.translate(OX, 0);
+  box(2, 128, 116, 26, WHITE);
+  wrap(d.call, 18).slice(0, 2).forEach((l, i) => text(l, 60, 135 + i * 10, 1, WHITE, "center", null));
+  text("YOU: " + (d.mine + 1) + " " + SPEC[d.racers[d.mine][0]][1], 60, 164, 1, GOLD, "center", null);
+  const pl = "BET " + d.bet + " PAYS " + d.racers[d.mine][1] + ":1", px = 60 - (textW(pl, 1) >> 1) + 3;
+  chipIcon(px - 6, 175); text(pl, px, 175, 1, CHIP, "left", null);
+  g.restore();
+}
+function drawBet() {                                         // betting on the next dive, from the cast screen
+  rect("#08140f", 0, 0, LW, LH);
+  g.save(); g.translate(OX, 0);
+  const b = TAV.bet;
+  text("BET ON YOUR DIVE", 60, 8, 1, CHIP, "center", null);
+  chipIcon(38, 20); text(TAV.chips + " CHIPS", 44, 20, 1, WHITE, "left", null);
+  b.opts.forEach(([lab, pays], i) => {
+    const y = 29 + i * 17, sel = i === b.sel;
+    box(4, y, 112, 15, sel ? CHIP : "#2a4a3c"); text(lab, 8, y + 7, 1, sel ? WHITE : "#a0c8b4", "left", null); text("X" + pays, 112, y + 7, 1, sel ? GOLD : "#8a9a6a", "right", null);
+  });
+  text("STAKE", 60, 120, 1, "#a0c8b4", "center", null);
+  box(22, 126, 16, 15, CHIP); text("-", 30, 133, 1, CHIP, "center", null);
+  text(b.stake, 60, 133, 2, WHITE, "center");
+  box(82, 126, 16, 15, CHIP); text("+", 90, 133, 1, CHIP, "center", null);
+  text("MAX " + b.max + "  WIN " + Math.floor(b.stake * b.opts[b.sel][1]), 60, 148, 1, GREY, "center", null);
+  box(20, 156, 80, 16, GOLD); text("PLACE BET", 60, 164, 1, GOLD, "center", null);
+  text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
+  g.restore();
+}
 function lineCol(i) {
   const c = LINES[store.eq.line][2];
   if (c[0] !== "@") return c;
@@ -1107,7 +1217,12 @@ function drawHud() {
     });
     text(LURES[S.lure][1], 60, 131, 1, GOLD, "center");
     const on = Math.floor(t * 2.5) % 2;
-    box(20, 140, 80, 21, on ? WHITE : CYAN); text("CAST", 60, 150, 2, on ? WHITE : CYAN, "center");
+    box(20, 137, 80, 21, on ? WHITE : CYAN); text("CAST", 60, 147, 2, on ? WHITE : CYAN, "center");
+    if (TAV) {                                             // betting on this dive
+      const bt = TAV.placed;
+      const bl = bt || "PLACE A BET", bx = 57 - (textW(bl, 1) >> 1) + 4;
+      box(8, 160, 98, 12, bt ? GOLD : CHIP); chipIcon(bx - 6, 166); text(bl, bx, 166, 1, bt ? GOLD : CHIP, "left", null);
+    }
     TITLE_BAR.forEach(([lab, col, x, w]) => { box(x, 176, w, 14, col); text(lab, x + w / 2, 183, 1, col, "center", null); });
     const left = tasks().d.concat(tasks().w).filter(q => !q.done).length;
     if (left) { rect(INK, 110, 170, 9, 9); rect(GOLD, 111, 171, 7, 7); text(left, 114, 174, 1, INK, "center", null); }   // tasks still open, on MORE
@@ -1687,7 +1802,7 @@ function start() {
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id) && !store.sec.found.includes(id)) store.sec.found.push(id); });   // earned before the Secrets page existed
   newDive();
   LB.load();
-  window.REEL = { get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { get TAV() { return TAV; }, set TAV(v) { TAV = v; }, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
