@@ -169,7 +169,7 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   dives: 0,                                              // dives finished, for things that open up with experience
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
-  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "",
+  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "",
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} } };   // the Rusty Hook
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
@@ -183,7 +183,7 @@ const LOGGED = SPECIES.filter(s => !HIDDEN.includes(s[0]));
 
 // ------------------------------------------------------------------ secrets
 // Secret rewards live on the Secrets page only, never in the shop. They are appended past the shop's items:
-const SHOP_N = { flag: 12, flair: 20, boat: 18, line: 14 };   // how many of each list the shop sells; anything after is a secret or Bestiary reward
+const SHOP_N = { flag: 12, flair: 20, boat: 18, line: 14, hat: 26, pet: 14, trail: 12 };   // how many of each list the shop sells; anything after is a secret or Bestiary reward
 // [id, name, what it was, reward: [kind, index] or ["title", id] or null]
 const SECRETS = [
   ["bottle", "MESSAGE IN A BOTTLE", "FISHED A BOTTLE OUT OF THE SEA", ["flag", 12]],
@@ -287,22 +287,24 @@ let EV = events(), evAt = 0;                               // re-checked every f
 const LINES = [["WHITE LINE", 0, "#ecf0fa"], ["CYAN LINE", 400, "#5ae6ff"], ["PINK LINE", 400, "#ff8cd2"], ["LIME LINE", 500, "#82f082"], ["GOLD LINE", 1500, "#ffd246"], ["RAINBOW LINE", 5000, "@rainbow"],
   ["RED LINE", 400, "#f05050"], ["ORANGE LINE", 400, "#ffa046"], ["VIOLET LINE", 500, "#b48cff"], ["SILVER LINE", 800, "#c8d2e6"], ["SHADOW LINE", 900, "#3c3450"],
   ["FIRE LINE", 3000, "@fire"], ["ICE LINE", 2500, "@ice"], ["SPARKLE LINE", 4000, "@sparkle"],
-  ["BILE LINE", 0, "@bile"], ["VEIN LINE", 0, "@vein"]];        // Bestiary rewards, never sold
+  ["BILE LINE", 0, "@bile"], ["VEIN LINE", 0, "@vein"],         // Bestiary rewards, never sold
+  ["CHIP LINE", 0, "@chip"]];                                    // the Rusty Hook's, for chips
 const TRAILS = [["BUBBLES", 0, ["#c8ecff"]], ["GOLD DUST", 1000, ["#ffd246", "#fff0a0"]], ["PINK FIZZ", 1000, ["#ff8cd2", "#ffd2f0"]], ["EMBERS", 1500, ["#ff965a", "#ffdc5a"]],
   ["STARDUST", 2000, ["#ffffff", "#5ae6ff", "#c8a0ff"]], ["RAINBOW FIZZ", 4000, ["#f05050", "#ffa046", "#ffd246", "#82f082", "#5ae6ff", "#c8a0ff"]],
   ["TOXIC", 1200, ["#82f082", "#c8ff5a", "#46c846"]], ["DEEP BLUE", 1000, ["#3c78ff", "#5ae6ff"]], ["CANDY", 1500, ["#ff8cd2", "#ffffff", "#5ae6ff"]],
-  ["SHADOW", 1500, ["#3c3450", "#6e5a96"]], ["CONFETTI", 3000, ["#f05050", "#ffd246", "#5ae6ff", "#82f082", "#ff8cd2"]], ["GOLDEN RAIN", 5000, ["#ffd246", "#ffffff", "#ffb428"]]];
+  ["SHADOW", 1500, ["#3c3450", "#6e5a96"]], ["CONFETTI", 3000, ["#f05050", "#ffd246", "#5ae6ff", "#82f082", "#ff8cd2"]], ["GOLDEN RAIN", 5000, ["#ffd246", "#ffffff", "#ffb428"]],
+  ["CHIP SPRAY", 0, ["#f05050", "#fafaff", "#ffd246"]]];          // the Rusty Hook's, for chips
 const price = (names, list) => names.map((n, i) => [n, list[i]]);
 // Prices are set so the good stuff takes weeks of regular play, not an afternoon.
 const SHOP = [
   ["CHARACTER", "char", price(DATA.chars, [0, 500, 500, 1200, 1500, 1800, 1200, 1000, 2000, 1500, 1800, 1800, 6000, 4000, 3500, 2500, 2500, 3000, 4500, 3000, 6000, 5000])],
-  ["HAT", "hat", price(DATA.hats, [0, 300, 800, 4000, 1500, 400, 1000, 800, 3000, 2500, 500, 2000, 1000, 1800, 600, 1200, 900, 1500, 1800, 1200, 1400, 2500, 3500, 1400, 2200, 7500])],
+  ["HAT", "hat", price(DATA.hats.slice(0, SHOP_N.hat), [0, 300, 800, 4000, 1500, 400, 1000, 800, 3000, 2500, 500, 2000, 1000, 1800, 600, 1200, 900, 1500, 1800, 1200, 1400, 2500, 3500, 1400, 2200, 7500])],
   ["BOAT", "boat", price(DATA.boats.slice(0, SHOP_N.boat), [0, 700, 700, 1000, 1800, 1500, 4000, 8000, 1500, 1500, 3000, 2500, 5000, 3500, 4000, 3000, 2000, 4500])],
-  ["PET", "pet", price(DATA.pets, [0, 1500, 1500, 2500, 2500, 3000, 3000, 2000, 2500, 5000, 1800, 7000, 6000, 4500])],
+  ["PET", "pet", price(DATA.pets.slice(0, SHOP_N.pet), [0, 1500, 1500, 2500, 2500, 3000, 3000, 2000, 2500, 5000, 1800, 7000, 6000, 4500])],
   ["FLAG", "flag", price(DATA.flags.slice(0, SHOP_N.flag), [0, 600, 1500, 1200, 1500, 3000, 1500, 2000, 2500, 2000, 1500, 4000])],
   ["HOOK", "hook", price(DATA.hooks, [0, 1200, 900, 1500, 1100, 1800, 2500, 1500, 5000, 3000, 2000, 2500, 1500, 3500])],
   ["LINE", "line", LINES.slice(0, SHOP_N.line).map(l => [l[0], l[1]])],
-  ["BUBBLE TRAIL", "trail", TRAILS.map(l => [l[0], l[1]])],
+  ["BUBBLE TRAIL", "trail", TRAILS.slice(0, SHOP_N.trail).map(l => [l[0], l[1]])],
   ["FISH FLAIR", "flair", price(DATA.flair.slice(0, SHOP_N.flair), [0, 1200, 1500, 4000, 1000, 2000, 1800, 3000, 2500, 1200, 1500, 1000, 2000, 1200, 1800, 1500, 3500, 2500, 2000, 6000])],
 ];
 // Titles are earned, never bought. [id, name, how to get it (null = a secret)]
@@ -914,6 +916,7 @@ function drawSky() {
     rect(WHITE, Math.floor(i * 37 + Math.sin(t + i) * 4 + t * 3) % LW, y0 + Math.floor(i * 53 + t * (10 + i % 3 * 5)) % 82, 1, 1);
   if (EV.thanks) for (let i = 0; i < Math.round(8 * LW / UW); i++)                   // falling leaves
     rect(["#e66e32", "#c83c28", "#ffb43c"][i % 3], Math.floor(i * 41 + Math.sin(t * 1.3 + i) * 6 + t * 9) % LW, y0 + Math.floor(i * 29 + t * (7 + i % 4 * 2)) % 82, 2, 1);
+  if (TAV.show > T && S.state === "title") fireworks(y0, ["#f05050", "#fafaff", "#ffd246"]);   // a show bought at the Rusty Hook
   if (EV.newyear || EV.july4) fireworks(y0, EV.july4 ? ["#f05050", "#fafaff", "#5a8cff"] : ["#ffd246", "#ff8cd2", "#5ae6ff", "#82f082"]);
   if (S.storm) {
     for (let i = 0; i < Math.round(26 * LW / UW); i++) rect("#aabedc", (i * 37 + Math.floor(t * 90)) % LW, y0 + (i * 53 + Math.floor(t * 220)) % 80, 1, 3);
@@ -1783,7 +1786,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { credits: drawCredits, vip: drawVip, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2020,52 +2023,152 @@ const SONGS = [
   ["BAITER'S BOOGIE", null, "EARN MASTER BAITER", 140, "C4 - E4 G4 A4 - G4 E4 C4 - E4 G4 A4 - G4 - F4 - A4 C5 D5 - C5 A4 G4 - E4 C4 D4 - C4 -", "C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 F2 F3 F2 F3 F2 F3 F2 F3 G2 G3 G2 G3 C2 C3 C2 -"],
   ["FULL LOG", null, "LOG EVERY SPECIES", 120, "G4 - C5 - E5 - G5 - - - E5 - G5 - - - A5 - G5 - E5 - C5 - D5 - E5 - C5 - - - - -", "C3 - - - G2 - - - C3 - - - E3 - - - F2 - - - G2 - - - C3 - - - - - - -"],
   ["LULLABY", null, "PUT THE SLEEPER BACK TO SLEEP", 72, "E4 - G4 - B4 - - - A4 - G4 - E4 - - - D4 - E4 - G4 - - - D4 - E4 - - - - -", "E2 - - - B2 - - - C3 - - - G2 - - - A2 - - - E2 - - - B1 - - - E2 - - -"],
-  ["CREDITS THEME", null, "CATCH YOURSELF", 108, "C5 - E5 - G5 - - - E5 - D5 - C5 - A4 - - - G4 - A4 - C5 - D5 - E5 - D5 - C5 - - - - -", "C3 - G2 - A2 - E2 - F2 - C3 - G2 - - - F2 - C3 - G2 - D3 - C3 - G2 - C3 - - -"],
+  ["CREDITS THEME", null, "CATCH YOURSELF", 108, "C5 - E5 - G5 - - - E5 - D5 - C5 - A4 - - - G4 - A4 - C5 - D5 - E5 - D5 - C5 - - - - -", "C3 - G2 - A2 - E2 - F2 - C3 - G2 - - - F2 - C3 - G2 - D3 - C3 - G2 - C3 - - -"],,
+  ["RUSTY HOOK RAG", 120, "", 168, "C5 - E5 G5 - E5 C5 - D5 - F5 A5 - F5 D5 - E5 - G5 C6 - G5 E5 - D5 G4 B4 D5 C5 - - -", "C3 G2 C3 G2 C3 G2 C3 G2 D3 A2 D3 A2 D3 A2 D3 A2 C3 G2 C3 G2 C3 G2 C3 G2 G2 D3 G2 B2 C3 - - -"],
+  ["SALTY SORROW", 100, "", 80, "A4 - - C5 B4 - A4 - G4 - - E4 - - - - F4 - A4 - G4 - F4 - E4 - D4 - E4 - - -", "A2 - - - E2 - - - C3 - - - G2 - - - D2 - - - F2 - - - E2 - - - A1 - - -"],
+  ["LUCKY SEVENS", 120, "", 150, "G4 G4 - B4 - D5 - G5 - - F5 - D5 - B4 - C5 C5 - E5 - G5 - C6 - - B5 - G5 - D5 -", "G2 - D3 - G2 - D3 - G2 - D3 - G2 - D3 - C3 - G2 - C3 - G2 - D3 - A2 - D3 - G2 -"],
+  ["MOONLIGHT REEL", 140, "", 132, "D5 A4 F4 A4 D5 E5 F5 E5 D5 C5 A4 C5 G4 A4 C5 A4 D5 A4 F4 A4 D5 E5 F5 G5 A5 G5 F5 E5 D5 - D5 -", "D3 - A2 - D3 - A2 - C3 - G2 - C3 - G2 - D3 - A2 - D3 - A2 - A2 - E3 - D3 - - -"],
+  ["INK BLUES", 120, "", 96, "A3 - C4 - D4 - E4 - G4 - - E4 - D4 - - C4 - A3 - C4 - D4 - E4 - G4 - A4 - - -", "A1 - A2 - A1 - A2 - D2 - D3 - D2 - D3 - A1 - A2 - A1 - A2 - E2 - D2 - A1 - - -"],
+  ["LAST CALL", 160, "", 72, "E4 - - - G4 - - - C5 - - - B4 - - - A4 - - - G4 - - - F4 - E4 - D4 - C4 -", "C3 - - - E2 - - - A2 - - - G2 - - - F2 - - - C3 - - - G2 - - - C2 - - -"]
 ];
 const songOwned = i => tav().songs.includes(i);
 function earnSong(i) { if (songOwned(i)) return; tav().songs.push(i); saveStore(); if (S) S.popups.push(["NEW SONG: " + SONGS[i][0], 4, CHIP]); }
 const FISH_PICKS = ["clown", "koi", "tuna", "sword", "puffer", "bass", "parrot", "ember", "trout", "perch"];
-const SHOP_ROWS = [                                         // [label, price (or a function of the save), what it is]
-  ["RUMOUR", 30, "A BOTTLE YOU HAVEN'T FOUND"],
-  ["BOTTLE MAGNET", 40, "MORE BOTTLES, 5 DIVES"],
-  ["TREASURE MAP", 60, "WHERE THIS WEEK'S GOLD BOOT HIDES"],
-  ["A STORY", 50, "TIP THE OLD MAN"],
-  ["A DERBY FISH", 200, "YOUR OWN RACER"],
-  ["JUKEBOX", 150, "MUSIC HERE AND ON THE TITLE"],
-  ["DREAM SLEEPER", 20, "FIGHT A GHOST OF IT. PRACTICE ONLY"],
+// The chip shop. Pages of seven; the bottle things sit at the very bottom on purpose: with steady betting they were
+// far too easy to buy, so a rumour now costs more each time (150, +50 a time, up to 400) and the magnet lasts 3 dives.
+// [id, label, price, what it is]. Cosmetics here are the tavern's own: chips only, never in the coin shop.
+const SHOP_PER = 7;
+const SHOP_ROWS = [
+  ["story", "A STORY", 50, "TIP THE OLD MAN"],
+  ["fish", "A DERBY FISH", 200, "YOUR OWN RACER"],
+  ["jukebox", "JUKEBOX", 150, "MUSIC HERE AND ON THE TITLE"],
+  ["dream", "DREAM SLEEPER", 20, "FIGHT A GHOST OF IT. PRACTICE ONLY"],
+  ["drink", "A DRINK", 10, "BUY HIM ONE. HE TALKS"],
+  ["scratch", "SCRATCH CARD", 5, "THREE ALIKE WINS, UP TO X20"],
+  ["show", "FIREWORKS", 30, "A SHOW OVER YOUR BOAT"],
+  ["cap", "OLD MAN'S CAP", 300, "A HAT. HE HAS A SPARE"],
+  ["cat", "BAR CAT", 600, "A PET. IT CAME WITH THE PLACE"],
+  ["tub", "RUSTY TUB", 900, "A BOAT. FLOATS, MOSTLY"],
+  ["ace", "ACE OF SPADES", 250, "A FLAG FOR YOUR BOAT"],
+  ["pchips", "POKER CHIPS", 400, "FISH FLAIR"],
+  ["chipline", "CHIP LINE", 350, "A FISHING LINE"],
+  ["spray", "CHIP SPRAY", 350, "A BUBBLE TRAIL"],
+  ["carve", "CARVE INITIALS", 100, "INTO THE TAVERN WALL"],
+  ["map", "TREASURE MAP", 60, "WHERE THIS WEEK'S GOLD BOOT HIDES"],
+  ["magnet", "BOTTLE MAGNET", 120, "MORE BOTTLES, 3 DIVES"],
+  ["rumour", "RUMOUR", 150, "A BOTTLE YOU HAVEN'T FOUND"],
 ];
+const TAV_COSM = { cap: ["hat", 26], cat: ["pet", 14], tub: ["boat", 19], ace: ["flag", 15], pchips: ["flair", 21], chipline: ["line", 16], spray: ["trail", 12] };   // past SHOP_N: never sold for coins
+const rumourPrice = () => Math.min(400, 150 + 50 * (tav().rumours || 0));
 function shopRowState(i) {                                  // -> [label shown, price or null, note]
-  const q = tav(), [lab, price, note] = SHOP_ROWS[i];
-  if (i === 0) return [lab, rumourPool().length ? price : null, rumourPool().length ? note : "NOTHING NEW TO TELL"];
-  if (i === 1) return [lab, price, q.magnet ? "ON FOR " + q.magnet + " MORE DIVES" : note];
-  if (i === 2) return [lab, q.map === weekString() ? null : price, q.map === weekString() ? "BOOT AROUND " + bootDepth() + " M" : note];
-  if (i === 3) return [q.stories ? "STORIES (" + q.stories + ")" : lab, q.stories < STORIES.length ? price : null, q.stories < STORIES.length ? (q.stories ? "TIP HIM FOR THE NEXT ONE" : note) : "THAT'S ALL HE KNOWS"];
-  if (i === 4) return [q.fish ? "YOUR RACER" : lab, q.fish ? null : price, q.fish ? q.fish.name + ": TRAIN IT" : note];
-  if (i === 6) return store.sec.woke ? [lab, price, note] : ["???", null, "WAKE SOMETHING UP FIRST"];
-  return [lab, q.jukebox ? null : price, q.jukebox ? "PICK A SONG" : note];
+  const q = tav(), [id, lab, price, note] = SHOP_ROWS[i], cm = TAV_COSM[id];
+  if (cm) { const own = store.own[cm[0]].includes(cm[1]), on = store.eq[cm[0]] === cm[1]; return [lab, own ? null : price, own ? (on ? "WEARING IT" : "YOURS") : note]; }
+  if (id === "rumour") return [lab, rumourPool().length ? rumourPrice() : null, rumourPool().length ? note : "NOTHING NEW TO TELL"];
+  if (id === "magnet") return [lab, price, q.magnet ? "ON FOR " + q.magnet + " MORE DIVES" : note];
+  if (id === "map") return [lab, q.map === weekString() ? null : price, q.map === weekString() ? "BOOT AROUND " + bootDepth() + " M" : note];
+  if (id === "story") return [q.stories ? "STORIES (" + q.stories + ")" : lab, q.stories < STORIES.length ? price : null, q.stories < STORIES.length ? (q.stories ? "TIP HIM FOR THE NEXT ONE" : note) : "THAT'S ALL HE KNOWS"];
+  if (id === "fish") return [q.fish ? "YOUR RACER" : lab, q.fish ? null : price, q.fish ? q.fish.name + ": TRAIN IT" : note];
+  if (id === "dream") return store.sec.woke ? [lab, price, note] : ["???", null, "WAKE SOMETHING UP FIRST"];
+  if (id === "jukebox") return [lab, q.jukebox ? null : price, q.jukebox ? "PICK A SONG" : note];
+  if (id === "carve") return [lab, price, q.carved ? "YOURS SAYS " + q.carved + ". CARVE AGAIN?" : note];
+  return [lab, price, note];
 }
 function rumourPool() { return BOTTLES.map((b, i) => i).filter(i => bottleOpen(i) && !store.sec.bottles.includes(i)); }
 function bootDepth() { return Math.round(RNG(hashStr("boot" + weekString())).uniform(ZONES[3][1] + 6, ZONES[3][2] - 6)); }
 function shopBuy(i) {
-  const q = tav(), [, price] = shopRowState(i);
-  if (i === 3 && q.stories) { if (price && q.chips >= price) { addChips(-price); q.stories++; play("fanfare"); } TAV.story = q.stories - 1; openOverlay("story"); return; }
-  if (i === 4 && q.fish) { openOverlay("myfish"); return; }
-  if (i === 5 && q.jukebox) { openOverlay("jukebox"); return; }
+  const q = tav(), id = SHOP_ROWS[i][0], [, price] = shopRowState(i), cm = TAV_COSM[id];
+  if (id === "story" && q.stories) { if (price && q.chips >= price) { addChips(-price); q.stories++; play("fanfare"); } TAV.story = q.stories - 1; openOverlay("story"); return; }
+  if (id === "fish" && q.fish) { openOverlay("myfish"); return; }
+  if (id === "jukebox" && q.jukebox) { openOverlay("jukebox"); return; }
+  if (cm && store.own[cm[0]].includes(cm[1])) { store.eq[cm[0]] = store.eq[cm[0]] === cm[1] ? 0 : cm[1]; saveStore(); play("select"); return; }   // put it on, or take it off
   if (price === null) { play("miss"); return; }
   if (q.chips < price) { play("miss"); TAV.say = "COME BACK WITH CHIPS"; return; }
-  if (i === 6) { addChips(-price); S.overlay = null; startBoss(true); return; }          // the Dream Sleeper: a practice fight
+  if (id === "dream") { addChips(-price); S.overlay = null; startBoss(true); return; }          // the Dream Sleeper: a practice fight
+  if (id === "scratch") { addChips(-price); scratchNew(); return; }
   addChips(-price); play("fanfare");
-  if (i === 0) { const pool = rumourPool(), b = pool[Math.floor(Math.random() * pool.length)]; store.sec.bottles.push(b); findSecret("bottle"); S.overlay = "note"; S.noteIdx = store.sec.bottles.length - 1; S.noteBack = "chipshop"; }
-  else if (i === 1) q.magnet += 5;
-  else if (i === 2) { q.map = weekString(); TAV.say = "TRY AROUND " + bootDepth() + " M"; }
-  else if (i === 3) { q.stories++; TAV.story = q.stories - 1; openOverlay("story"); }
-  else if (i === 4) {
+  if (cm) { store.own[cm[0]].push(cm[1]); store.eq[cm[0]] = cm[1]; }
+  else if (id === "rumour") { q.rumours = (q.rumours || 0) + 1; const pool = rumourPool(), b = pool[Math.floor(Math.random() * pool.length)]; store.sec.bottles.push(b); findSecret("bottle"); S.overlay = "note"; S.noteIdx = store.sec.bottles.length - 1; S.noteBack = "chipshop"; }
+  else if (id === "magnet") q.magnet += 3;
+  else if (id === "map") { q.map = weekString(); TAV.say = "TRY AROUND " + bootDepth() + " M"; }
+  else if (id === "story") { q.stories++; TAV.story = q.stories - 1; openOverlay("story"); }
+  else if (id === "fish") {
     let nm = "";
     try { nm = (window.prompt("NAME YOUR RACER (UP TO 10 LETTERS)", "") || "").toUpperCase().replace(/[^A-Z ]/g, "").trim().slice(0, 10); } catch (e) { /* no prompts here */ }
     q.fish = { name: nm || "SPEEDY", id: FISH_PICKS[Math.floor(Math.random() * FISH_PICKS.length)], lv: [0, 0, 0], races: 0, wins: 0 };
     openOverlay("myfish");
-  } else if (i === 5) { q.jukebox = true; openOverlay("jukebox"); }
+  } else if (id === "jukebox") { q.jukebox = true; openOverlay("jukebox"); }
+  else if (id === "drink") { TAV.say = gossip(); S.overlay = "tavern"; }
+  else if (id === "show") { TAV.show = T + 25; S.overlay = null; S.popups.push(["LOOK UP!", 2.5, GOLD]); }
+  else if (id === "carve") { q.carved = store.name || "???"; TAV.say = "DON'T TELL THE OWNER"; S.overlay = "tavern"; }
   saveStore();
+}
+// ---- a drink for the old man: he talks. Some of it is even true.
+const GOSSIP = ["THE SEA IS DEEPER THAN IT LOOKS.", "NEVER TRUST A FISH THAT SMILES.", "I CAUGHT A BOOT. THEN ITS PAIR.",
+  "THE JELLIES REMEMBER FACES.", "THIS CAP WAS MY DAD'S.", "THE CAT CAME WITH THE BAR. ASK IT.",
+  "HEAR SINGING DOWN THERE? DON'T HUM.", "THE DERBY IS FIXED. BY ME. KIDDING.", "THE GULPER ATE MY LUNCH IN 1987.",
+  "GOOD HOOKS WAIT. ANGLERS DON'T.", "THE FLOOR CREAKS. LIKE IT'S DREAMING.", "THE HOUSE WINS. I'M THE HOUSE."];
+function gossip() {
+  const live = [];
+  const top = LB.today && LB.today[0];
+  if (top) live.push(top.n + " LEADS TODAY: " + top.s + ".");
+  if (store.best) live.push("YOUR BEST: " + store.best + " LB. CUTE.");
+  if (store.dives) live.push(store.dives + " DIVES. STILL DRY?");
+  if (store.sec.found.length) live.push(store.sec.found.length + " SECRETS FOUND. NOT ALL.");
+  if (store.sec.beat) live.push("YOU WENT THROUGH. I SEE IT IN YOU.");
+  const all = GOSSIP.concat(live);
+  return all[Math.floor(Math.random() * all.length)];
+}
+// ---- the scratch card: 9 squares, three alike wins. Prizes are set so it pays back about 95%.
+const SCRATCH = [["boot", 0, 0], ["minnow", 2, 0.2], ["clown", 5, 0.06], ["shark", 10, 0.015], ["megalodon", 20, 0.005]];   // [species, pays x, chance it's the winner]
+function scratchNew() {
+  const syms = SCRATCH.filter(s => DATA.atlas[s[0]]), r = Math.random();
+  let acc = 0, win = -1;
+  syms.forEach((s, i) => { if (win < 0 && r < (acc += s[2])) win = i; });
+  const cells = [];
+  if (win >= 0) cells.push(win, win, win);
+  const count = syms.map((s, i) => cells.filter(c => c === i).length);
+  while (cells.length < 9 && syms.length >= 5) { const i = Math.floor(Math.random() * syms.length); if (i !== win && count[i] < 2) { count[i]++; cells.push(i); } }
+  for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [cells[i], cells[j]] = [cells[j], cells[i]]; }
+  TAV.scratch = { syms, cells, open: cells.map(() => false), win, paid: false };
+  S.overlay = "scratch"; play("select");
+}
+function scratchTap(lx, ly) {
+  const sc = TAV.scratch;
+  if (ly > 186) { S.overlay = "chipshop"; play("back"); return; }
+  if (sc.paid) { if (ly >= 156 && ly < 174) { const [, price] = shopRowState(SHOP_ROWS.findIndex(r => r[0] === "scratch")); if (tav().chips >= price) { addChips(-price); scratchNew(); } else play("miss"); } return; }
+  const c = Math.floor((lx - 15) / 30), r = Math.floor((ly - 40) / 30);
+  if (c >= 0 && c < 3 && r >= 0 && r < 3 && lx >= 15) { sc.open[r * 3 + c] = true; play("tick"); }
+  else if (ly >= 136 && ly < 152) { sc.open = sc.open.map(() => true); play("tick"); }
+  if (sc.open.every(o => o)) {
+    sc.paid = true;
+    if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); }
+    else { sc.msg = "NO LUCK"; play("miss"); }
+    saveStore();
+  }
+}
+function drawScratch() {
+  tavernBg();
+  g.save(); g.translate(OX, 0);
+  const sc = TAV.scratch;
+  text("SCRATCH CARD", 60, 8, 1, GOLD, "center", null);
+  chipsLine(19);
+  rect("#d8c8a0", 12, 37, 96, 96);
+  sc.cells.forEach((k, i) => {
+    const x = 15 + (i % 3) * 30, y = 40 + Math.floor(i / 3) * 30;
+    if (!sc.open[i]) { rect("#9aa0b4", x, y, 28, 28); rect("#b8bed0", x + 2, y + 2, 24, 3); text("?", x + 14, y + 14, 1, "#6a7088", "center", null); return; }
+    const s = sc.syms[k], a = DATA.atlas[s[0]], z = Math.min(1, 24 / a[2], 18 / a[3]), w = Math.max(1, Math.floor(a[2] * z)), h = Math.max(1, Math.floor(a[3] * z));
+    rect(sc.paid && k === sc.win ? "#fff0b4" : "#efe4c8", x, y, 28, 28);
+    g.drawImage(atlas, a[0], a[1], a[2], a[3], x + 14 - (w >> 1), y + 12 - (h >> 1), w, h);
+    if (s[1]) text("X" + s[1], x + 14, y + 23, 1, "#5a3a22", "center", null);
+  });
+  if (!sc.paid) { box(20, 136, 80, 16, CHIP); text("SCRATCH ALL", 60, 144, 1, CHIP, "center", null); text("TAP THE SQUARES", 60, 162, 1, "#d8c8b0", "center", null); }
+  else {
+    text(sc.msg, 60, 144, 1, sc.win >= 0 ? GOLD : GREY, "center", null);
+    const price = SHOP_ROWS.find(r => r[0] === "scratch")[2];
+    box(20, 156, 80, 18, tav().chips >= price ? GOLD : "#3c4a40"); text("ANOTHER: " + price, 60, 165, 1, tav().chips >= price ? GOLD : GREY, "center", null);
+  }
+  text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
+  g.restore();
 }
 const trainCost = lv => 30 + lv * 15;
 
@@ -2106,7 +2209,7 @@ let MUS = { song: -1, step: 0, next: 0 };
 function noteHz(n) { const m = /^([A-G])(\d)$/.exec(n); return m ? 440 * Math.pow(2, ({ C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 }[m[1]] + (m[2] - 4) * 12) / 12) : 0; }
 function tone(f, t0, dur, wave, vol) { const o = AC.createOscillator(), ga = AC.createGain(); o.type = wave; o.frequency.setValueAtTime(f, t0); ga.gain.setValueAtTime(vol, t0); ga.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(ga); ga.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 function musicTick() {
-  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
+  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
   if (want !== MUS.song) { MUS = { song: want, step: 0, next: AC ? AC.currentTime + 0.1 : 0 }; }
   if (want < 0 || AC.state !== "running") return;
   const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), dt = 30 / bpm;
@@ -2179,8 +2282,9 @@ function drawTavern() {
   rect("#6a4428", 0, 60, 120, 9); rect("#8a5c38", 0, 60, 120, 2);                                 // the bar
   text("RUSTY HOOK", 60, 8, 1, GOLD, "center");
   box(96, 2, 22, 11, CYAN); text("TOP", 107, 7, 1, CYAN, "center", null);
-  text(TAV.say, 60, 76, 1, WHITE, "center", null);
-  chipsLine(88);
+  const sayL = wrap(TAV.say, 19).slice(0, 2); sayL.forEach((l, i) => text(l, 60, (sayL.length > 1 ? 72 : 76) + i * 8, 1, WHITE, "center", null));
+  if (tav().carved) text(tav().carved + " WAS HERE", 60, 65, 1, "#3c2414", "center", null);   // carved into the bar
+  chipsLine(89);
   const dr = dailyReady(), rows = tavRows(), [y0, st] = rows.length > 4 ? [94, 18] : [98, 19];
   rows.forEach(([lab, col], i) => { const y = y0 + i * st; box(14, y, 92, 15, col); text(lab, 60, y + 7, 1, col, "center", null); });
   text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
@@ -2268,17 +2372,20 @@ function drawChipShop() {
   g.save(); g.translate(OX, 0);
   text("BUY THINGS", 60, 8, 1, GOLD, "center", null);
   chipsLine(19);
-  SHOP_ROWS.forEach((r, i) => {
-    const [lab, price] = shopRowState(i), y = 27 + i * 15, sel = i === TAV.shopSel;
+  const pages = Math.ceil(SHOP_ROWS.length / SHOP_PER), page = Math.floor(TAV.shopSel / SHOP_PER);
+  box(2, 2, 16, 13, GOLD); text("<", 10, 8, 1, GOLD, "center", null); box(102, 2, 16, 13, GOLD); text(">", 110, 8, 1, GOLD, "center", null);
+  text("PAGE " + (page + 1) + "/" + pages, 60, 180, 1, "#a08c70", "center", null);
+  SHOP_ROWS.slice(page * SHOP_PER, page * SHOP_PER + SHOP_PER).forEach((r, k) => {
+    const i = page * SHOP_PER + k, [lab, price] = shopRowState(i), y = 27 + k * 15, sel = i === TAV.shopSel;
     box(4, y, 112, 13, sel ? GOLD : "#5a3a22"); text(lab, 8, y + 6, 1, sel ? WHITE : "#d8c8b0", "left", null);
     if (price !== null) text(price, 112, y + 6, 1, CHIP, "right", null);
   });
   const [, price, note] = shopRowState(TAV.shopSel);
   box(4, 134, 112, 34, GOLD);
   wrap(note, 18).slice(0, 2).forEach((l, i) => text(l, 60, 141 + i * 9, 1, "#e8dcc4", "center", null));
-  const opens = (TAV.shopSel === 4 && tav().fish) || (TAV.shopSel === 5 && tav().jukebox);
-  const lab = opens ? "TAP AGAIN TO OPEN" : price === null ? (TAV.shopSel === 3 && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? "TAP AGAIN: BUY " : "NEEDS ") + price;
-  if (lab) text(TAV.shopSel === 6 && price !== null && tav().chips >= price ? "DREAM FOR " + price : lab, 60, 160, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
+  const sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid], opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox);
+  const lab = opens ? "TAP AGAIN TO OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAP AGAIN: TAKE OFF" : "TAP AGAIN: PUT ON") : price === null ? (sid === "story" && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? "TAP AGAIN: BUY " : "NEEDS ") + price;
+  if (lab) text(sid === "dream" && price !== null && tav().chips >= price ? "DREAM FOR " + price : lab, 60, 160, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -2295,13 +2402,16 @@ function drawStory() {
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
+const SONG_PER = 11;
 function drawJukebox() {
   tavernBg();
   g.save(); g.translate(OX, 0);
   text("JUKEBOX", 60, 8, 1, "#ff8cd2", "center", null);
   chipsLine(19);
-  SONGS.forEach((sg, i) => {
-    const y = 26 + i * 12, own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
+  const pages = Math.ceil(SONGS.length / SONG_PER), page = Math.floor(TAV.songSel / SONG_PER);
+  box(2, 2, 16, 13, "#ff8cd2"); text("<", 10, 8, 1, "#ff8cd2", "center", null); box(102, 2, 16, 13, "#ff8cd2"); text(">", 110, 8, 1, "#ff8cd2", "center", null);
+  SONGS.slice(page * SONG_PER, page * SONG_PER + SONG_PER).forEach((sg, k) => {
+    const i = page * SONG_PER + k, y = 26 + k * 12, own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
     rect(sel ? "#3a2440" : "#24160e", 4, y, 112, 11);
     text(own || sg[1] ? sg[0] : "???", 7, y + 5, 1, on ? "#ff8cd2" : own ? WHITE : GREY, "left", null);
     text(on ? "ON" : own ? "" : sg[1] ? sg[1] : "", 113, y + 5, 1, on ? "#ff8cd2" : CHIP, "right", null);
@@ -2445,9 +2555,11 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     else if (ly > 189) back();
     return true;
   }
+  if (o === "scratch") { scratchTap(lx, ly); return true; }
   if (o === "chipshop") {
-    const i = Math.floor((ly - 27) / 15);
-    if (ly >= 27 && i < SHOP_ROWS.length) { if (i === TAV.shopSel) shopBuy(i); else { TAV.shopSel = i; play("tick"); } }
+    const pages = Math.ceil(SHOP_ROWS.length / SHOP_PER), page = Math.floor(TAV.shopSel / SHOP_PER), i = page * SHOP_PER + Math.floor((ly - 27) / 15);
+    if (ly < 17 && (lx < 24 || lx > 96)) { TAV.shopSel = ((page + (lx > 96 ? 1 : pages - 1)) % pages) * SHOP_PER; play("tick"); }
+    else if (ly >= 27 && ly < 27 + SHOP_PER * 15 && i < Math.min(SHOP_ROWS.length, page * SHOP_PER + SHOP_PER)) { if (i === TAV.shopSel) shopBuy(i); else { TAV.shopSel = i; play("tick"); } }
     else if (ly >= 134 && ly < 170) shopBuy(TAV.shopSel);
     else if (ly > 186) back();
     return true;
@@ -2459,8 +2571,9 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     return true;
   }
   if (o === "jukebox") {
-    const i = Math.floor((ly - 26) / 12);
-    if (ly >= 26 && i < SONGS.length) {
+    const pages = Math.ceil(SONGS.length / SONG_PER), page = Math.floor(TAV.songSel / SONG_PER), i = page * SONG_PER + Math.floor((ly - 26) / 12);
+    if (ly < 17 && (lx < 24 || lx > 96)) { TAV.songSel = ((page + (lx > 96 ? 1 : pages - 1)) % pages) * SONG_PER; play("tick"); return true; }
+    if (ly >= 26 && ly < 26 + SONG_PER * 12 && i < Math.min(SONGS.length, page * SONG_PER + SONG_PER)) {
       if (i !== TAV.songSel) { TAV.songSel = i; play("tick"); return true; }
       const sg = SONGS[i];
       if (songOwned(i)) { tav().song = tav().song === i ? -1 : i; saveStore(); }
@@ -2499,6 +2612,7 @@ function lineCol(i) {
   if (c === "@fire") return "hsl(" + Math.floor(18 + 22 * Math.sin(T * 9 + i * 0.8)) + ",100%," + Math.floor(55 + 10 * Math.sin(T * 13 + i)) + "%)";
   if (c === "@ice") return (i + Math.floor(T * 6)) % 4 ? "#bfeaff" : "#ffffff";
   if (c === "@vein") return (i + Math.floor(T * 9)) % 6 === 0 ? "#ff5a6e" : (i + Math.floor(T * 9)) % 6 === 1 ? "#d23246" : "#8c1e32";   // a pulse runs down it
+  if (c === "@chip") return (i + Math.floor(T * 4)) % 4 < 2 ? "#f05050" : "#fafaff";
   if (c === "@bile") return (i * 3 + Math.floor(T * 5)) % 7 === 0 ? "#e6ff8c" : "#7cb43c";
   return (i * 7 + Math.floor(T * 10)) % 9 === 0 ? "#ffd246" : (i + Math.floor(T * 4)) % 5 === 0 ? "#ffffff" : "#a0a8c8";      // sparkle
 }
@@ -3128,7 +3242,7 @@ function closeOverlay() {
   if (S.overlay === "help") { store.seenHelp = true; saveStore(); }
   const o = S.overlay;
   S.overlay = o === "note" && S.noteBack ? S.noteBack : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip"
-    : ["c21", "derby", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish"].includes(o) ? "chipshop" : null;
+    : ["c21", "derby", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
   play("back");
 }
 function overlayTap(lx, ly) {
@@ -3318,7 +3432,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { get FLIP() { return FLIP; }, get T() { return T; }, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
