@@ -66,6 +66,146 @@ MYTHIC = "prettyone"
 LURKER = ["...mmmmmmm...", "..mpmmmmmpm..", ".mmmmyymmmmm.", "mmmmmmmmmmmmm", "mvmvmvmvmvmvm", "v..v..v..v..v", ".v..v..v..v..", "v..v.....v..v", ".v.......v..."]   # the flesh jelly: touch it and the trip ends
 
 
+# ---- drop 5: the other seven zones. Appended, so the ids above keep their places.
+CROSSING_N = len(CREATURES)     # the Crossing's creatures (and the junk and the mythic) come first in the atlas
+PAL.update({"f": (250, 196, 150), "i": (240, 120, 56), "h": (96, 70, 104), "H": (58, 40, 64), "u": (124, 84, 50), "U": (80, 52, 30),
+            "x": (188, 104, 56), "n": (88, 132, 70), "e": (120, 170, 220)})
+
+
+def _pad(rows):
+    w = max(len(r) for r in rows)
+    return [r.ljust(w, ".") for r in rows]
+
+
+_MORE = [
+    # ---- 4. The Boil: blisters, steam, things that pop
+    ("blisterfish", "BLISTER FISH", 3, (6, 12), 14, 5, False, ["...ff.f...", "m.fpffpff.", "mmfffffyk.", "m.ffpfffff", "...fpff..."]),
+    ("boilleech", "BOILING LEECH", 3, (3, 7), 18, 5, False, [".irrrrrrrrr..", "irrirrirrrrrw", ".rrrrrrrrrrwk", "..i...i...rw."]),
+    ("poxray", "POX RAY", 3, (14, 22), 12, 4, False, ["r.........r", "rrr.....rrr", "rprrrrrrrpr", "rrrprrrprrr", ".rrryrkrrr.", "...rrrrr...", ".....r.....", ".....r....."]),
+    ("scaldsnail", "SCALD SNAIL", 3, (3, 6), 6, 6, False, ["...iiii..k", "..iyyiii.f", "..iyiyii.f", "...iiii.ff", "fffffffffk"]),
+    ("bubblegut", "BUBBLE GUT", 3, (8, 14), 10, 5, False, ["....w.w.....", "...ppppp....", "..ppwpppp.w.", "mppppwppyk..", "mppwpppppp..", "..pppppw....", "...ppppp...."]),
+    ("festerling", "FESTERLING", 3, (2, 5), 20, 6, False, ["..gg.g..", "m.mgmmm.", "mmmmmgyk", "m.mmgmm.", "...g...."]),
+    ("sorethumb", "SORE THUMB", 3, (5, 9), 8, 4, False, [".rrrr.", "rmmmmr", "pppppp", "pkppkp", "pppppp", "pprrpp", "pppppp", ".pppp."]),
+    ("steamslug", "STEAM SLUG", 3, (4, 8), 10, 5, False, ["..w..w....", ".w..w..w..", "...ssssss.", "..sSSSSsyk", "sssssssssk"]),
+    ("bigpop", "THE BIG POP", 3, (100, 160), 6, 0, True, [".....fffff.....", "...ffffpffff...", "..fpffffffwff..", ".fffffffffwwff.", "fffpffffffffyk.", "fffffffpffffyyk",
+                                                         ".ffffffffffpff.", "..ffpffffffff..", "...fffffpfff...", ".....fffff.....", "......m.m......"]),
+    ("motherblister", "MOTHER BLISTER", 3, (140, 200), 8, 0, True, ["...p...p...p....", "..rrr.rrr.rrr...", ".rrrrrrrrrrrrrr.", "rrprrprrprrrryrk", "rrrrrrrrrrrrrrrk",
+                                                                   "rprrprrprrprrrr.", ".rrrrrrrrrrrrr..", "..f..f..f..f...."]),
+    ("simmer", "THE SIMMER", 3, (120, 180), 12, 0, True, ["..w...w...w..", ".w...w...w...", "iiiiiiiiiiiii", "iyyiiiiiiiyyi", ".iiiiiiiiiii.", ".ikkkkkkkkki.", ".iwiwiwiwiwi.",
+                                                         "..iiiiiiiii..", "...i.....i..."]),
+    # ---- 5. The Hollows: eyes and glass
+    ("eyecluster", "EYEBALL CLUSTER", 4, (3, 7), 10, 5, False, [".www..ww.", "wwkww.wkw", ".www.www.", "..rr.wkw.", ".wkw..ww.", "..w......"]),
+    ("glassspider", "GLASS SPIDER", 4, (4, 9), 22, 4, False, ["l.l.....l.l", ".l.l...l.l.", "..lcccccl..", "..ccykycc..", "..lcccccl..", ".l.l...l.l.", "l.l.....l.l"]),
+    ("blinker", "BLINKER", 4, (2, 5), 16, 6, False, ["....llll..", "l..lwwwwl.", "lllwwkkwl.", "l..lwwwwl.", "....llll.."]),
+    ("staringshell", "STARING SHELL", 4, (6, 11), 4, 5, False, ["..ooooo..", ".occccco.", "ocwwkwwco", "occccccco", ".ooooooo."]),
+    ("lenslouse", "LENS LOUSE", 4, (1, 3), 14, 6, False, [".cccc.", "ccwwcc", "cwkwcc", ".cccc.", "o.o.o."]),
+    ("hollowshrimp", "HOLLOW SHRIMP", 4, (2, 5), 18, 6, False, ["......cc.", "..cccc..c", ".c....cyk", "c.....cc.", ".cc.c.c..", "..c.c.c.."]),
+    ("weeper", "WEEPER", 4, (5, 10), 8, 4, False, ["..llllll..", ".lllllllll", "llllwklll.", ".llllelll.", "..llllll..", ".....e....", ".....e...."]),
+    ("socketcrab", "SOCKET CRAB", 4, (6, 12), 12, 5, False, ["o.o....o.o", ".oo....oo.", "..oooooo..", ".oowkkwoo.", "oooooooooo", ".o.o..o.o."]),
+    ("iriseel", "IRIS EEL", 4, (8, 15), 24, 4, False, [".llllllllllllllll.", "lllwkllllwklllllyk", ".llllllllllllllll."]),
+    ("watcher", "THE WATCHER", 4, (90, 140), 4, 0, True, ["....ccccccc....", "..ccwwwwwwwcc..", ".cwwwwrwwwwwwc.", "cwwwwlllllwwwwc", "cwwwlkkkkklwrwc", "cwwrlkkykklwwwc",
+                                                         "cwwwlkkkkklwwwc", "cwwwwlllllwwwwc", ".cwwwwwwrwwwwc.", "..ccwwwwwwwcc..", "....ccccccc...."]),
+    ("hundredeyes", "HUNDRED EYES", 4, (130, 190), 10, 0, True, ["..lllllllllllll...", ".lwklwklwklwklwkl.", "lllllllllllllllly.", "lwklwklwklwklwklk.", "llllllllllllllll..",
+                                                               ".lwklwklwklwklwl..", "..llllllllllll....", "...l..l..l..l....."]),
+    # ---- 6. The Sink: drowned lights in the dark
+    ("facelantern", "FACE LANTERN", 5, (5, 10), 8, 5, False, ["....k...", "....k...", "...yyy..", "..ykyky.", "..yykyy.", "...yyy..", ".hhhhhh.", "hhhhhhhk", ".hhhhhh."]),
+    ("drownedangler", "DROWNED ANGLER", 5, (12, 22), 16, 4, False, [".....k......", "......k.....", "......t.....", "..hhhhhhh...", ".hhhhhhhhyk.", "hhhhhhhwkwkw",
+                                                                   "hhhhhhhhhhh.", ".hhhhhhhhh..", "..h....h...."]),
+    ("sinker", "SINKER", 5, (10, 18), 6, 5, False, ["...oo...", "..o..o..", "..oooo..", ".oooooo.", "ooykooyk", "oooooooo", ".oooooo."]),
+    ("undertow", "UNDERTOW", 5, (6, 12), 26, 4, False, ["..hhhhhh..", ".h......h.", "h..hhhh..h", "h.h.yk.h.h", "h..hhh..h.", ".h......h.", "..hhhhh..."]),
+    ("gloomgulper", "GLOOM GULPER", 5, (14, 24), 12, 4, False, ["hhhhhhhhh.", "hhhhhhhhyk", "hh.w.w.w.w", "h.........", "hh.w.w.w.w", "hhhhhhhhhh", ".hhhhhhh.."]),
+    ("palelure", "PALE LURE", 5, (2, 5), 14, 5, False, ["......cc", ".....c..", "..sss...", ".sssyk..", "sssss...", ".s.s...."]),
+    ("leadbelly", "LEAD BELLY", 5, (16, 26), 6, 4, False, ["..hhhhhhh..", ".hhhhhhhhyk", "hooooooooh.", "hoooooooooh", ".hhhhhhhhh."]),
+    ("choker", "CHOKER", 5, (8, 14), 20, 4, False, ["...hhh.........", "..h...h........", "..h...hhhhhhhyk", "...hhh.hhhhhhh."]),
+    ("wailingwisp", "WAILING WISP", 5, (1, 4), 22, 6, False, [".ccc.", "ckcck", "ccccc", "ckkkc", ".ccc.", "c.c.c", ".c.c."]),
+    ("hushfish", "HUSH FISH", 5, (3, 7), 10, 6, False, ["..hhhh..", "h.hhhhhy", "hhhhhhk.", "h.hhhhh.", "..h..h.."]),
+    ("deepbreath", "THE DEEP BREATH", 5, (160, 220), 6, 0, True, ["...ppppp...ppppp...", "..ppmpmpp.ppmpmpp..", ".ppmpmpmpppmpmpmpp.", ".pmpmpmpmpmpmpmpmp.", ".ppmpmpmpkpmpmpmpp.",
+                                                                 "..ppmpmpk.kpmpmpp..", "...pppp.....pppp...", ".........r.........", ".........r........."]),
+    ("lastlight", "THE LAST LIGHT", 5, (90, 140), 14, 0, True, [".......t.......", "......tyt......", ".......t.......", ".......k.......", "......k........", "..hhhhhhhhh....",
+                                                               ".hhhhhhhhhhhh..", "hhhhhhhhhhhywk.", "hhhhhhhhhkwkwkw", ".hhhhhhhhhhhhh.", "..hhhhhhhhhh..."]),
+    ("drownedking", "THE DROWNED KING", 5, (150, 210), 8, 0, True, ["..t.t.t.t...", "..ttttttt...", ".ooooooooo..", "oocwkcwkcoo.", "oooooooooooo", "ookkkkkkkoo.", ".ooooooooo..",
+                                                                   "..o.o.o.o...", ".o.o.o.o.o.."]),
+    # ---- 7. The Hulk: a ship that sank upwards
+    ("barnaclehand", "BARNACLE HAND", 6, (6, 11), 14, 4, False, [".s.s.s.s..", ".s.s.s.s..", ".s.s.s.s.s", "sssssssss.", "sSssSssss.", ".sssssss..", "..sssss..."]),
+    ("rotplank", "ROT PLANK", 6, (8, 14), 4, 5, False, ["uuuuuuuuuuuu", "uUuuuUuuxuuU", "uuuuyukuuuuu", "UUUUUUUUUUUU"]),
+    ("bilgeblob", "BILGE BLOB", 6, (5, 10), 6, 5, False, ["...nnnn...", ".nngnnnnn.", "nnnnykngnn", "nngnnnnnnn", ".nnnnngnn.", "n..n..n..n"]),
+    ("rustlouse", "RUST LOUSE", 6, (1, 3), 16, 6, False, [".xxxx.", "xxxxxk", "xuxuxy", ".xxxx.", "x.x.x."]),
+    ("mastworm", "MAST WORM", 6, (4, 8), 12, 5, False, ["....uu......", ".pppuupppp..", "ppmpuumpmpyk", ".pppuupppp..", "....uu......"]),
+    ("portholeeye", "PORTHOLE EYE", 6, (6, 10), 4, 5, False, ["..xxxxx..", ".xooooox.", "xowwkwwox", "xowkykwox", "xowwkwwox", ".xooooox.", "..xxxxx.."]),
+    ("ropetail", "ROPE TAIL", 6, (5, 10), 18, 5, False, ["s.s.s.s......", ".s.s.s.uuuu..", "s.s.s.uuuuuyk", ".s.s.s.uuuu.."]),
+    ("nailbiter", "NAIL BITER", 6, (6, 12), 22, 4, False, ["..ooooooo.", ".ooooooooy", "ooowowowok", "oo.......w", "ooowowowo.", ".oooooooo.", "..o...o..."]),
+    ("hullcreeper", "HULL CREEPER", 6, (8, 14), 8, 4, False, ["u.u.u.u.u.u", "uuuuuuuuuuu", "uUnUnUnUuyk", "uuuuuuuuuuu", "u.u.u.u.u.u"]),
+    ("captainsbeard", "CAPTAIN'S BEARD", 6, (3, 6), 10, 5, False, ["..sssss..", ".skssksss", "..sssss..", ".s.s.s.s.", "s.s.s.s.s", ".s.s.s.s.", "..s...s.."]),
+    ("cannonslug", "CANNON SLUG", 6, (12, 20), 8, 4, False, ["........kk", "..oooooook", ".ooooooook", "oooooooo..", "nnnnnnnnyk", "nnnnnnnnnn"]),
+    ("galleyrat", "GALLEY RAT", 6, (2, 5), 20, 6, False, [".......bb.", "p.bbbbbbbb", ".pbbbbbbyk", "..bbbbbbbp", "..b.b..b.b"]),
+    ("figurehead", "THE FIGUREHEAD", 6, (120, 170), 8, 0, True, [".....uuuu.....", "....uuuuuu....", "...uusksksu...", "...ussssssu...", "...usrrrrsu...", "....ussssu....",
+                                                                "..uuuuuuuuuu..", ".uuuUuuuuUuuu.", "uuuuuuuuuuuuuu", "...u......u..."]),
+    ("firstmate", "THE FIRST MATE", 6, (100, 150), 12, 0, True, ["....kkkkkk....", "...kkkkkkkk...", "....ssssss....", "...sksssksx...", "...ssssssss...", "...ssrrrrss...",
+                                                                "....ssssss....", "..bbbbbbbbbb..", ".bbbbbbbbbbbb.", "..b..b..b..b..", "..s..s..s..s.."]),
+    # ---- 8. The Murk: shadows with nothing casting them
+    ("shadowshark", "SHADOW SHARK", 7, (16, 26), 26, 4, False, ["........H.........", ".......HH.........", "H....HHHHHHHHHH...", "HH.HHHHHHHHHHHHyH.", "HHHHHHHHHHHHHHwkwk",
+                                                               "HH.HHHHHHHHHHHHHH.", "H.....HH....HH...."]),
+    ("murkmouth", "MURK MOUTH", 7, (10, 18), 12, 4, False, ["..HHHHHHH..", ".HyHHHHHyH.", "HwkwkwkwkwH", "H.........H", "HwkwkwkwkwH", ".HHHHHHHHH."]),
+    ("halffish", "HALF FISH", 7, (3, 6), 16, 5, False, ["s.s.hhhh.", ".sssshhyk", "s.s.hhhh."]),
+    ("dimbulb", "DIM BULB", 7, (2, 5), 10, 6, False, ["...y...", "..yty..", "...k...", "..hhh..", ".hhhhhy", "hhhhhk.", ".h.h..."]),
+    ("smudge", "SMUDGE", 7, (1, 4), 8, 6, False, [".hhh.h.", "hhHhhhh", "hHHhyhh", ".hhhh.h"]),
+    ("whisperray", "WHISPER RAY", 7, (8, 16), 14, 4, False, ["h.........h", "hh.......hh", "hhhhhhhhhhh", ".hhhykyhhh.", "...hhhhh...", ".....h.....", "......h...."]),
+    ("notafish", "NOT-A-FISH", 7, (4, 9), 12, 4, False, ["..hhhhh...", ".hhhhhhhyk", "hhhhhhhhhw", ".hhhhhhhh.", ".p.p..p.p.", "p..p..p..p"]),
+    ("gloomer", "GLOOMER", 7, (6, 12), 8, 5, False, ["...hhhhh..", ".hhhhhhhh.", "hhhhhhhhyh", "hhhhhhhhhh", ".hhkkkkhh.", "...hhhh..."]),
+    ("silhouette", "SILHOUETTE", 7, (5, 10), 14, 5, False, ["..HHH..", "..HyH..", "..HHH..", "HHHHHHH", "..HHH..", "..HHH..", ".H...H.", "H.....H"]),
+    ("skinsquid", "SKIN SQUID", 7, (6, 12), 16, 4, False, ["..pppp......", ".pppppppp...", "ppkpppppppp.", "pppppppppppp", ".ppppppp.p.p", "..pppp.p.p.p"]),
+    ("fadefish", "FADE FISH", 7, (2, 5), 18, 6, False, ["..h.hh..", "h.hhhhh.", "hhhHhhyk", "h.hhhhh.", "..h.hh.."]),
+    ("othershadow", "THE OTHER SHADOW", 7, (110, 160), 18, 0, True, ["...........HHH...", "H........HHHHHH..", "HH...HHHHHHHHHHH.", "HHHHHHHHHHHHHHyyH", "HHHHHHHHHHHHHHHHH",
+                                                                    "HH...HHHHHHHHHHH.", "H........HHHHHH..", "...........HHH..."]),
+    ("grin", "THE GRIN", 7, (80, 130), 10, 0, True, ["....yy.....yy....", ".................", "w...............w", "ww.............ww", ".wwkwkwkwkwkwkww.", "..wkwkwkwkwkwkw..",
+                                                    "....wwwwwwwww...."]),
+    ("misternobody", "MISTER NOBODY", 7, (100, 150), 6, 0, True, [".....kkkkk.....", ".....kkkkk.....", "...kkkkkkkkk...", ".....HHHHH.....", ".....HHHHH.....", "....HHHHHHH....",
+                                                                 "...HHHHHHHHH...", "...H.HHHHH.H...", ".....HH.HH.....", ".....HH.HH.....", "....HHH.HHH...."]),
+    # ---- 9. The Tangle: veins and hair instead of kelp
+    ("tangleworm", "TANGLE WORM", 8, (3, 7), 16, 5, False, [".r.r..r.r..", "r.r.rr.r.r.", ".rrrrrrrryk", "r.r.rr.r.r.", ".r.r..r.r.."]),
+    ("hairweed", "HAIR WEED", 8, (2, 5), 4, 5, False, ["b.b.b.b", "b.b.b.b", ".b.b.b.", ".b.b.b.", "b.bkb.b", ".bbbbb.", "..bbb.."]),
+    ("veineel", "VEIN EEL", 8, (8, 15), 24, 4, False, [".vvvvvvvvvvvvvvvvv..", "vrvvrvvrvvrvvrvvvvyk", ".vvvvvvvvvvvvvvvvvv."]),
+    ("knotfish", "KNOT FISH", 8, (4, 9), 10, 5, False, ["...rrr....", "m.r.r.r...", "mmrrrrrryk", "m.r.r.r...", "...rrr...."]),
+    ("clotcrab", "CLOT CRAB", 8, (5, 10), 12, 5, False, ["d.d....d.d", ".dd....dd.", "..dddddd..", ".ddykdykd.", "dddddddddd", ".d.r..r.d.", "...r..r..."]),
+    ("snarlsnapper", "SNARL SNAPPER", 8, (8, 15), 22, 4, False, ["..vvvvvvvv..", ".vvvvvvvvvy.", "vvvvvvvvwkwk", "vvvvvvvv....", "vvvvvvvvwkwk", ".vvvvvvvvvv.", "..b.b.b.b..."]),
+    ("pulsepod", "PULSE POD", 8, (2, 6), 6, 6, False, ["..rrr..", ".rmmmr.", "rmmymmr", "rmmmmmr", ".rmmmr.", "..rrr..", "...r...", "...r..."]),
+    ("nervenetter", "NERVE NETTER", 8, (4, 8), 14, 5, False, ["w.w.w.w.w", ".w.w.w.w.", "w.wwwww.w", ".wwykwww.", "w.wwwww.w", ".w.w.w.w."]),
+    ("capillarycarp", "CAPILLARY CARP", 8, (6, 12), 14, 5, False, ["...rrrrr...", "m.rvrrrvrr.", "mmrrvrvrryk", "m.rvrrrvrr.", "...rrrrr..."]),
+    ("mattedmullet", "MATTED MULLET", 8, (5, 10), 12, 5, False, ["..bbbbb....", ".bbbbbbsss.", "bbbbbsssssy", ".bbbssssssk", "...sssssss.", "....s..s..."]),
+    ("stringsquid", "STRING SQUID", 8, (3, 7), 18, 5, False, ["..rrr.........", ".rrrrr........", "rrykrrr.r.r.r.", ".rrrrrrrrrrrrr", "..rrr..r.r.r.r"]),
+    ("loosethread", "LOOSE THREAD", 8, (1, 2), 20, 6, False, ["r........", ".r.....r.", "..rrrrr.r", ".......ry"]),
+    ("heartpod", "HEART POD", 8, (6, 11), 6, 4, False, [".rr...rr.", "rrrr.rrrr", "rrrrrrrrr", "rrykrrykr", ".rrrrrrr.", "..rrrrr..", "...rrr...", "....r...."]),
+    ("heartbeat", "THE HEARTBEAT", 8, (110, 170), 10, 0, True, ["..vv.....vv....", ".vrrrv.vrrrv...", "vrrrrrvrrrrrv..", "vrrrrrrrrrrrv..", "vrrrykrrrykrv..", ".vrrrrrrrrrv...",
+                                                               "..vrrrrrrrv.r.r", "...vrrrrrv.r.r.", "....vrrrv..r.r.", ".....vrv.......", "......v........"]),
+    ("bigknot", "THE BIG KNOT", 8, (140, 200), 6, 0, True, ["....rrrrrr........", "..rr......rr......", ".r..rrrrr...r.....", "r..r.....r...rrrry", "r..r..yk.r..rrrrrk", "r...rrrrr...r.....",
+                                                           ".r.........r......", "..rr.....rr.......", "....rrrrr........."]),
+    # ---- 10. Mirror Shallows: almost normal fish, which is worse
+    ("insideoutminnow", "INSIDE-OUT MINNOW", 9, (1, 3), 22, 6, False, ["..rrrr..", "p.rmrmr.", "pprrrryk", "p.mrmrr.", "..rrrr.."]),
+    ("grinningsunfish", "GRINNING SUNFISH", 9, (3, 7), 12, 5, False, ["...tttt...", "..tttttt..", "t.ttttyt..", "tttwkwkwt.", "t.ttttttt.", "..tttttt..", "...tttt..."]),
+    ("backwardbass", "BACKWARD BASS", 9, (4, 9), 14, 5, False, ["...gggg...g", ".gggggggggg", "kyggggggg.g", ".gggggggggg", "...gggg...g"]),
+    ("wrongtrout", "WRONG TROUT", 9, (3, 8), 16, 5, False, ["...pppp...", "p.ptptpp..", "pppppppyk.", "p.ptptppw.", "...pppp..."]),
+    ("upsideguppy", "UPSIDE GUPPY", 9, (1, 2), 20, 6, False, ["..ccc....", ".cccccc.l", "kycccccll", "..ccc...l", "...l.l..."]),
+    ("smilesmelt", "SMILE SMELT", 9, (1, 3), 18, 6, False, [".cccccc..", "ccccccyk.", "cccckwkw.", ".cccccc.."]),
+    ("toothytang", "TOOTHY TANG", 9, (3, 7), 22, 4, False, ["..lllll...", ".llllllly.", "lllllwkwkw", "lllll.....", "lllllwkwkw", ".llllllll.", "..lllll..."]),
+    ("twinperch", "TWIN PERCH", 9, (2, 5), 14, 5, False, ["...ggggyk", "m.ggggggg", "mmgggg...", "m.ggggggg", "...ggggyk"]),
+    ("flippedflounder", "FLIPPED FLOUNDER", 9, (5, 10), 10, 5, False, [".pppppppp..", "ppppppppppp", "ppmpmpmpppp", ".ppppppyk.."]),
+    ("mimicminnow", "MIMIC MINNOW", 9, (1, 3), 20, 4, False, ["..cccc..", "c.ccccc.", "ccccccyk", "c.cccwkw", "..cccc.."]),
+    ("echoeel", "ECHO EEL", 9, (4, 8), 24, 4, False, ["c.c.cccccccccc.", ".c.ccccccccccyk", "c.c.cccccccccc."]),
+    ("copycarp", "COPY CARP", 9, (6, 11), 12, 4, False, ["....tttt...", "t..tktktk..", "tttttttttyk", "t..tttttt..", "....tttt..."]),
+    ("gapinggoby", "GAPING GOBY", 9, (2, 4), 14, 5, False, ["..ssss..", ".ssssssy", "sssss..k", "ssss....", "sssss..k", ".sssssss"]),
+    ("reflection", "THE REFLECTION", 9, (90, 140), 14, 0, True, ["..cc.......cc..", ".ccccc...ccccc.", "cyccccccccccccy", "ckccccccccccckc", "ccccccccccccccc", ".ccccc...ccccc.",
+                                                                "..cc.......cc.."]),
+    ("counterfeitkoi", "THE COUNTERFEIT KOI", 9, (100, 150), 12, 0, True, ["....wwwww......", "..wwrrwwwrww...", "w.wwwwrrwwwwyk.", "wwwwrrwwwrrwwww", "w.wwwwwwrrwwww.",
+                                                                          "..wwkrwkwwkw...", "....wwwww......"]),
+    ("doppelganger", "THE DOPPELGANGER", 9, (120, 170), 10, 0, True, ["......o........", "......o........", "....ooo........", "..pppppppp.....", ".pppppppppp....", "ppppppppppppyk.",
+                                                                     "pppkpkpkpkppwkw", ".pppppppppp....", "..pppppppp.....", "...m.....m....."]),
+]
+CREATURES += [c[:7] + (_pad(c[7]),) for c in _MORE]
+# Hunters swim at the hook instead of past it once they see it. Getting grabbed ends an endgame run.
+HUNTERS = ["gnasher", "spinesnake", "boilleech", "glassspider", "drownedangler", "choker", "barnaclehand", "nailbiter", "shadowshark", "murkmouth",
+           "tangleworm", "snarlsnapper", "toothytang", "mimicminnow"]
+
+
 def rows_surface(pg, rows, outlined):
     """Pixel rows -> an outlined surface, in the same style as the topside fish."""
     from hopper import from_rows  # noqa: E402  (the project's own helpers)

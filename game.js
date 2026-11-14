@@ -147,6 +147,7 @@ const SOUNDS = {                                       // [frequency, seconds, w
   chime: [[880, 0.08, "triangle", 0.3], [1320, 0.2, "triangle", 0.3, 0, 0.08]],
   fanfare: [[523, 0.09, "square", 0.2], [659, 0.09, "square", 0.2, 0, 0.09], [784, 0.09, "square", 0.2, 0, 0.18], [1047, 0.3, "square", 0.2, 0, 0.27]],
   thunder: [[70, 0.6, "sawtooth", 0.25, 40]],
+  growl: [[90, 0.45, "sawtooth", 0.22, 60], [70, 0.4, "square", 0.1, 50, 0.1]], lunge: [[180, 0.18, "sawtooth", 0.25, 520]],   // a Flipside hunter sees you, then comes
 };
 function play(name, vol) {
   if (!AC || !SOUNDS[name]) return;
@@ -164,10 +165,10 @@ function catchSound(n) {
 // --------------------------------------------------------------- saved data
 let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, mythic: 0, titles: ["rookie"],
   own: { char: [0], hat: [0], boat: [0], hook: [0], line: [0], trail: [0], flair: [0], pet: [0], flag: [0] },
-  eq: { char: 0, hat: 0, boat: 0, hook: 0, line: 0, trail: 0, flair: 0, pet: 0, flag: 0, title: "rookie" }, tasks: null,
+  eq: { char: 0, hat: 0, boat: 0, hook: 0, line: 0, trail: 0, flair: 0, pet: 0, flag: 0, title: "rookie", mon: 0, mpet: 0, mhat: 0 }, tasks: null,   // mon/mpet/mhat: wear the monster forms
   dives: 0,                                              // dives finished, for things that open up with experience
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
-  flip: { log: {}, runs: 0, wins: 0 },                   // the Flipside: creatures caught (for the Bestiary), trips made
+  flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
   tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "",
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} } };   // the Rusty Hook
 try {
@@ -182,7 +183,7 @@ const LOGGED = SPECIES.filter(s => !HIDDEN.includes(s[0]));
 
 // ------------------------------------------------------------------ secrets
 // Secret rewards live on the Secrets page only, never in the shop. They are appended past the shop's items:
-const SHOP_N = { flag: 12, flair: 20 };                  // how many of each list the shop sells; anything after is a secret reward
+const SHOP_N = { flag: 12, flair: 20, boat: 18, line: 14 };   // how many of each list the shop sells; anything after is a secret or Bestiary reward
 // [id, name, what it was, reward: [kind, index] or ["title", id] or null]
 const SECRETS = [
   ["bottle", "MESSAGE IN A BOTTLE", "FISHED A BOTTLE OUT OF THE SEA", ["flag", 12]],
@@ -285,7 +286,8 @@ let EV = events(), evAt = 0;                               // re-checked every f
 // Line colours: a plain colour, or "@name" for an animated one (see lineCol).
 const LINES = [["WHITE LINE", 0, "#ecf0fa"], ["CYAN LINE", 400, "#5ae6ff"], ["PINK LINE", 400, "#ff8cd2"], ["LIME LINE", 500, "#82f082"], ["GOLD LINE", 1500, "#ffd246"], ["RAINBOW LINE", 5000, "@rainbow"],
   ["RED LINE", 400, "#f05050"], ["ORANGE LINE", 400, "#ffa046"], ["VIOLET LINE", 500, "#b48cff"], ["SILVER LINE", 800, "#c8d2e6"], ["SHADOW LINE", 900, "#3c3450"],
-  ["FIRE LINE", 3000, "@fire"], ["ICE LINE", 2500, "@ice"], ["SPARKLE LINE", 4000, "@sparkle"]];
+  ["FIRE LINE", 3000, "@fire"], ["ICE LINE", 2500, "@ice"], ["SPARKLE LINE", 4000, "@sparkle"],
+  ["BILE LINE", 0, "@bile"], ["VEIN LINE", 0, "@vein"]];        // Bestiary rewards, never sold
 const TRAILS = [["BUBBLES", 0, ["#c8ecff"]], ["GOLD DUST", 1000, ["#ffd246", "#fff0a0"]], ["PINK FIZZ", 1000, ["#ff8cd2", "#ffd2f0"]], ["EMBERS", 1500, ["#ff965a", "#ffdc5a"]],
   ["STARDUST", 2000, ["#ffffff", "#5ae6ff", "#c8a0ff"]], ["RAINBOW FIZZ", 4000, ["#f05050", "#ffa046", "#ffd246", "#82f082", "#5ae6ff", "#c8a0ff"]],
   ["TOXIC", 1200, ["#82f082", "#c8ff5a", "#46c846"]], ["DEEP BLUE", 1000, ["#3c78ff", "#5ae6ff"]], ["CANDY", 1500, ["#ff8cd2", "#ffffff", "#5ae6ff"]],
@@ -295,11 +297,11 @@ const price = (names, list) => names.map((n, i) => [n, list[i]]);
 const SHOP = [
   ["CHARACTER", "char", price(DATA.chars, [0, 500, 500, 1200, 1500, 1800, 1200, 1000, 2000, 1500, 1800, 1800, 6000, 4000, 3500, 2500, 2500, 3000, 4500, 3000, 6000, 5000])],
   ["HAT", "hat", price(DATA.hats, [0, 300, 800, 4000, 1500, 400, 1000, 800, 3000, 2500, 500, 2000, 1000, 1800, 600, 1200, 900, 1500, 1800, 1200, 1400, 2500, 3500, 1400, 2200, 7500])],
-  ["BOAT", "boat", price(DATA.boats, [0, 700, 700, 1000, 1800, 1500, 4000, 8000, 1500, 1500, 3000, 2500, 5000, 3500, 4000, 3000, 2000, 4500])],
+  ["BOAT", "boat", price(DATA.boats.slice(0, SHOP_N.boat), [0, 700, 700, 1000, 1800, 1500, 4000, 8000, 1500, 1500, 3000, 2500, 5000, 3500, 4000, 3000, 2000, 4500])],
   ["PET", "pet", price(DATA.pets, [0, 1500, 1500, 2500, 2500, 3000, 3000, 2000, 2500, 5000, 1800, 7000, 6000, 4500])],
   ["FLAG", "flag", price(DATA.flags.slice(0, SHOP_N.flag), [0, 600, 1500, 1200, 1500, 3000, 1500, 2000, 2500, 2000, 1500, 4000])],
   ["HOOK", "hook", price(DATA.hooks, [0, 1200, 900, 1500, 1100, 1800, 2500, 1500, 5000, 3000, 2000, 2500, 1500, 3500])],
-  ["LINE", "line", LINES.map(l => [l[0], l[1]])],
+  ["LINE", "line", LINES.slice(0, SHOP_N.line).map(l => [l[0], l[1]])],
   ["BUBBLE TRAIL", "trail", TRAILS.map(l => [l[0], l[1]])],
   ["FISH FLAIR", "flair", price(DATA.flair.slice(0, SHOP_N.flair), [0, 1200, 1500, 4000, 1000, 2000, 1800, 3000, 2500, 1200, 1500, 1000, 2000, 1200, 1800, 1500, 3500, 2500, 2000, 6000])],
 ];
@@ -311,8 +313,12 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     ["all", "COMPLETIONIST", "LOG EVERY SPECIES"], ["baiter", "MASTER BAITER", null], ["mythic", "HOLY CRAP", null], ["soggy", "SOGGY", null],
     ["roller", "HIGH ROLLER", "1,000 TAVERN CHIPS"], ["shark", "CARD SHARK", "WIN 25 HANDS OF 21"], ["derbyking", "DERBY KING", "WIN 10 DERBY BETS"],
     ["longshot", "LONG SHOT", "WIN A X8 DIVE BET"], ["regular", "REGULAR", "TAKE FREE CHIPS 14 DAYS"],
-    ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"], ["otherside", "THE OTHER SIDE", "BEAT THE GAME"]]);
-const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy");   // SOGGY is a secret reward and lives on the Secrets page
+    ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"], ["otherside", "THE OTHER SIDE", "BEAT THE GAME"]])
+  .concat(["GAP KEEPER", "TOOTH FAIRY", "MARROW MINER", "BLISTER POPPER", "EYE SPY", "LAMPLIGHTER", "GHOST DECKHAND", "SHADOW BOXER", "KNOT TIER", "MIRROR MIRROR"]
+    .map((n, i) => ["fzone" + i, n, "FILL " + DATA.flip.zones[i][0]]))
+  .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY"], ["bestiary", "BESTIARY KEEPER", "FILL THE BESTIARY"], ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS"]]);
+const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
+const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
 function award(id) { if (store.titles.includes(id)) return false; store.titles.push(id); return true; }
 function checkTitles(dive) {                               // -> names of titles earned just now
@@ -389,7 +395,7 @@ function zoneOf(m) { for (let i = 0; i < ZONES.length; i++) if (m < ZONES[i][2])
 // ------------------------------------------------------------- leaderboard
 const LB = {                                             // two lists in the database: /daily/<date> and /all, each entry {n, s, t, h, ti}
   url: (typeof LEADERBOARD_URL === "string" ? LEADERBOARD_URL : "").trim().replace(/\/+$/, ""),
-  today: null, all: null, status: "", note: "",
+  today: null, all: null, ftoday: null, fall: null, status: "", note: "",     // ftoday/fall: the Flipside board, under /flip
   async top(path) {                                      // best ten; falls back to reading the whole list if the database has no index yet
     let data = null;
     try { const r = await fetch(this.url + path + '.json?orderBy=%22s%22&limitToLast=10'); if (r.ok) data = await r.json(); } catch (e) { data = null; }
@@ -399,21 +405,29 @@ const LB = {                                             // two lists in the dat
   async load() {
     if (!this.url) return;
     this.status = "LOADING...";
-    try { [this.today, this.all] = await Promise.all([this.top("/daily/" + dayString()), this.top("/all")]); this.status = ""; }
+    try {
+      [this.today, this.all] = await Promise.all([this.top("/daily/" + dayString()), this.top("/all")]); this.status = "";
+      if (store.sec.beat) [this.ftoday, this.fall] = await Promise.all([this.top("/flip/daily/" + dayString()), this.top("/flip/all")]);
+    }
     catch (e) { this.status = "CAN'T REACH THE SCORES"; }
   },
-  async submit(name, score, haul, title) {
+  async submit(name, score, haul, title, pre) {               // pre: "/flip" for the Flipside board
     if (!this.url || !name || score <= 0) return;
     const body = JSON.stringify(Object.assign({ n: name, s: score, t: Date.now(), h: haul, ti: title }, store.sec.beat && store.sec.mark !== false ? { m: 1 } : {}));   // m: has beaten the game
     const post = path => fetch(this.url + path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
     try {
-      const [a, b] = await Promise.all([post("/daily/" + dayString() + ".json"), post("/all.json")]);
+      const [a, b] = await Promise.all([post((pre || "") + "/daily/" + dayString() + ".json"), post((pre || "") + "/all.json")]);
       this.note = a.ok && b.ok ? "" : "UPDATE THE DATABASE RULES";
     } catch (e) { this.status = "CAN'T REACH THE SCORES"; return; }
     await this.load();
   },
 };
 function packHaul(h, bottom) { return h.rows.map(r => r[0] + ":" + r[1] + (r[3] ? ":T" : "")).join(",") + "|" + h.mult + "|" + (bottom ? 1 : 0); }
+function unpackFlipHaul(s) {                               // a Flipside board entry's catch: "id:lb[:T],...|mult"
+  if (typeof s !== "string") return null;
+  const [fish, mult] = s.split("|");
+  return { fish: fish ? fish.split(",").map(f => f.split(":")).filter(f => FSPEC[f[0]]) : [], mult: +mult || 1 };
+}
 function unpackHaul(s) {
   if (typeof s !== "string") return null;
   const [fish, mult, bottom] = s.split("|");
@@ -432,6 +446,7 @@ function newDive() {
     bubbles: [], popups: [], overlay: store.seenHelp ? null : "help", logPage: 0, logSel: 0, tab: 0, scoreSel: -1, shopCat: 0, shopSel: 0, helpPage: 0,
     haul: null, zoneSeen: 0, prepared: false, eye: 0, reached: 0, resume: "down",
     chunks: {}, special: {},
+    bPage: S ? S.bPage : 0, bSel: S ? S.bSel : 0, board: S ? S.board : 0, fhaul: null,
     realTod: timeOfDay(), eclipse: false, sunTaps: 0, poke: { n: 0, t: 9, fall: -1 }, bottle: null, bottleGot: -1,
   };
   EV = events();
@@ -692,14 +707,7 @@ function update(dt) {
     S.cam += ((S.hy - 128) - S.cam) * Math.min(1, dt * 6);
     if (S.state === "rise" && S.hy <= 2) beginHaul();
   } else if (S.state === "fight") {
-    const fg = S.fight;
-    fg.pos += fg.dir * fg.speed * dt;
-    if (fg.pos >= 1 || fg.pos <= 0) { fg.pos = clamp(fg.pos, 0, 1); fg.dir = -fg.dir; }
-    fg.shake = Math.max(0, fg.shake - dt);
-    fg.left -= dt;
-    if (fg.style === "shrink") fg.win[1] = Math.max(0.045, fg.win[1] - 0.035 * dt);       // the green zone closes while you wait
-    if (fg.style === "dart") { fg.ph += dt * 3.2; fg.win[0] = clamp(fg.base + Math.sin(fg.ph) * 0.2, fg.win[1], 1 - fg.win[1]); }   // ...or will not hold still
-    if (fg.left <= 0) loseFight("TOO SLOW! GOT AWAY");
+    if (fightTick(S.fight, dt)) loseFight("TOO SLOW! GOT AWAY");
   } else if (S.state === "turn") {
     if (S.stT > 0.75) {
       if (S.rising) { S.rising = false; S.resume = "rise"; setState("rise"); S.popups.push(["FISH ON THE WAY UP!", 2.6, LIME]); }
@@ -754,13 +762,36 @@ function land(i, f) {
 const SLIPPERY = /EEL|SQUID|SERPENT|KRAKEN|LAMPREY|HAGFISH|OARFISH|OCTOPUS/;
 function fightStyle(s) { return SLIPPERY.test(s[1]) ? "dart" : s[4] >= 30 ? "quick" : s[2] >= 4 ? "shrink" : "heavy"; }
 const STYLE_HINT = { dart: "SLIPPERY: IT MOVES", quick: "FAST ONE!", shrink: "HURRY: IT SHRINKS", heavy: "HEAVY: MORE HITS" };
+function newFight(need, style, lb) {                         // the timing bar: tap when the marker is on green
+  const time = (style === "quick" ? 3.2 : 4.2) + need * 1.5, c = rnd(0.3, 0.7);
+  return { need, style, hits: 0, miss: 0, pos: 0, dir: 1, shake: 0, ph: 0, base: c, time, left: time,
+    speed: (1.0 + Math.min(0.9, lb / 500)) * (style === "quick" ? 1.7 : 1), win: [c, style === "shrink" ? 0.17 : 0.13] };
+}
+function fightTick(fg, dt) {                                 // -> true when time runs out
+  fg.pos += fg.dir * fg.speed * dt;
+  if (fg.pos >= 1 || fg.pos <= 0) { fg.pos = clamp(fg.pos, 0, 1); fg.dir = -fg.dir; }
+  fg.shake = Math.max(0, fg.shake - dt);
+  fg.left -= dt;
+  if (fg.style === "shrink") fg.win[1] = Math.max(0.045, fg.win[1] - 0.035 * dt);       // the green zone closes while you wait
+  if (fg.style === "dart") { fg.ph += dt * 3.2; fg.win[0] = clamp(fg.base + Math.sin(fg.ph) * 0.2, fg.win[1], 1 - fg.win[1]); }   // ...or will not hold still
+  return fg.left <= 0;
+}
+function fightHit(fg) {                                      // a tap: -> "win", "hit", "miss" or "lost"
+  if (Math.abs(fg.pos - fg.win[0]) <= fg.win[1]) {
+    fg.hits++; fg.shake = 0.25; play("hit");
+    if (fg.hits >= fg.need) return "win";
+    fg.base = rnd(0.25, 0.75);
+    fg.win = [fg.base, fg.style === "shrink" ? 0.17 : Math.max(0.08, 0.13 - 0.015 * fg.hits)]; fg.speed *= 1.1;
+    return "hit";
+  }
+  fg.miss++; play("miss");
+  return fg.miss >= 2 ? "lost" : "miss";
+}
 function startFight(i, f) {
   const s = SPEC[f.id], legend = s[7], style = fightStyle(s);
   let need = (legend ? 3 : 2) + (style === "heavy" ? 1 : 0) + (legend && s[2] >= 7 ? 1 : 0);
   if (C.FIXED.includes(f.id)) need = 2;
-  const time = (style === "quick" ? 3.2 : 4.2) + need * 1.5, c = rnd(0.3, 0.7);
-  S.fight = { i, f, need, style, hits: 0, miss: 0, pos: 0, dir: 1, shake: 0, ph: 0, base: c, time, left: time,
-    speed: (1.0 + Math.min(0.9, f.lb / 500)) * (style === "quick" ? 1.7 : 1), win: [c, style === "shrink" ? 0.17 : 0.13] };
+  S.fight = Object.assign(newFight(need, style, f.lb), { i, f });
   S.touchX = null;
   setState("fight"); play("select");
 }
@@ -771,16 +802,9 @@ function loseFight(msg) {                                  // it throws the hook
   S.popups.push([msg, 1.8, RED]); S.immune = 1.0; play("miss"); setState(S.resume);
 }
 function fightTap() {
-  const fg = S.fight;
-  if (Math.abs(fg.pos - fg.win[0]) <= fg.win[1]) {
-    fg.hits++; fg.shake = 0.25; play("hit");
-    if (fg.hits >= fg.need) { S.fight = null; S.immune = 0.5; land(fg.i, fg.f); return; }
-    fg.base = rnd(0.25, 0.75);
-    fg.win = [fg.base, fg.style === "shrink" ? 0.17 : Math.max(0.08, 0.13 - 0.015 * fg.hits)]; fg.speed *= 1.1;
-  } else {
-    fg.miss++; play("miss");
-    if (fg.miss >= 2) loseFight("IT GOT AWAY!");
-  }
+  const fg = S.fight, r = fightHit(fg);
+  if (r === "win") { S.fight = null; S.immune = 0.5; land(fg.i, fg.f); }
+  else if (r === "lost") loseFight("IT GOT AWAY!");
 }
 const SHORT = { "TROPHY CASE": "TROPHIES", "3 OF A KIND": "TRIPLE", "DEEP TRIO": "DEEP", "GRAND TOUR": "TOUR", "A PAIR": "PAIR" };
 function beginHaul() {
@@ -945,11 +969,18 @@ function slTentacle(t) {                                     // a tentacle sweep
 // ------------------------------------------------------------ the Flipside
 // Through the crack is an upside-down mirror of the ocean. The Crossing (drop 4) climbs its first three zones to the
 // surface overhead, where a monster version of you waits in an upside-down boat. Catch yourself to beat the game.
+// After that, the crack opens to the endgame (drop 5): the whole Flipside, all ten zones, in the dark, with hunters.
 const FLIP_Z = DATA.flip.zones, FSPEC = Object.fromEntries(DATA.flip.species.map(s => [s[0], s]));
+const HUNT = new Set(DATA.flip.hunters);
 const FLIP_HOOK_Y = 140;                                   // the hook stays this far down the screen while the world rises past
+// The endgame's knobs, bot-tuned (tools/tests/test_flipside.py) so a good player catches themselves on about 1 run in 5.
+const FL_TUNE = { one: 0.3, two: 0.85, hunt: 0.3, huntZ: 0.04, jelly: 0.16, jellyZ: 0.015, sense: 70, wind: 0.45, charge: 112, chargeZ: 3, go: 1.4, rest: 2.4, maxHunt: 2,
+  light: 34, glowLight: 46, legend: 0.35, trophy: 0.035 };
 let FLIP = null;
-// Test link: ?crossing (or ?crossing=top to start just below your other self). A practice run: nothing is saved.
+// Test links: ?crossing (or ?crossing=top to start just below your other self), and ?flipside (or ?flipside=top) for the endgame.
+// A practice run: nothing is saved.
 const TEST_FLIP = (() => { try { const q = new URLSearchParams(location.search); return q.has("crossing") ? (q.get("crossing") === "top" ? 2 : 1) : 0; } catch (e) { return 0; } })();
+const TEST_END = (() => { try { const q = new URLSearchParams(location.search); return q.has("flipside") ? (q.get("flipside") === "top" ? 2 : 1) : 0; } catch (e) { return 0; } })();
 const flipZoneAt = m => { let z = 0; FLIP_Z.forEach((q, i) => { if (m >= q[1]) z = i; }); return z; };
 const crackOpen = () => store.sec.beat || LURES[S.lure][0] === "glow";      // the first time, it only opens for a light
 function knockCrack() {                                       // a pulse at the crack, from a dive
@@ -958,35 +989,46 @@ function knockCrack() {                                       // a pulse at the 
   if (S.catch.length || S.bottom) { S.toFlip = true; S.popups.push(["THE CRACK OPENS...", 3, "#c8a0ff"]); beginHaul(); }   // your catch is weighed first
   else startFlip(0);
 }
-function startFlip(test) {
-  const L = DATA.flip.crossing * M, Lu = LURES[S.lure];
+function startFlip(test, end) {
+  if (end === undefined) end = !test && store.sec.beat;     // once you've beaten the game, the crack leads to the whole thing
+  const L = (end ? FLIP_Z[FLIP_Z.length - 1][2] : DATA.flip.crossing) * M, Lu = LURES[S.lure];
   const seed = (Math.random() * 4294967296) >>> 0, rng = RNG(seed);
   if (!test) { store.sec.crack = true; saveStore(); }       // you've been through it
-  FLIP = { test, seed, mode: "in", mt: 0, f: test === 2 ? L - 260 : 0, L, rng, chunks: {}, lurk: {}, special: [], catch: [], pulses: Lu[5], ring: null, scare: null, scared: false,
-    zone: -1, sx: LW / 2, wet: 2, gone: new Set() };
+  FLIP = { test, end, seed, mode: "in", mt: 0, f: test === 2 ? L - 260 : 0, L, rng, chunks: {}, special: [], catch: [], pulses: Lu[5], ring: null, scare: null, scared: false,
+    zone: -1, sx: LW / 2, wet: 2, gone: new Set(), fight: null, safe: 0, flick: 1, flickT: 4, dim: 0, rise: 0 };
   S.sink = Lu[3]; S.steerK = Lu[4]; S.hx = LW / 2; S.keys.clear(); S.touchX = null; S.overlay = null; S.popups = [];
-  FLIP_Z.slice(0, 3).forEach((z, zi) => DATA.flip.species.filter(s => s[2] === zi && s[6]).forEach(s => {   // legendaries: each might be out there
-    if (rng.random() < 0.3) FLIP.special.push({ id: s[0], x: rng.uniform(10, LW - 30), y: rng.uniform(z[1] + 6, z[2] - 6) * M, v: (rng.random() < 0.5 ? -1 : 1) * s[4], ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]), leg: true });
+  FLIP_Z.slice(0, end ? FLIP_Z.length : 3).forEach((z, zi) => DATA.flip.species.filter(s => s[2] === zi && s[6]).forEach(s => {   // legendaries: each might be out there
+    if (rng.random() < (end ? FL_TUNE.legend : 0.3)) FLIP.special.push({ id: s[0], x: rng.uniform(10, LW - 30), y: rng.uniform(z[1] + 6, z[2] - 6) * M, v: (rng.random() < 0.5 ? -1 : 1) * s[4], ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]), leg: true });
   }));
-  if (rng.random() < C.MYTHIC_CHANCE) FLIP.special.push({ id: DATA.flip.mythic, x: rng.uniform(10, LW - 30), y: rng.uniform(210, 320) * M, v: 18, ph: 0, lb: 40, myth: true });
+  if (rng.random() < C.MYTHIC_CHANCE) FLIP.special.push({ id: DATA.flip.mythic, x: rng.uniform(10, LW - 30), y: rng.uniform(210, end ? 1100 : 320) * M, v: 18, ph: 0, lb: 40, myth: true });
   setState("flip"); flipDrone(true);
 }
 function flipChunk(i) {                                       // creatures and lurkers for one 72 px slice of the climb, made when first seen
   if (FLIP.chunks[i]) return FLIP.chunks[i];
-  const rng = RNG(Math.imul(i + 7, 2654435761) ^ FLIP.seed), out = [], y0 = i * C.CHUNK, m = y0 / M;
-  if (m < 4 || y0 > FLIP.L - 70) return (FLIP.chunks[i] = { fish: out, jelly: [] });
-  const z = flipZoneAt(m), pool = DATA.flip.species.filter(s => s[2] === z && s[5] > 0), wsum = pool.reduce((a, s) => a + s[5], 0);
-  const n = Math.round((rng.random() < 0.6 ? 1 : 2) * LW / UW);           // fewer than on top: the Crossing is the gentle one
+  const F = FLIP, rng = RNG(Math.imul(i + 7, 2654435761) ^ F.seed), out = [], y0 = i * C.CHUNK, m = y0 / M;
+  if (m < 4 || y0 > F.L - 70) return (F.chunks[i] = { fish: out, jelly: [] });
+  const z = flipZoneAt(m), pool = DATA.flip.species.filter(s => s[2] === z && s[5] > 0 && !(F.end && HUNT.has(s[0]))), wsum = pool.reduce((a, s) => a + s[5], 0);
+  const per = F.end ? (rng.random() < FL_TUNE.one ? 1 : rng.random() < FL_TUNE.two ? 2 : 3) : (rng.random() < 0.6 ? 1 : 2);   // the Crossing is the gentle one
+  const n = Math.round(per * LW / UW);
   for (let k = 0; k < n; k++) {
     let r = rng.random() * wsum, s = pool[0];
     for (const q of pool) { r -= q[5]; if (r <= 0) { s = q; break; } }
-    out.push({ id: s[0], x: rng.uniform(0, LW - 20), y: y0 + rng.uniform(4, C.CHUNK - 4), v: (rng.random() < 0.5 ? -1 : 1) * s[4] * rng.uniform(0.8, 1.2), ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]) });
+    const c = { id: s[0], x: rng.uniform(0, LW - 20), y: y0 + rng.uniform(4, C.CHUNK - 4), v: (rng.random() < 0.5 ? -1 : 1) * s[4] * rng.uniform(0.8, 1.2), ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]) };
+    if (F.end && rng.random() < FL_TUNE.trophy) { c.tr = true; c.lb = Math.round(s[3][1] * 1.6); }      // a trophy: bigger, and it fights
+    out.push(c);
+  }
+  const hunters = F.end ? DATA.flip.species.filter(s => s[2] === z && HUNT.has(s[0])) : [];
+  for (let k = 0; hunters.length && k < 2; k++) {              // hunters find you: they turn up near your line, however wide the screen
+    if (rng.random() >= (FL_TUNE.hunt + FL_TUNE.huntZ * z) * (k ? 0.35 : 1)) break;
+    const s = hunters[Math.floor(rng.random() * hunters.length)];
+    out.push({ id: s[0], x: clamp(S.hx + rng.uniform(-70, 70) - 6, 0, LW - 20), y: y0 + rng.uniform(4, C.CHUNK - 4), v: (rng.random() < 0.5 ? -1 : 1) * s[4] * rng.uniform(0.8, 1.2), ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]), hunter: true });
   }
   if (rng.random() < 0.08) out.push({ id: rng.random() < 0.5 ? "ftooth" : "hairball", x: rng.uniform(0, LW - 10), y: y0 + rng.uniform(4, 60), v: 0, ph: 0, lb: 1 });
   const jelly = [];
-  const jc = Math.round(0.11 * LW / UW * 10) / 10;
-  if (rng.random() < jc + (z === 2 ? 0.04 : 0)) jelly.push({ x: rng.uniform(8, LW - 20), y: y0 + rng.uniform(8, 64), ph: rng.uniform(0, 6) });
-  return (FLIP.chunks[i] = { fish: out, jelly });
+  const jc = F.end ? (FL_TUNE.jelly + z * FL_TUNE.jellyZ) * Math.pow(LW / UW, 1.35)      // a wide screen has more room to dodge in, so a few more
+    : Math.round(0.11 * LW / UW * 10) / 10;
+  if (rng.random() < jc + (!F.end && z === 2 ? 0.04 : 0)) jelly.push({ x: rng.uniform(8, LW - 20), y: y0 + rng.uniform(8, 64), ph: rng.uniform(0, 6) });
+  return (F.chunks[i] = { fish: out, jelly });
 }
 function flipVisible() {                                      // [chunk index, creature] for everything near the screen, specials included
   const lo = Math.floor((FLIP.f - 80) / C.CHUNK), hi = Math.floor((FLIP.f + FLIP_HOOK_Y + 30) / C.CHUNK), out = [];
@@ -996,58 +1038,119 @@ function flipVisible() {                                      // [chunk index, c
 }
 function flipJellies() { const lo = Math.floor((FLIP.f - 80) / C.CHUNK), hi = Math.floor((FLIP.f + FLIP_HOOK_Y + 30) / C.CHUNK), out = []; for (let i = Math.max(0, lo); i <= hi; i++) out.push(...flipChunk(i).jelly); return out; }
 const flipSY = y => FLIP_HOOK_Y - (y - FLIP.f);              // world height -> screen y
-function flipRect(c) { const a = DATA.atlas["fc_" + c.id]; return [c.x, flipSY(c.y) - (a[3] >> 1), a[2], a[3]]; }
+const flipK = c => (c.tr ? 1.5 : 1);
+function flipRect(c) { const a = DATA.atlas["fc_" + c.id], k = flipK(c), w = Math.round(a[2] * k), h = Math.round(a[3] * k); return [c.x, flipSY(c.y) - (h >> 1), w, h]; }
+const flipHookRect = () => [S.hx - 2, FLIP_HOOK_Y - 3, 5, 6];
 function flipPulse() {
-  if (!FLIP || FLIP.mode !== "climb" || FLIP.pulses <= 0) return;
+  if (!FLIP || FLIP.mode !== "climb" || FLIP.fight || FLIP.pulses <= 0) return;
   FLIP.pulses--; FLIP.ring = 0; play("pulse");
-  for (const c of flipVisible()) { const dx = c.x + 6 - S.hx, dy = flipSY(c.y) - FLIP_HOOK_Y; if (Math.hypot(dx, dy) < 50) { c.v = (dx < 0 ? -1 : 1) * Math.max(40, Math.abs(c.v) * 3); c.fl = 1; } }
+  for (const c of flipVisible()) {
+    const [x, y, w, h] = flipRect(c), dx = x + w / 2 - S.hx, dy = y + h / 2 - FLIP_HOOK_Y;
+    if (Math.hypot(dx, dy) >= 50) continue;
+    if (c.hunter) { c.h = { m: "stun", t: 1.8 }; c.fl = 0; }  // a hunter is knocked senseless, and can be caught
+    else { c.v = (dx < 0 ? -1 : 1) * Math.max(40, Math.abs(c.v) * 3); c.fl = 1; }
+  }
   for (const j of flipJellies()) { const dx = j.x + 6 - S.hx; if (Math.abs(dx) < 50 && Math.abs(flipSY(j.y) - FLIP_HOOK_Y) < 50) j.x += dx < 0 ? -30 : 30; }
 }
 const flipTop = () => FLIP.L - 36;                            // where your other self's hook hangs
+const flipHunting = () => flipVisible().filter(c => c.h && (c.h.m === "wind" || c.h.m === "go")).length;
+function flipHunt(c, dt) {                                    // a hunter: notices the hook, winds up, lunges in a straight line. -> true if it grabbed you
+  const F = FLIP, U = FL_TUNE, [x, y, w, h] = flipRect(c), dx = S.hx - (x + w / 2), dy = FLIP_HOOK_Y - (y + h / 2), d = Math.hypot(dx, dy), H = c.h;
+  if (!H) {                                                   // it only comes down at you, out of the dark above
+    if (!c.fl && d < U.sense && dy > 14 && Math.abs(dx) < dy * 1.2 && flipHunting() < U.maxHunt) { c.h = { m: "wind", t: U.wind }; c.v = Math.sign(dx || 1) * Math.abs(c.v); play("growl"); }
+    return false;
+  }
+  H.t -= dt;
+  if (H.m === "wind") {                                       // it has seen you: eyes go red, it shivers, then it goes
+    if (H.t <= 0) { const k = (U.charge + U.chargeZ * Math.max(0, F.zone)) / Math.max(1, d); c.h = { m: "go", t: U.go, vx: dx * k, vs: dy * k }; c.v = Math.sign(dx || 1) * Math.abs(c.v); play("lunge"); }
+    else c.y += F.rise * dt;                                  // it holds its place on screen while it winds up
+  } else if (H.m === "go") {                                  // a straight line, aimed where you were: steer out of the way, or pulse it
+    c.x += H.vx * dt; c.y += (F.rise - H.vs) * dt;
+    const r = flipRect(c);
+    if (F.safe <= 0 && overlap(flipHookRect(), [r[0] + 2, r[1] + 1, r[2] - 4, r[3] - 2])) return true;
+    if (H.t <= 0) c.h = { m: "rest", t: U.rest };
+  } else if (H.t <= 0) c.h = H.m === "stun" ? { m: "rest", t: 1 } : null;
+  return false;
+}
+function flipLand(c) {                                        // on the hook
+  const F = FLIP, sp = FSPEC[c.id];
+  F.gone.add(c); F.catch.push([c.id, c.lb, c.tr ? 1 : 0]);
+  if (sp[6] || c.myth || c.tr) play("fanfare"); else catchSound(F.catch.length);
+  if (sp[6]) { S.flash = 0.3; S.popups.push([sp[1] + "!", 3, GOLD]); }
+  else if (c.myth) { S.flash = 0.4; S.popups.push(["...THE PRETTY ONE?!", 3.5, "#ffd2f0"]); }
+  else if (c.tr) S.popups.push(["TROPHY " + sp[1], 3, TROPHY]);
+  if (F.catch.length === C.CAPACITY) S.popups.push(["HOOK FULL. KEEP GOING", 2.4, CYAN]);
+}
+const SLIMY = /EEL|WORM|LEECH|SLUG|THREAD|SQUID/;
+function flipFight(c) {                                        // legendaries and trophies fight, as on top; the Flipside holds still while you do
+  const sp = FSPEC[c.id], leg = sp[6], style = SLIMY.test(sp[1]) ? "dart" : sp[4] >= 22 ? "quick" : c.lb >= 60 ? "heavy" : "shrink";
+  FLIP.fight = Object.assign(newFight((leg ? 3 : 2) + (style === "heavy" ? 1 : 0), style, c.lb), { c });
+  S.touchX = null; play("select");
+}
+function flipFightTap() {
+  const F = FLIP, fg = F.fight, r = fightHit(fg);
+  if (r === "win") { F.fight = null; F.safe = 0.8; flipLand(fg.c); }
+  else if (r === "lost") flipFightLost("IT GOT AWAY!");
+}
+function flipFightLost(msg) { const F = FLIP, c = F.fight.c; F.fight = null; F.safe = 0.8; c.v = (c.x + 6 < S.hx ? -1 : 1) * 60; c.fl = 1.5; S.popups.push([msg, 1.8, RED]); play("miss"); }
+function flipFail(msg) { const F = FLIP; F.mode = "fail"; F.mt = 0; S.shake = 0.5; S.flash = 0.4; play("zap"); S.popups.push([msg, 3, ORANGE]); }
 function flipUpdate(dt) {
   const F = FLIP;
   F.mt += dt;
   S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt);
   if (F.ring !== null) { F.ring += dt * 2; if (F.ring > 1) F.ring = null; }
-  if (F.mode === "in") { if (F.mt > 1.1) { F.mode = "climb"; F.mt = 0; S.popups.push(["THE FLIPSIDE", 3, "#ff8ca0"]); } return; }
+  if (F.end) {                                                // the light flickers, and now and then nearly goes out
+    if ((F.flickT -= dt) <= 0) { F.flickT = 5 + Math.random() * 9; F.dim = 0.3 + Math.random() * 0.6; }
+    F.dim = Math.max(0, F.dim - dt);
+    F.flick = F.dim > 0 ? 0.5 + 0.15 * Math.sin(T * 40) : 0.92 + 0.08 * Math.sin(T * 23) * Math.sin(T * 7.3);
+  }
+  if (F.mode === "in") { if (F.mt > 1.1) { F.mode = "climb"; F.mt = 0; S.popups.push([F.end ? "THE WHOLE FLIPSIDE" : "THE FLIPSIDE", 3, "#ff8ca0"]); } return; }
   if (F.mode === "meet") { if (F.mt > 2.6) { F.mode = "out"; F.mt = 0; S.flash = 1; play("thunder"); } return; }
   if (F.mode === "fail") { if (F.mt > 1.8) { F.mode = "out"; F.mt = 0; } return; }
   if (F.mode === "out") { if (F.mt > 1.2) endFlip(); return; }
+  if (F.fight) { if (fightTick(F.fight, dt)) flipFightLost("TOO SLOW! GOT AWAY"); return; }
   steer(dt);
-  const top = flipTop() - 2;
+  F.safe = Math.max(0, F.safe - dt);
+  const top = flipTop() - 2, f0 = F.f;
   if (F.f < top) F.f = Math.min(top, F.f + 62 * S.sink * dt);           // you keep falling; the world rises
+  F.rise = (F.f - f0) / dt;
   const m = F.f / M, z = flipZoneAt(m);
-  if (z !== F.zone && z < 3) { F.zone = z; S.popups = S.popups.filter(p => !FLIP_Z.some(q => q[0] === p[0])); S.popups.push([FLIP_Z[z][0], 2.6, "#ff8ca0"]); }
+  if (z !== F.zone && (F.end || z < 3)) {
+    F.zone = z; S.popups = S.popups.filter(p => !FLIP_Z.some(q => q[0] === p[0])); S.popups.push([FLIP_Z[z][0], 2.6, "#ff8ca0"]);
+    if (F.end && F.zone > 0) F.pulses = Math.min(LURES[S.lure][5], F.pulses + 1);   // each new zone gives back one pulse
+  }
   if (!F.scared && F.f > F.L * 0.5) { F.scared = true; F.scare = 0; play("thunder", 0.8); SOUNDS.roar = [[70, 1.8, "sawtooth", 0.4, 30], [48, 2, "square", 0.25, 25, 0.2]]; play("roar"); }   // something huge passes behind you
   if (F.scare !== null) { F.scare += dt; if (F.scare > 5) F.scare = null; }
   if ((F.wet -= dt) <= 0) { F.wet = 1.5 + Math.random() * 3.5; flipSquelch(); }
   const glow = LURES[S.lure][8];
   for (const c of flipVisible()) {                            // creatures swim; the glow lure draws them in a little
+    if (c.hunter && flipHunt(c, dt)) { flipFail("GRABBED BY " + (FSPEC[c.id][1].length > 12 ? "SOMETHING" : FSPEC[c.id][1])); return; }
+    if (c.h && c.h.m !== "rest") continue;
     c.x += c.v * dt;
     if (c.fl) { c.fl -= dt; if (c.fl <= 0) { c.fl = 0; c.v = Math.sign(c.v) * Math.max(6, FSPEC[c.id][4]); } }
     if (glow && !c.fl) { const dx = S.hx - (c.x + 6), dy = FLIP_HOOK_Y - flipSY(c.y); if (Math.hypot(dx, dy) < glow * 2) c.x += Math.sign(dx) * 10 * dt; }
     if (c.x > LW + 24) c.x = -24; else if (c.x < -24) c.x = LW + 24;
   }
-  const hook = [S.hx - 2, FLIP_HOOK_Y - 3, 5, 6];
+  const hook = flipHookRect();
   for (const j of flipJellies()) {                            // a flesh jelly ends the trip
     j.x += Math.sin(T * 0.7 + j.ph) * 6 * dt;
     if (glow) j.x += Math.sign(S.hx - j.x - 6) * 4 * dt;
-    if (overlap(hook, [j.x + 2, flipSY(j.y) - 3, 9, 7])) { F.mode = "fail"; F.mt = 0; S.shake = 0.5; S.flash = 0.4; play("zap"); S.popups.push(["A FLESH JELLY GOT YOU", 3, ORANGE]); return; }
+    if (overlap(hook, [j.x + 2, flipSY(j.y) - 3, 9, 7])) { flipFail("A FLESH JELLY GOT YOU"); return; }
   }
   for (const c of flipVisible()) {                            // catching, or bumping off a full hook
-    if (c.fl || !overlap(hook, flipRect(c))) continue;
+    if (c.fl || (c.h && (c.h.m === "wind" || c.h.m === "go")) || !overlap(hook, flipRect(c))) continue;
     const sp = FSPEC[c.id], legOn = F.catch.some(q => FSPEC[q[0]][6]);
-    if (F.catch.length >= C.CAPACITY || (sp[6] && legOn)) { c.v = (c.x + 6 < S.hx ? -1 : 1) * 60; c.fl = 0.8; play("tick"); continue; }
-    F.gone.add(c); F.catch.push([c.id, c.lb]);
-    if (sp[6] || c.myth) play("fanfare"); else catchSound(F.catch.length);
-    if (sp[6]) { S.flash = 0.3; S.popups.push([sp[1] + "!", 3, GOLD]); }
-    else if (c.myth) { S.flash = 0.4; S.popups.push(["...THE PRETTY ONE?!", 3.5, "#ffd2f0"]); }
-    if (F.catch.length === C.CAPACITY) S.popups.push(["HOOK FULL. KEEP GOING", 2.4, CYAN]);
+    if (F.catch.length >= C.CAPACITY || (sp[6] && legOn)) { c.v = (c.x + 6 < S.hx ? -1 : 1) * 60; c.fl = 0.8; c.h = null; play("tick"); continue; }
+    if (F.end && (sp[6] || c.tr)) { flipFight(c); return; }
+    flipLand(c);
   }
   if (F.f >= top - 1) {                                        // your other self dangles its hook: catch it
     const mx = LW / 2 + Math.sin(T * 0.9) * Math.min(40, LW * 0.3);
     if (Math.abs(S.hx - mx) < 5) { F.mode = "meet"; F.mt = 0; F.mx = mx; F.won = true; S.flash = 0.6; play("fanfare"); S.popups.push(["YOU CAUGHT YOURSELF", 4, "#ff8ca0"]); }
   }
+}
+function flipLogCatch(list) {
+  list.forEach(([id, lb, tr]) => { const e = store.flip.log[id] || (store.flip.log[id] = { n: 0, rec: 0 }); e.n++; e.rec = Math.max(e.rec, lb); if (tr) e.star = true; });
 }
 function endFlip() {
   const F = FLIP;
@@ -1055,10 +1158,11 @@ function endFlip() {
   FLIP = null;
   newDive();
   if (F.test) { S.popups.push([F.won ? "TEST: YOU MADE IT" : "TEST OVER", 3, GREY]); return; }
+  if (F.end) { endgameDone(F); return; }
   store.sec.crossed = true;
   if (F.won) {
     store.flip.runs++; store.flip.wins++;
-    F.catch.forEach(([id, lb]) => { const e = store.flip.log[id] || (store.flip.log[id] = { n: 0, rec: 0 }); e.n++; e.rec = Math.max(e.rec, lb); });
+    flipLogCatch(F.catch);
     const first = !store.sec.beat;
     store.sec.beat = true;
     findSecret("crossing");
@@ -1068,6 +1172,71 @@ function endFlip() {
     if (first) { CRED = { y: 0, done: false }; S.overlay = "credits"; if (LB.url) LB.load(); }   // the credits roll the first time
     else S.popups.push(["YOU CAUGHT YOURSELF AGAIN", 3, "#ff8ca0"]);
   } else { store.flip.runs++; saveStore(); S.popups.push(["BACK ON TOP. FOR NOW.", 3, "#ff8ca0"]); }
+}
+
+// ---- the endgame's score, Bestiary and rewards
+const BESTIARY = DATA.flip.species.filter(s => !DATA.flip.junk.includes(s[0]) && s[0] !== DATA.flip.mythic);   // the 123
+const flipZoneFull = z => BESTIARY.filter(s => s[2] === z).every(s => store.flip.log[s[0]]);
+const flipFullZones = () => FLIP_Z.filter((q, z) => flipZoneFull(z)).length;
+const flipAllLegends = () => BESTIARY.filter(s => s[6]).every(s => store.flip.log[s[0]]);
+// [id, name, how to earn it, earned?, what it gives: ["toggle", eq key] | [cosmetic kind, index] | ["title", id]]
+const FLIP_REWARDS = [
+  ["mon", "MONSTER FORM", "CATCH YOURSELF AS THIS CHARACTER", () => store.flip.mons.includes(store.eq.char), ["toggle", "mon"]],
+  ["mpet", "MONSTER PETS", "FILL ANY FLIPSIDE ZONE", () => flipFullZones() >= 1, ["toggle", "mpet"]],
+  ["bile", "BILE LINE", "FILL 5 FLIPSIDE ZONES", () => flipFullZones() >= 5, ["line", SHOP_N.line]],
+  ["vein", "VEIN LINE", "EVERY FLIPSIDE LEGENDARY", flipAllLegends, ["line", SHOP_N.line + 1]],
+  ["maw", "MAW BOAT", "FILL THE WHOLE BESTIARY", () => BESTIARY.every(s => store.flip.log[s[0]]), ["boat", SHOP_N.boat]],
+  ["mhat", "MONSTER HATS", "ALL 22 MONSTER FORMS", () => store.flip.mons.length >= DATA.chars.length, ["toggle", "mhat"]],
+].concat(FLIP_Z.map((z, i) => ["fzone" + i, titleName("fzone" + i), "FILL " + z[0], () => flipZoneFull(i), ["title", "fzone" + i]]))
+  .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY", flipAllLegends, ["title", "flegends"]],
+    ["bestiary", "BESTIARY KEEPER", "FILL THE WHOLE BESTIARY", () => BESTIARY.every(s => store.flip.log[s[0]]), ["title", "bestiary"]],
+    ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS", () => store.flip.mons.length >= DATA.chars.length, ["title", "allofme"]]]);
+function flipDone(id) { const r = FLIP_REWARDS.find(q => q[0] === id); return !!r && r[3](); }
+const flipEarned = () => FLIP_REWARDS.filter(r => r[0] !== "mon" && r[3]()).map(r => r[0]);
+function flipRewardWorn(rw) { return rw[0] === "toggle" ? !!store.eq[rw[1]] : rw[0] === "title" ? store.eq.title === rw[1] : store.eq[rw[0]] === rw[1]; }
+function flipRewardToggle(r) {
+  if (!r[3]()) { play("miss"); return; }
+  const rw = r[4], on = flipRewardWorn(rw);
+  if (rw[0] === "toggle") store.eq[rw[1]] = on ? 0 : 1;
+  else if (rw[0] === "title") store.eq.title = on ? "rookie" : rw[1];
+  else store.eq[rw[0]] = on ? 0 : rw[1];
+  saveStore(); play("select");
+}
+function flipScore(list) {                                   // the creatures' weight times the same additive set bonuses as on top
+  const ids = list.map(c => c[0]), zones = ids.map(i => FSPEC[i][2]), sets = [];
+  if (ids.length === 3) {
+    if (list.every(c => c[2] || FSPEC[c[0]][6])) sets.push([1, "TROPHY CASE"]);
+    if (new Set(ids).size === 1) sets.push([2, "3 OF A KIND"]);
+    if (Math.min(...zones) >= 7) sets.push([1, "TOP TRIO"]);          // the last three zones, nearest the surface
+    if (new Set(zones).size === 3) sets.push([1, "GRAND TOUR"]);
+  }
+  if (ids.length - new Set(ids).size === 1) sets.push([0.5, "A PAIR"]);
+  const mult = Math.min(5, 1 + sets.reduce((a, s) => a + s[0], 0)), base = list.reduce((a, c) => a + c[1], 0);
+  return { sets, mult, total: Math.round(base * mult) };
+}
+function endgameDone(F) {
+  store.flip.runs++;
+  if (!F.won) { saveStore(); S.popups.push(["THE FLIPSIDE KEEPS IT ALL", 3, "#ff8ca0"]); return; }
+  store.flip.wins++;
+  const had = flipEarned(), news = [], ch = store.eq.char;
+  const isNew = F.catch.map(([id]) => !store.flip.log[id]);
+  flipLogCatch(F.catch);
+  if (!store.flip.mons.includes(ch)) { store.flip.mons.push(ch); news.push(["MONSTER " + DATA.chars[ch] + "!", "#ff8ca0"]); }   // you caught yourself: now you can be that
+  flipEarned().filter(id => !had.includes(id)).forEach(id => {
+    const r = FLIP_REWARDS.find(q => q[0] === id), rw = r[4];
+    if (rw[0] === "title") { award(rw[1]); news.push(["NEW TITLE: " + r[1], GOLD]); }
+    else { if (rw[0] !== "toggle" && !store.own[rw[0]].includes(rw[1])) store.own[rw[0]].push(rw[1]); news.push(["UNLOCKED: " + r[1], GOLD]); }
+  });
+  const sc = flipScore(F.catch), record = sc.total > store.flip.best;
+  if (record) store.flip.best = sc.total;
+  saveStore();
+  S.fhaul = { rows: F.catch.map((c, i) => [c[0], c[1], c[2], isNew[i]]), sets: sc.sets, mult: sc.mult, total: sc.total, record, news };
+  S.overlay = "fhaul";
+  const packed = F.catch.map(c => c[0] + ":" + c[1] + (c[2] ? ":T" : "")).join(",") + "|" + sc.mult, ti = titleName(store.eq.title);
+  if (sc.total > 0 && LB.url) {
+    if (store.name) LB.submit(store.name, sc.total, packed, ti, "/flip");
+    else askName(n => { if (n) LB.submit(n, sc.total, packed, ti, "/flip"); });
+  }
 }
 
 // ---- sound: a low drone and wet noises
@@ -1095,6 +1264,29 @@ function flipSquelch() {
 }
 
 // ---- drawing
+let darkC = null;
+const LIGHTS = new Set(["facelantern", "dimbulb", "palelure", "lastlight", "drownedangler", "simmer", "wailingwisp"]);   // things that carry their own light
+function flipDark(F) {
+  if (!darkC || darkC.width !== LW) { darkC = document.createElement("canvas"); darkC.width = LW; darkC.height = LH; }
+  const d = darkC.getContext("2d"), near = clamp((F.L - 36 - F.f) / (80 * M), 0, 1);     // it lifts a little near the surface
+  d.globalCompositeOperation = "source-over"; d.clearRect(0, 0, LW, LH);
+  d.fillStyle = "rgba(10,2,6," + (0.5 + 0.38 * near).toFixed(3) + ")"; d.fillRect(0, 0, LW, LH);
+  d.globalCompositeOperation = "destination-out";
+  const hole = (x, y, r) => { const gr = d.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, "rgba(0,0,0,1)"); gr.addColorStop(0.6, "rgba(0,0,0,0.85)"); gr.addColorStop(1, "rgba(0,0,0,0)"); d.fillStyle = gr; d.fillRect(x - r, y - r, r * 2, r * 2); };
+  hole(S.hx, FLIP_HOOK_Y, (LURES[S.lure][8] ? FL_TUNE.glowLight : FL_TUNE.light) * F.flick);
+  const vis = flipVisible();
+  vis.forEach(c => { if (LIGHTS.has(c.id)) { const [x, y, w, h] = flipRect(c); if (y > -20 && y < LH + 20) hole(x + w / 2, y + h / 2, 13 * F.flick); } });
+  g.drawImage(darkC, 0, 0);
+  g.globalAlpha = 0.3;                                         // flesh jellies give off a faint glow, so you can see them coming
+  flipJellies().forEach(j => { const y = flipSY(j.y) + Math.round(Math.sin(T * 2 + j.ph) * 2); if (y > -20 && y < LH + 20) spr("flurker", j.x, y - 6); });
+  g.globalAlpha = 1;
+  vis.forEach(c => {                                           // and hunters' eyes shine: yellow while they look, red when they come
+    if (!c.hunter || (c.h && c.h.m === "stun")) return;
+    const [x, y, w, h] = flipRect(c), hot = c.h && (c.h.m === "wind" || c.h.m === "go"), ex = c.v < 0 ? x + 2 : x + w - 4, ey = y + Math.max(1, Math.floor(h / 3));
+    if (y < -10 || y > LH + 10 || (!hot && Math.floor(T * 1.3 + c.ph) % 5 === 0)) return;    // they blink
+    rect(hot ? "#ff3030" : "#ffd246", ex, ey, 1, 1); rect(hot ? "#ff3030" : "#ffd246", ex + (c.v < 0 ? 2 : -2), ey, 1, 1);
+  });
+}
 let flipTint = null;
 function drawFlip() {
   const F = FLIP, t = T;
@@ -1135,10 +1327,12 @@ function drawFlip() {
   if (cy < LH + 20) { g.globalAlpha = 0.5 + 0.2 * Math.sin(t * 2); ell("#c8a0ff", LW / 2 - 14, cy - 5, 28, 12); g.globalAlpha = 1; line("#05030a", LW / 2, cy - 4, LW / 2 + 1, cy + 4); }
   flipJellies().forEach(j => { const y = flipSY(j.y) + Math.round(Math.sin(t * 2 + j.ph) * 2); if (y > -20 && y < LH + 20) spr("flurker", j.x, y - 6); });
   flipVisible().forEach(c => {
-    const [x, y] = flipRect(c);
+    const [x0, y, w] = flipRect(c), x = x0 + (c.h && c.h.m === "wind" ? Math.round(Math.sin(t * 60)) : 0);
     if (y < -24 || y > LH + 24) return;
-    spr("fc_" + c.id, x, y, c.v < 0);
-    if (FSPEC[c.id][6]) for (let k = 0; k < 3; k++) { const a = t * 3 + k * 2.1, w = DATA.atlas["fc_" + c.id][2]; rect(GOLD, x + w / 2 + Math.cos(a) * (w / 2 + 3), y + 4 + Math.sin(a) * 6, 1, 1); }
+    spr("fc_" + c.id, x, y, c.v < 0, flipK(c));
+    if (c.h && c.h.m === "stun") for (let k = 0; k < 3; k++) rect("#ffe678", x + w / 2 + Math.cos(t * 6 + k * 2.1) * 5, y - 3 + Math.sin(t * 6 + k * 2.1) * 2, 1, 1);   // seeing stars
+    if (c.tr && !FSPEC[c.id][6] && Math.floor(t * 3 + c.ph) % 3 === 0) rect(TROPHY, x + ((t * 20) % w), y - 1, 1, 1);
+    if (FSPEC[c.id][6]) for (let k = 0; k < 3; k++) { const a = t * 3 + k * 2.1; rect(GOLD, x + w / 2 + Math.cos(a) * (w / 2 + 3), y + 4 + Math.sin(a) * 6, 1, 1); }
     if (c.myth) for (let k = 0; k < 4; k++) rect(WHITE, x + ((t * 30 + k * 7) % 14) - 2, y - 2 + ((k * 5 + Math.floor(t * 8)) % 10), 1, 1);
   });
   const top = flipSY(F.L);                                     // the surface overhead, and the other you
@@ -1153,6 +1347,7 @@ function drawFlip() {
     line("#a0dc78", bx + 18, top + 22, mx, my);                 // its line, from its own hand down to you
     ring("#a0dc78", mx, my + 3, 2);
   }
+  if (F.end) flipDark(F);                                      // the endgame is dark: only your light, and what glows
   // your line runs back down through the crack; your hook points up now
   line(lineCol(0), S.hx, LH, S.hx, FLIP_HOOK_Y + 4);
   g.save(); g.translate(S.hx + 3, FLIP_HOOK_Y + 3); g.rotate(Math.PI); spr("hook" + store.eq.hook, 0, 0); g.restore();
@@ -1169,6 +1364,7 @@ function drawFlip() {
     box(2, 176, 36, 22, F.pulses ? "#ff8ca0" : "#5a3a46"); text("PULSE", 20, 183, 1, F.pulses ? "#ff8ca0" : "#7a5a66", "center", null);
     for (let k = 0; k < F.pulses; k++) rect("#ff8ca0", 8 + k * 9, 190, 6, 3);
     if (F.test) { text("TEST", LW - 4, KEYS ? 182 : 192, 1, GREY, "right", null); if (KEYS) text("ESC: QUIT", LW - 4, 192, 1, GREY, "right", null); }
+    if (F.fight) { g.save(); g.translate(OX, 0); drawFightBox(F.fight, FSPEC[F.fight.c.id][1], FSPEC[F.fight.c.id][6]); g.restore(); }
     S.popups.slice(-2).forEach((p, i) => { const tw = textW(p[0], 1); box(Math.floor(LW / 2 - tw / 2) - 4, 32 + i * 13, tw + 8, 11, p[2]); text(p[0], LW / 2, 37 + i * 13, 1, p[2], "center", null); });
   }
 }
@@ -1587,7 +1783,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { credits: drawCredits, vip: drawVip, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { credits: drawCredits, vip: drawVip, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2302,11 +2498,14 @@ function lineCol(i) {
   if (c === "@rainbow") return "hsl(" + Math.floor((T * 140 + i * 14) % 360) + ",90%,66%)";
   if (c === "@fire") return "hsl(" + Math.floor(18 + 22 * Math.sin(T * 9 + i * 0.8)) + ",100%," + Math.floor(55 + 10 * Math.sin(T * 13 + i)) + "%)";
   if (c === "@ice") return (i + Math.floor(T * 6)) % 4 ? "#bfeaff" : "#ffffff";
+  if (c === "@vein") return (i + Math.floor(T * 9)) % 6 === 0 ? "#ff5a6e" : (i + Math.floor(T * 9)) % 6 === 1 ? "#d23246" : "#8c1e32";   // a pulse runs down it
+  if (c === "@bile") return (i * 3 + Math.floor(T * 5)) % 7 === 0 ? "#e6ff8c" : "#7cb43c";
   return (i * 7 + Math.floor(T * 10)) % 9 === 0 ? "#ffd246" : (i + Math.floor(T * 4)) % 5 === 0 ? "#ffffff" : "#a0a8c8";      // sparkle
 }
 const POKE_SAY = ["HI!", "HELLO!", "YES?", "HEY!", "QUIT IT", "STOP!", "I MEAN IT", "GRR...", "LAST CHANCE"];
 function angler(x, y, eq, wl, mon) {                       // the boat, whoever is fishing today, their hat, pet and flag (mon: their Flipside self)
-  const cn = (mon ? "mchar" : "char") + eq.char, hn = (mon && DATA.atlas["mhat" + eq.hat] ? "mhat" : "hat") + eq.hat, pn = (mon && eq.pet ? "mpet" : "pet") + eq.pet;
+  const mc = mon || (eq.mon && store.flip.mons.includes(eq.char)), mh = mon || (eq.mhat && flipDone("mhat")), mp = mon || (eq.mpet && flipDone("mpet"));   // monster forms, once earned
+  const cn = (mc ? "mchar" : "char") + eq.char, hn = (mh && DATA.atlas["mhat" + eq.hat] ? "mhat" : "hat") + eq.hat, pn = (mp && eq.pet ? "mpet" : "pet") + eq.pet;
   const [cw, ch] = sprSize(cn), P = S.poke;
   if (eq.flag) { rect("#785432", x + 2, y - 17, 1, 17); const wav = Math.floor(T * 3) % 2; spr("flag" + eq.flag, x + 3, y - 17 + wav, false); }
   let cx = x + 10, cy = y - 12, swim = false;
@@ -2431,12 +2630,20 @@ function drawHud() {
     if (st === "rise" && Math.floor(t * 3) % 2) text("RISING: KEEP FISHING", 60, 166, 1, LIME);
     if (st === "down" && S.hy < 22 * M && Math.floor(t * 3) % 2) text("PICK YOUR " + C.CAPACITY + " FISH", 60 - 3, 166, 1, WHITE);
   }
-  if (st === "fight") {
-    const fg = S.fight, leg = SPEC[fg.f.id][7], col = leg ? LEGEND : TROPHY;
+  if (st === "fight") drawFightBox(S.fight, SPEC[S.fight.f.id][1], SPEC[S.fight.f.id][7]);
+  S.popups.slice(-3).forEach((p, i) => {
+    if (p[1] > 0.3 || Math.floor(t * 20) % 2) { const tw = textW(p[0], 1); box(Math.floor(60 - tw / 2) - 4, 40 + i * 13, tw + 8, 11, p[2]); text(p[0], 60, 45 + i * 13, 1, p[2], "center", null); }
+  });
+  drawHaulBox();
+  g.restore();
+}
+function drawFightBox(fg, name, leg) {                       // the timing bar, in the menu column
+  const t = T, col = leg ? LEGEND : TROPHY;
+  {
     box(8, 104, 104, 68, col);
     if (leg) { g.fillStyle = Math.floor(t * 6) % 2 ? LEGEND : WHITE; g.fillRect(10, 106, 100, 1); g.fillRect(10, 169, 100, 1); g.fillRect(10, 106, 1, 64); g.fillRect(109, 106, 1, 64); }   // legendaries get a flashing double border
     text(leg ? "LEGENDARY!" : "TROPHY!", 60, 111, 1, col, "center", null);
-    text(SPEC[fg.f.id][1], 60, 120, 1, WHITE, "center", null);
+    text(name, 60, 120, 1, WHITE, "center", null);
     text(STYLE_HINT[fg.style], 60, 129, 1, CYAN, "center", null);
     const bx = 16, bw = 88, k = clamp(fg.left / fg.time, 0, 1);
     rect("#321e32", bx, 135, bw, 3); rect(k < 0.3 ? RED : k < 0.6 ? GOLD : LIME, bx, 135, Math.ceil(bw * k), 3);      // the clock
@@ -2448,9 +2655,9 @@ function drawHud() {
     for (let q = 0; q < 2; q++) text("X", 100 - q * 8, 156, 1, q < fg.miss ? RED : "#464c6e", "center", null);
     if (Math.floor(t * 4) % 2) text(KEYS ? "SPACE ON GREEN!" : "TAP ON GREEN!", 60, 165, 1, WHITE, "center", null);
   }
-  S.popups.slice(-3).forEach((p, i) => {
-    if (p[1] > 0.3 || Math.floor(t * 20) % 2) { const tw = textW(p[0], 1); box(Math.floor(60 - tw / 2) - 4, 40 + i * 13, tw + 8, 11, p[2]); text(p[0], 60, 45 + i * 13, 1, p[2], "center", null); }
-  });
+}
+function drawHaulBox() {                                     // the haul screen, in the menu column
+  const st = S.state, t = T;
   if (st === "haul") {
     const h = S.haul;
     box(6, 84, 108, 112, CYAN);
@@ -2480,17 +2687,19 @@ function drawHud() {
       g.save(); g.translate(fx, fy); flair(w, hh); g.restore();
     }
   }
-  g.restore();
 }
 
-const MORE_ROWS = () => [["TASKS", LIME], [store.sec.found.length ? "SECRETS" : "???", store.sec.found.length ? "#c8a0ff" : GREY], ["HELP", CYAN],
-  [store.name ? "INITIALS: " + store.name : "SET INITIALS", store.name ? WHITE : GREY], ["SAVE CODE", GOLD]];
+const MORE_ROWS = () => [["TASKS", LIME, "tasks"], [store.sec.found.length ? "SECRETS" : "???", store.sec.found.length ? "#c8a0ff" : GREY, "secrets"]]
+  .concat(store.sec.beat ? [["BESTIARY", "#ff8ca0", "bestiary"]] : [])                  // after beating the game
+  .concat([["HELP", CYAN, "help"], [store.name ? "INITIALS: " + store.name : "SET INITIALS", store.name ? WHITE : GREY, "name"], ["SAVE CODE", GOLD, "save"]]);
+const moreStep = () => (MORE_ROWS().length > 5 ? 18 : 21);
 function drawMore() {                                      // everything that used to crowd the title screen
   g.save(); g.translate(OX, 0);
   box(6, 30, 108, 150, WHITE); text("MORE", 60, 40, 2, WHITE, "center");
   const left = tasks().d.concat(tasks().w).filter(q => !q.done).length;
+  const st = moreStep(), bh = st - 4;
   MORE_ROWS().forEach(([lab, col], i) => {
-    const y = 56 + i * 21; box(16, y, 88, 17, col); text(lab, 60, y + 8, 1, col, "center", null);
+    const y = 56 + i * st; box(16, y, 88, bh, col); text(lab, 60, y + (bh >> 1), 1, col, "center", null);
     if (i === 0 && left) { rect(INK, 98, y - 3, 9, 9); rect(GOLD, 99, y - 2, 7, 7); text(left, 102, y + 1, 1, INK, "center", null); }
   });
   text(KEYS ? "ESC TO CLOSE" : "TAP OUTSIDE TO CLOSE", 60, 170, 1, GREY, "center", null);
@@ -2584,16 +2793,107 @@ function drawLog() {
   g.restore();
 }
 
+// ---- the endgame's haul, and the Bestiary
+function drawFHaul() {                                       // after catching yourself in the endgame
+  rect("#14050a", 0, 0, LW, LH);
+  g.save(); g.translate(OX, 0);
+  const h = S.fhaul;
+  text("YOU CAUGHT YOURSELF", 60, 7, 1, "#ff8ca0", "center", null);
+  const mc = "mchar" + store.eq.char, [cw] = sprSize(mc); spr(mc, 60 - (cw >> 1), 14 + (Math.floor(T * 2) % 2));
+  box(6, 34, 108, 138, "#ff8ca0");
+  text("THE FLIPSIDE HAUL", 60, 41, 1, "#ff8ca0", "center", null);
+  h.rows.forEach(([id, lb, tr, isNew], i) => {
+    const y = 53 + i * 10, sp = FSPEC[id], name = ((sp[6] ? "!" : tr ? "*" : "") + sp[1]).slice(0, isNew ? 9 : lb >= 100 ? 12 : 13);
+    text(name, 10, y, 1, id === DATA.flip.mythic ? "#ffd2f0" : sp[6] ? LEGEND : tr ? TROPHY : WHITE, "left", null);
+    if (isNew) text("NEW", 88, y, 1, LIME, "right", null);
+    text(lb, 110, y, 1, WHITE, "right", null);
+  });
+  if (!h.rows.length) text("AN EMPTY HOOK", 60, 63, 1, GREY, "center", null);
+  if (h.sets.length) { const long = h.sets.map(s => s[1]).join("+"), short = h.sets.map(s => SHORT[s[1]] || s[1]).join("+"); text((h.sets.length === 1 ? long : short.length <= 13 ? short : h.sets.length + " BONUSES") + " X" + h.mult, 60, 86, 1, LIME, "center", null); }
+  h.news.slice(0, 5).forEach(([txt, col], j) => text(txt.slice(0, 19), 60, 98 + j * 10, 1, col, "center", null));
+  rect("#ff8ca0", 10, 150, 100, 1);
+  text("SCORE", 10, 160, 1, "#ff8ca0", "left", null); text(h.total, 110, 159, 2, GOLD, "right", null);
+  if (h.record && h.total > 0) text("YOUR FLIPSIDE BEST!", 60, 180, 1, GOLD, "center", null);
+  if (Math.floor(T * 2.5) % 2) text("TAP TO CONTINUE", 60, 192, 1, WHITE, "center", null);
+  g.restore();
+}
+const B_RPER = 7, B_PAGES = FLIP_Z.length + Math.ceil(FLIP_REWARDS.length / B_RPER);   // a page per zone, then the rewards
+function drawBestiary() {
+  rect("#14050a", 0, 0, LW, LH);
+  g.save(); g.translate(OX, 0);
+  const pg = S.bPage, PINK = "#ff8ca0";
+  box(2, 2, 12, 13, PINK); text("<", 8, 8, 1, PINK, "center", null); box(106, 2, 12, 13, PINK); text(">", 112, 8, 1, PINK, "center", null);
+  if (pg < FLIP_Z.length) {
+    text(FLIP_Z[pg][0], 60, 8, 1, GOLD, "center", null);
+    const page = BESTIARY.filter(s => s[2] === pg);
+    page.forEach((s, i) => {
+      const x = 4 + (i % 4) * 28, y = 20 + Math.floor(i / 4) * 20, e = store.flip.log[s[0]], a = DATA.atlas["fc_" + s[0]];
+      rect(e ? "#4a1424" : "#1e0a12", x, y, 27, 19);
+      g.fillStyle = i === S.bSel ? WHITE : s[6] && e ? GOLD : INK; g.fillRect(x, y, 27, 1); g.fillRect(x, y + 18, 27, 1); g.fillRect(x, y, 1, 19); g.fillRect(x + 26, y, 1, 19);
+      const k = Math.min(1, 23 / a[2], 15 / a[3]), w = Math.max(1, Math.floor(a[2] * k)), hh = Math.max(1, Math.floor(a[3] * k));
+      g.drawImage(e ? atlas : sil, a[0], a[1], a[2], a[3], x + 14 - (w >> 1), y + 10 - (hh >> 1), w, hh);
+      if (e && e.star) text("*", x + 22, y + 5, 1, GOLD, "center", null);
+    });
+    const s = page[Math.min(S.bSel, page.length - 1)], e = store.flip.log[s[0]];
+    box(2, 106, 116, 34, PINK);
+    if (e) {
+      text(s[1], 60, 113, 1, s[6] ? GOLD : WHITE, "center", null);
+      text("X" + e.n + " BEST " + e.rec + " LB", 60, 123, 1, PINK, "center", null);
+      text(s[6] ? "! LEGENDARY !" : e.star ? "* TROPHY CAUGHT" : "NO TROPHY YET", 60, 133, 1, s[6] ? LEGEND : e.star ? TROPHY : GREY, "center", null);
+    } else {
+      text("???", 60, 113, 1, GREY, "center", null);
+      text(FLIP_Z[s[2]][0], 60, 123, 1, GREY, "center", null);
+      text(s[6] ? "LEGENDARY" : "NOT CAUGHT YET", 60, 133, 1, GREY, "center", null);
+    }
+    text("CAUGHT " + BESTIARY.filter(q => store.flip.log[q[0]]).length + "/" + BESTIARY.length, 60, 150, 1, WHITE, "center", null);
+    text("TROPHIES " + BESTIARY.filter(q => !q[6] && (store.flip.log[q[0]] || {}).star).length + "/" + BESTIARY.filter(q => !q[6]).length, 60, 160, 1, GOLD, "center", null);
+    text("WON " + store.flip.wins + "/" + store.flip.runs + " BEST " + store.flip.best, 60, 170, 1, PINK, "center", null);
+  } else {
+    const rp = pg - FLIP_Z.length, list = FLIP_REWARDS.slice(rp * B_RPER, rp * B_RPER + B_RPER);
+    text("REWARDS " + (rp + 1) + "/" + (B_PAGES - FLIP_Z.length), 60, 8, 1, GOLD, "center", null);
+    text("MONSTERS " + store.flip.mons.length + "/" + DATA.chars.length, 60, 23, 1, PINK, "center", null);
+    list.forEach((r, k) => {
+      const y = 34 + k * 14, sel = k === S.bSel, ok = r[3]();
+      rect(sel ? "#3c1020" : "#1e0a12", 2, y, 116, 13);
+      if (sel) { g.fillStyle = PINK; g.fillRect(2, y, 116, 1); g.fillRect(2, y + 12, 116, 1); g.fillRect(2, y, 1, 13); g.fillRect(117, y, 1, 13); }
+      text(r[1], 5, y + 6, 1, !ok ? GREY : flipRewardWorn(r[4]) ? GOLD : WHITE, "left", null);
+      if (ok) text("+", 113, y + 6, 1, LIME, "right", null);
+    });
+    const r = list[Math.min(S.bSel, list.length - 1)];
+    if (r) {
+      const ok = r[3](), on = ok && flipRewardWorn(r[4]);
+      box(2, 134, 116, 32, PINK);
+      wrap(r[2], 18).slice(0, 2).forEach((l, i) => text(l, 60, 140 + i * 9, 1, "#f0d2dc", "center", null));
+      text(ok ? "EARNED" : "NOT YET", 60, 159, 1, ok ? LIME : GREY, "center", null);
+      if (ok) { box(26, 169, 68, 14, on ? CYAN : GOLD); text(on ? "TAKE OFF" : "PUT ON", 60, 176, 1, on ? CYAN : GOLD, "center", null); }
+    }
+  }
+  text("TAP HERE TO CLOSE", 60, 194, 1, WHITE, "center", null);
+  g.restore();
+}
+function bestiaryTap(lx, ly, d) {
+  if (d) { S.bPage = (S.bPage + d) % B_PAGES; S.bSel = 0; return; }
+  if (S.bPage < FLIP_Z.length) {
+    if (ly >= 20 && ly < 100) { S.bSel = clamp(Math.floor((ly - 20) / 20) * 4 + Math.floor((lx - 4) / 28), 0, BESTIARY.filter(s => s[2] === S.bPage).length - 1); play("tick"); }
+    return;
+  }
+  const rp = S.bPage - FLIP_Z.length, n = FLIP_REWARDS.slice(rp * B_RPER, rp * B_RPER + B_RPER).length;
+  if (ly >= 34 && ly < 34 + B_RPER * 14) { const k = Math.floor((ly - 34) / 14); if (k < n) { if (k === S.bSel) flipRewardToggle(FLIP_REWARDS[rp * B_RPER + k]); else { S.bSel = k; play("tick"); } } }
+  else if (ly >= 167 && ly < 185) flipRewardToggle(FLIP_REWARDS[rp * B_RPER + S.bSel]);
+}
+
 function drawScores() {
   rect("#080e28", 0, 0, LW, LH);
   g.save(); g.translate(OX, 0);
-  text("HIGH SCORES", 60, 9, 1, GOLD, "center", null);
+  const fb = S.board && store.sec.beat;                      // the Flipside board, once you've been there
+  if (store.sec.beat) { box(2, 2, 12, 13, "#ff8ca0"); text("<", 8, 8, 1, "#ff8ca0", "center", null); box(106, 2, 12, 13, "#ff8ca0"); text(">", 112, 8, 1, "#ff8ca0", "center", null); }
+  text(fb ? "FLIPSIDE" : "HIGH SCORES", 60, 9, 1, fb ? "#ff8ca0" : GOLD, "center", null);
   ["TODAY", "ALL TIME"].forEach((lab, i) => { const on = S.tab === i; box(6 + i * 55, 18, 53, 14, on ? CYAN : "#3c4264"); text(lab, 32 + i * 55, 25, 1, on ? CYAN : GREY, "center", null); });
   if (!LB.url) {
-    text("YOUR BEST: " + store.best + " LB", 60, 60, 1, WHITE, "center", null);
+    text("YOUR BEST: " + (fb ? store.flip.best : store.best) + " LB", 60, 60, 1, WHITE, "center", null);
     ["THE SHARED BOARD", "IS NOT SET UP YET.", "SEE README.MD"].forEach((l, i) => text(l, 60, 90 + i * 11, 1, GREY, "center", null));
   } else {
-    const rows = (S.tab === 0 ? LB.today : LB.all) || [];
+    const rows = (fb ? (S.tab === 0 ? LB.ftoday : LB.fall) : (S.tab === 0 ? LB.today : LB.all)) || [];
     if (LB.status) text(LB.status, 60, 46, 1, ORANGE, "center", null);
     else if (!rows.length) text(S.tab === 0 ? "NO CATCHES YET TODAY" : "NO SCORES YET", 60, 60, 1, GREY, "center", null);
     rows.forEach((r, i) => {
@@ -2602,8 +2902,15 @@ function drawScores() {
       text(i + 1, 18, y, 1, i < 3 ? GOLD : GREY, "right", null); text(r.n, 26, y, 1, col, "left", null); text(r.s, 112, y, 1, col, "right", null);
       if (r.m) { const mx = 26 + textW(r.n, 1) + 2; rect("#ff8ca0", mx, y - 2, 3, 3); rect(INK, mx + 1, y - 1, 1, 1); }   // a little red eye: they've been to the other side
     });
-    const r = rows[S.scoreSel], h = r && unpackHaul(r.h);            // what was on the hook for the selected score
-    if (r) {
+    const r = rows[S.scoreSel], h = r && (fb ? unpackFlipHaul(r.h) : unpackHaul(r.h));    // what was on the hook for the selected score
+    if (r && fb) {
+      box(2, 147, 116, 41, "#ff8ca0");
+      if (h) {
+        h.fish.forEach((f, i) => { const sp = FSPEC[f[0]]; text((sp[6] ? "!" : f[2] ? "*" : "") + sp[1].slice(0, 14), 6, 153 + i * 8, 1, sp[6] ? LEGEND : f[2] ? TROPHY : WHITE, "left", null); text(f[1], 114, 153 + i * 8, 1, WHITE, "right", null); });
+        text("X" + h.mult, 6, 181, 1, LIME, "left", null);
+        if (r.ti) text(String(r.ti).slice(0, 17 - ("X" + h.mult).length), 114, 181, 1, "#c8a0ff", "right", null);
+      } else text("NO CATCH DETAILS", 60, 167, 1, GREY, "center", null);
+    } else if (r) {
       box(2, 147, 116, 41, CYAN);
       if (h) {
         h.fish.forEach((f, i) => { text((SPEC[f[0]][7] ? "!" : f[2] ? "*" : "") + SPEC[f[0]][1].slice(0, 14), 6, 153 + i * 8, 1, HIDDEN.includes(f[0]) ? "#c8a0ff" : SPEC[f[0]][7] ? LEGEND : f[2] ? TROPHY : WHITE, "left", null); text(f[1], 114, 153 + i * 8, 1, WHITE, "right", null); });
@@ -2813,6 +3120,7 @@ nameInput.addEventListener("keydown", e => { if (e.key === "Enter") closeName(tr
 function tapAction() {
   if (S.state === "title" && S.stT > 0.25) cast();
   else if (S.state === "fight" && S.stT > 0.35) fightTap();
+  else if (S.state === "flip" && FLIP && FLIP.fight && FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap();
   else if (S.state === "haul" && S.haul.shown >= S.haul.n && S.stT > S.haul.end + 0.6) finishDive();
 }
 function pointerPos(e) { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * LW, (e.clientY - r.top) / r.height * LH]; }
@@ -2835,12 +3143,13 @@ function overlayTap(lx, ly) {
     return;
   }
   if (S.overlay === "more") {
-    const i = Math.floor((ly - 56) / 21);
-    if (lx >= 16 && lx < 104 && i >= 0 && i < 5 && (ly - 56) % 21 < 17) {
-      if (i === 0) openOverlay("tasks");
-      else if (i === 1) { if (store.sec.found.length) openOverlay("secrets"); else play("miss"); }
-      else if (i === 2) openOverlay("help");
-      else if (i === 3) { S.overlay = null; askName(); }
+    const rows = MORE_ROWS(), st = moreStep(), i = Math.floor((ly - 56) / st), id = rows[i] && rows[i][2];
+    if (lx >= 16 && lx < 104 && i >= 0 && i < rows.length && (ly - 56) % st < st - 4) {
+      if (id === "tasks") openOverlay("tasks");
+      else if (id === "secrets") { if (store.sec.found.length) openOverlay("secrets"); else play("miss"); }
+      else if (id === "bestiary") openOverlay("bestiary");
+      else if (id === "help") openOverlay("help");
+      else if (id === "name") { S.overlay = null; askName(); }
       else { S.overlay = null; openSave(); }
     } else if (lx < 6 || lx >= 114 || ly < 30 || ly >= 180) closeOverlay();
     return;
@@ -2850,7 +3159,9 @@ function overlayTap(lx, ly) {
     if (d) S.noteIdx = (S.noteIdx + d) % n; else closeOverlay();
     return;
   }
+  if (S.overlay === "fhaul") { closeOverlay(); return; }
   if (ly > 186) { closeOverlay(); return; }
+  if (S.overlay === "bestiary") { bestiaryTap(lx, ly, arrows(B_PAGES)); return; }
   if (S.overlay === "secrets") {
     const n = store.sec.found.length, pages = Math.max(1, Math.ceil(n / SEC_PER)), d = pages > 1 ? arrows(pages) : 0;
     if (d) S.secSel = Math.min(n - 1, ((Math.floor(S.secSel / SEC_PER) + d) % pages) * SEC_PER);
@@ -2866,8 +3177,9 @@ function overlayTap(lx, ly) {
     if (d) { S.logPage = (S.logPage + d) % ZONES.length; S.logSel = 0; }
     else if (ly >= 20 && ly < 100) { S.logSel = clamp(Math.floor((ly - 20) / 20) * 4 + Math.floor((lx - 4) / 28), 0, LOGGED.filter(s => s[2] === S.logPage).length - 1); play("tick"); }
   } else if (S.overlay === "scores") {
-    if (ly >= 16 && ly < 34) { S.tab = lx < 60 ? 0 : 1; S.scoreSel = -1; play("tick"); }
-    else if (ly >= 35 && ly < 146) { const i = Math.floor((ly - 35) / 11), rows = (S.tab === 0 ? LB.today : LB.all) || []; S.scoreSel = i < rows.length ? i : -1; play("tick"); }
+    if (store.sec.beat && arrows(2)) { S.board = S.board ? 0 : 1; S.scoreSel = -1; }
+    else if (ly >= 16 && ly < 34) { S.tab = lx < 60 ? 0 : 1; S.scoreSel = -1; play("tick"); }
+    else if (ly >= 35 && ly < 146) { const fb = S.board && store.sec.beat, i = Math.floor((ly - 35) / 11), rows = (fb ? (S.tab === 0 ? LB.ftoday : LB.fall) : (S.tab === 0 ? LB.today : LB.all)) || []; S.scoreSel = i < rows.length ? i : -1; play("tick"); }
   } else if (S.overlay === "shop") {
     const d = arrows(CATS.length), n = CATS[S.shopCat][2].length, pages = Math.ceil(n / PER_PAGE), page = Math.floor(S.shopSel / PER_PAGE);
     if (d) { S.shopCat = (S.shopCat + d) % CATS.length; S.shopSel = 0; }
@@ -2916,7 +3228,7 @@ canvas.addEventListener("pointerdown", e => {
   if (AC && AC.state === "suspended") AC.resume();
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
-  if (S.state === "flip" && FLIP) { if (rx < 40 && ly > 172) flipPulse(); else S.touchX = rx; return; }
+  if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) flipPulse(); else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
   if (S.state === "title") { if (titleTap(rx, lx, ly)) return; }
   if (S.state === "down" && rx < 16 && ly < 14) { newDive(); return; }          // give up this dive
@@ -3003,9 +3315,10 @@ function start() {
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id) && !store.sec.found.includes(id)) store.sec.found.push(id); });   // earned before the Secrets page existed
   newDive();
   if (TEST_BOSS) startBoss(true, TEST_BOSS);
-  else if (TEST_FLIP) startFlip(TEST_FLIP);
+  else if (TEST_FLIP) startFlip(TEST_FLIP, false);
+  else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { get FLIP() { return FLIP; }, startFlip, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { get FLIP() { return FLIP; }, get T() { return T; }, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;

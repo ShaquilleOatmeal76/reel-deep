@@ -40,3 +40,15 @@ without editing anything by passing them as JSON, for example `python3 tests/tes
 As shipped: the careful bot reaches phase 3 in 80-90% of fights and wins 25-35%; the hugger does worse; the sloppy bot
 gets past phase 1 about three times in four and wins 1-2%.
 
+
+## How hard is the endgame Flipside?
+
+`tests/test_flipside.py` plays endgame runs with two bots (`tests/flipside_bot.js`) on a phone and a wide screen and prints how often they catch themselves, and what killed them (grabbed by a hunter, or a flesh jelly). Serve the game folder first (`python3 -m http.server 8765 --bind 127.0.0.1`), then:
+
+    python3 tests/test_flipside.py 40                      # standard lure
+    python3 tests/test_flipside.py 40 '{"hunt": 0.35}'     # try other FL_TUNE values
+    python3 tests/test_flipside.py 40 '{}' 3               # with the Sonar lure
+
+The bots see what a careful player sees (the light, glowing jellies, hunters' eyes) but react faster and judge lunges perfectly, so they win more than people do. With the drop 5 values, on the standard lure the good bot wins about 1 run in 3 and the ok bot about 1 in 4, which should put a good human near 1 in 5. Sonar is the safer lure (about 2 in 5), the Heavy Sinker the riskiest (about 1 in 8).
+
+The knobs (`FL_TUNE` in game.js): `hunt`/`huntZ` hunters per 12 m slice (more in later zones), `sense` how close before one notices you, `wind` its wind-up, `charge`/`go` the lunge's speed and length, `maxHunt` how many can come at once, `jelly`/`jellyZ` flesh jellies, `light`/`glowLight` the light around the hook.
