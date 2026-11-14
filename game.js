@@ -166,12 +166,13 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   own: { char: [0], hat: [0], boat: [0], hook: [0], line: [0], trail: [0], flair: [0], pet: [0], flag: [0] },
   eq: { char: 0, hat: 0, boat: 0, hook: 0, line: 0, trail: 0, flair: 0, pet: 0, flag: 0, title: "rookie" }, tasks: null,
   dives: 0,                                              // dives finished, for things that open up with experience
-  sec: { found: [], bottles: [], lastBottle: 0, konami: 0, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
+  sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
+  flip: { log: {}, runs: 0, wins: 0 },                   // the Flipside: creatures caught (for the Bestiary), trips made
   tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "",
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} } };   // the Rusty Hook
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
-  store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}) });
+  store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}), flip: Object.assign(store.flip, old.flip || {}) });
   store.tav.stats = Object.assign({ stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, store.tav.stats);
   if (!old.dives) store.dives = Math.max(store.dives || 0, Math.floor(Object.values(store.log).reduce((a, e) => a + (e.n || 0), 0) / 3));   // dives from before they were counted, roughly
 } catch (e) { /* private window: play without saving */ }
@@ -203,6 +204,7 @@ const SECRETS = [
   ["july4", "FOURTH OF JULY", "FIREWORKS OVER THE BOAT", null],
   ["october", "OCTOBER", "PUMPKINS AND GHOSTS", null],
   ["sleeper", "THE THING BELOW", "WOKE UP THE SLEEPER", null],
+  ["crossing", "THE OTHER YOU", "CAUGHT YOURSELF", ["mark", 0]],
 ];
 function findSecret(id) {                                  // -> true the first time; puts a note on screen and gives the reward
   if (store.sec.found.includes(id)) return false;
@@ -210,7 +212,8 @@ function findSecret(id) {                                  // -> true the first 
   if (!s) return false;
   store.sec.found.push(id);
   const rw = s[3];
-  if (rw && rw[0] === "title") award(rw[1]);
+  if (rw && rw[0] === "mark") { /* a setting, not an item */ }
+  else if (rw && rw[0] === "title") award(rw[1]);
   else if (rw && !store.own[rw[0]].includes(rw[1])) store.own[rw[0]].push(rw[1]);
   saveStore();
   if (S) { S.popups.push(["SECRET FOUND!", 3.2, "#c8a0ff"]); play("fanfare"); }
@@ -308,7 +311,7 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     ["all", "COMPLETIONIST", "LOG EVERY SPECIES"], ["baiter", "MASTER BAITER", null], ["mythic", "HOLY CRAP", null], ["soggy", "SOGGY", null],
     ["roller", "HIGH ROLLER", "1,000 TAVERN CHIPS"], ["shark", "CARD SHARK", "WIN 25 HANDS OF 21"], ["derbyking", "DERBY KING", "WIN 10 DERBY BETS"],
     ["longshot", "LONG SHOT", "WIN A X8 DIVE BET"], ["regular", "REGULAR", "TAKE FREE CHIPS 14 DAYS"],
-    ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"]]);
+    ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"], ["otherside", "THE OTHER SIDE", "BEAT THE GAME"]]);
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy");   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
 function award(id) { if (store.titles.includes(id)) return false; store.titles.push(id); return true; }
@@ -401,7 +404,7 @@ const LB = {                                             // two lists in the dat
   },
   async submit(name, score, haul, title) {
     if (!this.url || !name || score <= 0) return;
-    const body = JSON.stringify({ n: name, s: score, t: Date.now(), h: haul, ti: title });
+    const body = JSON.stringify(Object.assign({ n: name, s: score, t: Date.now(), h: haul, ti: title }, store.sec.beat && store.sec.mark !== false ? { m: 1 } : {}));   // m: has beaten the game
     const post = path => fetch(this.url + path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
     try {
       const [a, b] = await Promise.all([post("/daily/" + dayString() + ".json"), post("/all.json")]);
@@ -555,9 +558,10 @@ function say(key, txt, col, secs) { if (!S.said.has(key)) { S.said.add(key); S.p
 
 function pulse() {                                       // scatter everything near the hook
   if (S.state === "boss") { bossPulse(); return; }
+  if (S.state === "flip") { flipPulse(); return; }
   if (!["down", "rise"].includes(S.state) || S.pulses <= 0) return;
   if (!S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; startBoss(false); return; }   // knock on the eye with an empty hook
-  if (store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) say("crack", "THE CRACK HUMS. NOT YET.", "#c8a0ff", 2.6);
+  if (store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) { knockCrack(); if (S.state === "flip" || S.toFlip) { S.pulses--; return; } }   // knock on the crack
   S.pulses--; S.ring = 0; S.immune = Math.max(S.immune, 0.5);
   play("pulse");
   for (const [i, f] of visible()) {
@@ -637,6 +641,7 @@ function darknessAt(m) {
   return d[d.length - 1][1];
 }
 function update(dt) {
+  if (S.state === "flip" && FLIP) { flipUpdate(dt); S.shake = Math.max(0, (S.shake || 0) - dt); return; }
   if (S.state === "boss" && BOSS) { bossUpdate(dt); S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt); return; }
   S.immune = Math.max(0, S.immune - dt); S.flash = Math.max(0, S.flash - dt);
   if (S.ring !== null) { S.ring += dt; if (S.ring > 0.5) S.ring = null; }
@@ -840,8 +845,9 @@ function finishDive() {
     if (store.name) LB.submit(store.name, total, packed, ti);
     else askName(n => { if (n) LB.submit(n, total, packed, ti); });
   }
-  const note = S.bottleGot;
+  const note = S.bottleGot, goFlip = S.toFlip;
   newDive();
+  if (goFlip) { startFlip(0); return; }                    // the catch is banked; now through the crack
   if (note >= 0) { S.overlay = "note"; S.noteIdx = store.sec.bottles.indexOf(note); S.noteBack = null; }  // read the bottle's message once the dive is over
 }
 // --------------------------------------------------------------------- draw
@@ -936,6 +942,269 @@ function slTentacle(t) {                                     // a tentacle sweep
     if (i === 0) disc(SL_DARK, x + side * 2, y, r - 2);
   }
 }
+// ------------------------------------------------------------ the Flipside
+// Through the crack is an upside-down mirror of the ocean. The Crossing (drop 4) climbs its first three zones to the
+// surface overhead, where a monster version of you waits in an upside-down boat. Catch yourself to beat the game.
+const FLIP_Z = DATA.flip.zones, FSPEC = Object.fromEntries(DATA.flip.species.map(s => [s[0], s]));
+const FLIP_HOOK_Y = 140;                                   // the hook stays this far down the screen while the world rises past
+let FLIP = null;
+// Test link: ?crossing (or ?crossing=top to start just below your other self). A practice run: nothing is saved.
+const TEST_FLIP = (() => { try { const q = new URLSearchParams(location.search); return q.has("crossing") ? (q.get("crossing") === "top" ? 2 : 1) : 0; } catch (e) { return 0; } })();
+const flipZoneAt = m => { let z = 0; FLIP_Z.forEach((q, i) => { if (m >= q[1]) z = i; }); return z; };
+const crackOpen = () => store.sec.beat || LURES[S.lure][0] === "glow";      // the first time, it only opens for a light
+function knockCrack() {                                       // a pulse at the crack, from a dive
+  if (!crackOpen()) { say("crack", "IT WANTS A LIGHT.", "#c8a0ff", 2.6); play("miss"); return; }
+  S.flash = 0.5; play("thunder", 0.6);
+  if (S.catch.length || S.bottom) { S.toFlip = true; S.popups.push(["THE CRACK OPENS...", 3, "#c8a0ff"]); beginHaul(); }   // your catch is weighed first
+  else startFlip(0);
+}
+function startFlip(test) {
+  const L = DATA.flip.crossing * M, Lu = LURES[S.lure];
+  const seed = (Math.random() * 4294967296) >>> 0, rng = RNG(seed);
+  if (!test) { store.sec.crack = true; saveStore(); }       // you've been through it
+  FLIP = { test, seed, mode: "in", mt: 0, f: test === 2 ? L - 260 : 0, L, rng, chunks: {}, lurk: {}, special: [], catch: [], pulses: Lu[5], ring: null, scare: null, scared: false,
+    zone: -1, sx: LW / 2, wet: 2, gone: new Set() };
+  S.sink = Lu[3]; S.steerK = Lu[4]; S.hx = LW / 2; S.keys.clear(); S.touchX = null; S.overlay = null; S.popups = [];
+  FLIP_Z.slice(0, 3).forEach((z, zi) => DATA.flip.species.filter(s => s[2] === zi && s[6]).forEach(s => {   // legendaries: each might be out there
+    if (rng.random() < 0.3) FLIP.special.push({ id: s[0], x: rng.uniform(10, LW - 30), y: rng.uniform(z[1] + 6, z[2] - 6) * M, v: (rng.random() < 0.5 ? -1 : 1) * s[4], ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]), leg: true });
+  }));
+  if (rng.random() < C.MYTHIC_CHANCE) FLIP.special.push({ id: DATA.flip.mythic, x: rng.uniform(10, LW - 30), y: rng.uniform(210, 320) * M, v: 18, ph: 0, lb: 40, myth: true });
+  setState("flip"); flipDrone(true);
+}
+function flipChunk(i) {                                       // creatures and lurkers for one 72 px slice of the climb, made when first seen
+  if (FLIP.chunks[i]) return FLIP.chunks[i];
+  const rng = RNG(Math.imul(i + 7, 2654435761) ^ FLIP.seed), out = [], y0 = i * C.CHUNK, m = y0 / M;
+  if (m < 4 || y0 > FLIP.L - 70) return (FLIP.chunks[i] = { fish: out, jelly: [] });
+  const z = flipZoneAt(m), pool = DATA.flip.species.filter(s => s[2] === z && s[5] > 0), wsum = pool.reduce((a, s) => a + s[5], 0);
+  const n = Math.round((rng.random() < 0.6 ? 1 : 2) * LW / UW);           // fewer than on top: the Crossing is the gentle one
+  for (let k = 0; k < n; k++) {
+    let r = rng.random() * wsum, s = pool[0];
+    for (const q of pool) { r -= q[5]; if (r <= 0) { s = q; break; } }
+    out.push({ id: s[0], x: rng.uniform(0, LW - 20), y: y0 + rng.uniform(4, C.CHUNK - 4), v: (rng.random() < 0.5 ? -1 : 1) * s[4] * rng.uniform(0.8, 1.2), ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]) });
+  }
+  if (rng.random() < 0.08) out.push({ id: rng.random() < 0.5 ? "ftooth" : "hairball", x: rng.uniform(0, LW - 10), y: y0 + rng.uniform(4, 60), v: 0, ph: 0, lb: 1 });
+  const jelly = [];
+  const jc = Math.round(0.11 * LW / UW * 10) / 10;
+  if (rng.random() < jc + (z === 2 ? 0.04 : 0)) jelly.push({ x: rng.uniform(8, LW - 20), y: y0 + rng.uniform(8, 64), ph: rng.uniform(0, 6) });
+  return (FLIP.chunks[i] = { fish: out, jelly });
+}
+function flipVisible() {                                      // [chunk index, creature] for everything near the screen, specials included
+  const lo = Math.floor((FLIP.f - 80) / C.CHUNK), hi = Math.floor((FLIP.f + FLIP_HOOK_Y + 30) / C.CHUNK), out = [];
+  for (let i = Math.max(0, lo); i <= hi; i++) flipChunk(i).fish.forEach(c => { if (!FLIP.gone.has(c)) out.push(c); });
+  FLIP.special.forEach(c => { if (!FLIP.gone.has(c) && Math.abs(c.y - FLIP.f) < 260) out.push(c); });
+  return out;
+}
+function flipJellies() { const lo = Math.floor((FLIP.f - 80) / C.CHUNK), hi = Math.floor((FLIP.f + FLIP_HOOK_Y + 30) / C.CHUNK), out = []; for (let i = Math.max(0, lo); i <= hi; i++) out.push(...flipChunk(i).jelly); return out; }
+const flipSY = y => FLIP_HOOK_Y - (y - FLIP.f);              // world height -> screen y
+function flipRect(c) { const a = DATA.atlas["fc_" + c.id]; return [c.x, flipSY(c.y) - (a[3] >> 1), a[2], a[3]]; }
+function flipPulse() {
+  if (!FLIP || FLIP.mode !== "climb" || FLIP.pulses <= 0) return;
+  FLIP.pulses--; FLIP.ring = 0; play("pulse");
+  for (const c of flipVisible()) { const dx = c.x + 6 - S.hx, dy = flipSY(c.y) - FLIP_HOOK_Y; if (Math.hypot(dx, dy) < 50) { c.v = (dx < 0 ? -1 : 1) * Math.max(40, Math.abs(c.v) * 3); c.fl = 1; } }
+  for (const j of flipJellies()) { const dx = j.x + 6 - S.hx; if (Math.abs(dx) < 50 && Math.abs(flipSY(j.y) - FLIP_HOOK_Y) < 50) j.x += dx < 0 ? -30 : 30; }
+}
+const flipTop = () => FLIP.L - 36;                            // where your other self's hook hangs
+function flipUpdate(dt) {
+  const F = FLIP;
+  F.mt += dt;
+  S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt);
+  if (F.ring !== null) { F.ring += dt * 2; if (F.ring > 1) F.ring = null; }
+  if (F.mode === "in") { if (F.mt > 1.1) { F.mode = "climb"; F.mt = 0; S.popups.push(["THE FLIPSIDE", 3, "#ff8ca0"]); } return; }
+  if (F.mode === "meet") { if (F.mt > 2.6) { F.mode = "out"; F.mt = 0; S.flash = 1; play("thunder"); } return; }
+  if (F.mode === "fail") { if (F.mt > 1.8) { F.mode = "out"; F.mt = 0; } return; }
+  if (F.mode === "out") { if (F.mt > 1.2) endFlip(); return; }
+  steer(dt);
+  const top = flipTop() - 2;
+  if (F.f < top) F.f = Math.min(top, F.f + 62 * S.sink * dt);           // you keep falling; the world rises
+  const m = F.f / M, z = flipZoneAt(m);
+  if (z !== F.zone && z < 3) { F.zone = z; S.popups = S.popups.filter(p => !FLIP_Z.some(q => q[0] === p[0])); S.popups.push([FLIP_Z[z][0], 2.6, "#ff8ca0"]); }
+  if (!F.scared && F.f > F.L * 0.5) { F.scared = true; F.scare = 0; play("thunder", 0.8); SOUNDS.roar = [[70, 1.8, "sawtooth", 0.4, 30], [48, 2, "square", 0.25, 25, 0.2]]; play("roar"); }   // something huge passes behind you
+  if (F.scare !== null) { F.scare += dt; if (F.scare > 5) F.scare = null; }
+  if ((F.wet -= dt) <= 0) { F.wet = 1.5 + Math.random() * 3.5; flipSquelch(); }
+  const glow = LURES[S.lure][8];
+  for (const c of flipVisible()) {                            // creatures swim; the glow lure draws them in a little
+    c.x += c.v * dt;
+    if (c.fl) { c.fl -= dt; if (c.fl <= 0) { c.fl = 0; c.v = Math.sign(c.v) * Math.max(6, FSPEC[c.id][4]); } }
+    if (glow && !c.fl) { const dx = S.hx - (c.x + 6), dy = FLIP_HOOK_Y - flipSY(c.y); if (Math.hypot(dx, dy) < glow * 2) c.x += Math.sign(dx) * 10 * dt; }
+    if (c.x > LW + 24) c.x = -24; else if (c.x < -24) c.x = LW + 24;
+  }
+  const hook = [S.hx - 2, FLIP_HOOK_Y - 3, 5, 6];
+  for (const j of flipJellies()) {                            // a flesh jelly ends the trip
+    j.x += Math.sin(T * 0.7 + j.ph) * 6 * dt;
+    if (glow) j.x += Math.sign(S.hx - j.x - 6) * 4 * dt;
+    if (overlap(hook, [j.x + 2, flipSY(j.y) - 3, 9, 7])) { F.mode = "fail"; F.mt = 0; S.shake = 0.5; S.flash = 0.4; play("zap"); S.popups.push(["A FLESH JELLY GOT YOU", 3, ORANGE]); return; }
+  }
+  for (const c of flipVisible()) {                            // catching, or bumping off a full hook
+    if (c.fl || !overlap(hook, flipRect(c))) continue;
+    const sp = FSPEC[c.id], legOn = F.catch.some(q => FSPEC[q[0]][6]);
+    if (F.catch.length >= C.CAPACITY || (sp[6] && legOn)) { c.v = (c.x + 6 < S.hx ? -1 : 1) * 60; c.fl = 0.8; play("tick"); continue; }
+    F.gone.add(c); F.catch.push([c.id, c.lb]);
+    if (sp[6] || c.myth) play("fanfare"); else catchSound(F.catch.length);
+    if (sp[6]) { S.flash = 0.3; S.popups.push([sp[1] + "!", 3, GOLD]); }
+    else if (c.myth) { S.flash = 0.4; S.popups.push(["...THE PRETTY ONE?!", 3.5, "#ffd2f0"]); }
+    if (F.catch.length === C.CAPACITY) S.popups.push(["HOOK FULL. KEEP GOING", 2.4, CYAN]);
+  }
+  if (F.f >= top - 1) {                                        // your other self dangles its hook: catch it
+    const mx = LW / 2 + Math.sin(T * 0.9) * Math.min(40, LW * 0.3);
+    if (Math.abs(S.hx - mx) < 5) { F.mode = "meet"; F.mt = 0; F.mx = mx; F.won = true; S.flash = 0.6; play("fanfare"); S.popups.push(["YOU CAUGHT YOURSELF", 4, "#ff8ca0"]); }
+  }
+}
+function endFlip() {
+  const F = FLIP;
+  flipDrone(false);
+  FLIP = null;
+  newDive();
+  if (F.test) { S.popups.push([F.won ? "TEST: YOU MADE IT" : "TEST OVER", 3, GREY]); return; }
+  store.sec.crossed = true;
+  if (F.won) {
+    store.flip.runs++; store.flip.wins++;
+    F.catch.forEach(([id, lb]) => { const e = store.flip.log[id] || (store.flip.log[id] = { n: 0, rec: 0 }); e.n++; e.rec = Math.max(e.rec, lb); });
+    const first = !store.sec.beat;
+    store.sec.beat = true;
+    findSecret("crossing");
+    if (award("otherside")) S.popups.push(["NEW TITLE: THE OTHER SIDE", 5, GOLD]);
+    earnSong(10);
+    saveStore();
+    if (first) { CRED = { y: 0, done: false }; S.overlay = "credits"; if (LB.url) LB.load(); }   // the credits roll the first time
+    else S.popups.push(["YOU CAUGHT YOURSELF AGAIN", 3, "#ff8ca0"]);
+  } else { store.flip.runs++; saveStore(); S.popups.push(["BACK ON TOP. FOR NOW.", 3, "#ff8ca0"]); }
+}
+
+// ---- sound: a low drone and wet noises
+let DRONE = null;
+function flipDrone(on) {
+  if (!AC) return;
+  if (!on) { if (DRONE) { try { DRONE.g.gain.setTargetAtTime(0, AC.currentTime, 0.3); DRONE.o.forEach(o => o.stop(AC.currentTime + 1.5)); } catch (e) { /* already stopped */ } } DRONE = null; return; }
+  if (DRONE) return;
+  try {
+    const g2 = AC.createGain(), lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 220;
+    g2.gain.value = 0; g2.gain.setTargetAtTime(0.07, AC.currentTime, 1.2); lp.connect(g2); g2.connect(AC.destination);
+    const o = [55, 55.6, 82.4].map(f => { const x = AC.createOscillator(); x.type = "sawtooth"; x.frequency.value = f; x.connect(lp); x.start(); return x; });
+    DRONE = { g: g2, o };
+  } catch (e) { DRONE = null; }
+}
+function flipSquelch() {
+  if (!AC || AC.state !== "running") return;
+  try {
+    const len = Math.floor(AC.sampleRate * 0.25), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    const src = AC.createBufferSource(), bp = AC.createBiquadFilter(), ga = AC.createGain(), t0 = AC.currentTime;
+    src.buffer = buf; bp.type = "bandpass"; bp.Q.value = 6; bp.frequency.setValueAtTime(300 + Math.random() * 300, t0); bp.frequency.exponentialRampToValueAtTime(900 + Math.random() * 600, t0 + 0.2);
+    ga.gain.value = 0.25; src.connect(bp); bp.connect(ga); ga.connect(AC.destination); src.start();
+  } catch (e) { /* no sound, no matter */ }
+}
+
+// ---- drawing
+let flipTint = null;
+function drawFlip() {
+  const F = FLIP, t = T;
+  g.save();
+  if (F.mode === "in" || F.mode === "out") {                 // the screen turns over
+    const u = F.mode === "in" ? 1 - Math.min(1, F.mt / 1.1) : Math.min(1, F.mt / 1.2);
+    g.translate(LW / 2, LH / 2); g.rotate(u * Math.PI); g.translate(-LW / 2, -LH / 2);
+  }
+  if (S.shake > 0) g.translate(Math.round(Math.sin(t * 50) * 2), 0);
+  // the mirrored ocean: the topside at depth (1160 - height), flipped left to right, gone red
+  const srcTop = DEPTH_PX - (F.f + FLIP_HOOK_Y), wW = DATA.waterW || water.width;
+  rect("#120408", 0, 0, LW, LH);
+  g.save(); g.translate(LW, 0); g.scale(-1, 1);
+  const sy0 = Math.max(0, srcTop), dy0 = sy0 - srcTop;
+  g.drawImage(water, Math.max(0, (wW - LW) >> 1), sy0, Math.min(LW, wW), LH - dy0, 0, dy0, LW, LH - dy0);
+  g.restore();
+  g.globalCompositeOperation = "color"; g.globalAlpha = 0.8; rect("#c83c50", 0, 0, LW, LH);       // gone red
+  g.globalCompositeOperation = "screen"; g.globalAlpha = 1; rect("#5a1422", 0, 0, LW, LH);           // and lit like the topside, not like the deep
+  g.globalCompositeOperation = "source-over"; g.globalAlpha = 1;
+  const k0 = Math.floor((F.f - 60) / C.CHUNK);
+  for (let k = k0; k < k0 + 5; k++) {                          // vein strands and drifting motes, fixed to the world
+    const r = RNG(k * 977 + 13);
+    for (let q = 0; q < Math.round(2 * LW / UW); q++) {
+      let x = r.uniform(0, LW); const y0 = flipSY(k * C.CHUNK + C.CHUNK), len = r.randint(20, 60);
+      for (let j = 0; j < len; j++) { x += Math.sin(j * 0.25 + q + t * 0.6) * 0.5; rect(j % 7 === 3 ? "#be3c50" : "#8c1e32", x, y0 + j, 1, 1); }
+    }
+    for (let q = 0; q < Math.round(8 * LW / UW); q++) rect(q % 3 ? "#e68c96" : "#ffe678", (r.uniform(0, LW) + Math.sin(t + q) * 2) % LW, flipSY(k * C.CHUNK + r.uniform(0, C.CHUNK)), 1, 1);
+  }
+  if (F.scare !== null) {                                      // something enormous drifts past behind you, and leaves
+    const u = F.scare / 5, x = -260 + u * (LW + 520), y = 70 + Math.sin(u * 3) * 10;
+    g.globalAlpha = 0.55 * Math.sin(u * Math.PI);
+    ell("#200810", x - 130, y - 40, 260, 80); ell("#200810", x + 90, y - 20, 90, 40);
+    for (let k = 0; k < 6; k++) ell("#200810", x - 120 - k * 26, y + 20 + Math.sin(t * 2 + k) * 8, 30, 10);
+    g.globalAlpha = 0.9 * Math.sin(u * Math.PI); disc("#ffd246", x + 100, y - 6, 4); rect(INK, x + 100, y - 9, 1, 6);
+    g.globalAlpha = 1;
+  }
+  const cy = flipSY(0);                                        // the crack you came through, below you
+  if (cy < LH + 20) { g.globalAlpha = 0.5 + 0.2 * Math.sin(t * 2); ell("#c8a0ff", LW / 2 - 14, cy - 5, 28, 12); g.globalAlpha = 1; line("#05030a", LW / 2, cy - 4, LW / 2 + 1, cy + 4); }
+  flipJellies().forEach(j => { const y = flipSY(j.y) + Math.round(Math.sin(t * 2 + j.ph) * 2); if (y > -20 && y < LH + 20) spr("flurker", j.x, y - 6); });
+  flipVisible().forEach(c => {
+    const [x, y] = flipRect(c);
+    if (y < -24 || y > LH + 24) return;
+    spr("fc_" + c.id, x, y, c.v < 0);
+    if (FSPEC[c.id][6]) for (let k = 0; k < 3; k++) { const a = t * 3 + k * 2.1, w = DATA.atlas["fc_" + c.id][2]; rect(GOLD, x + w / 2 + Math.cos(a) * (w / 2 + 3), y + 4 + Math.sin(a) * 6, 1, 1); }
+    if (c.myth) for (let k = 0; k < 4; k++) rect(WHITE, x + ((t * 30 + k * 7) % 14) - 2, y - 2 + ((k * 5 + Math.floor(t * 8)) % 10), 1, 1);
+  });
+  const top = flipSY(F.L);                                     // the surface overhead, and the other you
+  if (top > -40) {
+    rect("#1a0610", 0, 0, LW, Math.max(0, top));
+    for (let x = 0; x < LW; x += 6) rect("#c8788c", x, top, 3, 1);
+    const bx = Math.round(LW / 2 - 30), mx = F.mode === "meet" ? F.mx : LW / 2 + Math.sin(T * 0.9) * Math.min(40, LW * 0.3), my = flipSY(flipTop());
+    g.save(); g.translate(0, top * 2 + 2); g.scale(1, -1);       // everything up there hangs upside down
+    angler(bx, top - 9, Object.assign({}, store.eq, { flag: 0 }), top, true);    // a monster you, with a monster pet
+    g.restore();
+    for (let k = 0; k < Math.round(12 * LW / UW); k++) if ((k * 7 + Math.floor(T * 2)) % 5) rect("#5a1e2a", (k * 53) % LW, (k * 29) % Math.max(1, top), 1, 1);   // a dim sky up there
+    line("#a0dc78", bx + 18, top + 22, mx, my);                 // its line, from its own hand down to you
+    ring("#a0dc78", mx, my + 3, 2);
+  }
+  // your line runs back down through the crack; your hook points up now
+  line(lineCol(0), S.hx, LH, S.hx, FLIP_HOOK_Y + 4);
+  g.save(); g.translate(S.hx + 3, FLIP_HOOK_Y + 3); g.rotate(Math.PI); spr("hook" + store.eq.hook, 0, 0); g.restore();
+  F.catch.forEach(([id], i) => { const a = DATA.atlas["fc_" + id]; g.save(); g.translate(S.hx, FLIP_HOOK_Y + 8 + i * 5); g.rotate(Math.PI / 2); spr("fc_" + id, -2, -(a[3] >> 1)); g.restore(); });
+  if (F.ring !== null) { const r = Math.floor(6 + F.ring * 46); ring("#ffb4c8", S.hx, FLIP_HOOK_Y, r); }
+  g.restore();
+  if (S.flash > 0) { g.globalAlpha = Math.min(1, S.flash); rect(F.mode === "out" ? WHITE : "#ffd2dc", 0, 0, LW, LH); g.globalAlpha = 1; }
+  if (F.mode === "out") { g.globalAlpha = Math.min(1, F.mt / 1.2); rect(WHITE, 0, 0, LW, LH); g.globalAlpha = 1; }
+  // the HUD stays the right way up
+  if (F.mode === "climb" || F.mode === "meet" || F.mode === "fail") {
+    const left = Math.max(0, Math.round((flipTop() - F.f) / M));
+    text(left ? left + " M TO GO" : "CATCH YOURSELF", LW / 2, 8, 1, "#ff8ca0", "center");
+    text("CATCH " + F.catch.length + "/" + C.CAPACITY, LW / 2, 18, 1, "#e6b4be", "center", null);
+    box(2, 176, 36, 22, F.pulses ? "#ff8ca0" : "#5a3a46"); text("PULSE", 20, 183, 1, F.pulses ? "#ff8ca0" : "#7a5a66", "center", null);
+    for (let k = 0; k < F.pulses; k++) rect("#ff8ca0", 8 + k * 9, 190, 6, 3);
+    if (F.test) { text("TEST", LW - 4, KEYS ? 182 : 192, 1, GREY, "right", null); if (KEYS) text("ESC: QUIT", LW - 4, 192, 1, GREY, "right", null); }
+    S.popups.slice(-2).forEach((p, i) => { const tw = textW(p[0], 1); box(Math.floor(LW / 2 - tw / 2) - 4, 32 + i * 13, tw + 8, 11, p[2]); text(p[0], LW / 2, 37 + i * 13, 1, p[2], "center", null); });
+  }
+}
+
+// ---- the credits, after catching yourself
+const CREDITS = [["DIRECTED BY", "A VERY PATIENT FOX"], ["LEAD FISH WRANGLER", "WHOEVER IS READING THIS"], ["HEAD OF JELLYFISH RELATIONS", "PLEASE STOP TOUCHING THEM"],
+  ["HOOK SHARPENING", "THE GOLD HOOK, WHO INSISTED"], ["CATERING", "WHATEVER THE GULPER DIDN'T EAT"], ["LEGAL COUNSEL", "THE KRAKEN'S LAWYERS (EIGHT OF THEM)"],
+  ["WEATHER", "THE STORM, ON A PART-TIME BASIS"], ["QUALITY ASSURANCE", "EVERYONE WHO GOT ZAPPED"], ["ALARM CLOCK FOR THE SLEEPER", "YOU. IT IS STILL UPSET."],
+  ["MOST CAUGHT FISH", "THE MINNOW, UNWILLINGLY"], ["WARDROBE", "THE PENGUIN WHO KEEPS BUYING HATS"], ["SPECIAL THANKS", "THE RUBBER DUCK, FOR LISTENING"],
+  ["BOOT CONSULTANT", "THE GOLDEN BOOT, STILL MISSING ITS PAIR"], ["APPEARING COURTESY OF NOBODY WHO WILL ADMIT IT", "THE SHIT FISH"],
+  ["DISCLAIMER", "NO BOOTS WERE HARMED. ONE BOOT WAS HARMED."]];
+let CRED = null;
+function creditLines() {                                       // [text, colour, gap after]
+  const out = [["REEL DEEP", GOLD, 18]];
+  CREDITS.forEach(([role, who]) => { wrap(role, 19).forEach(l => out.push([l, "#a090c0", 0])); wrap(who, 19).forEach(l => out.push([l, WHITE, 0])); out[out.length - 1][2] = 10; });
+  out.push(["PLAYTESTERS", "#a090c0", 0]);
+  const names = [...new Set((LB.all || []).map(e => e.n))];
+  (names.length ? names : ["EVERYONE ON THE", "ALL TIME BOARD"]).forEach(n => out.push([n, CYAN, 0]));
+  out[out.length - 1][2] = 24;
+  out.push(["THE END", GOLD, 12], ["THANK YOU FOR PLAYING.", WHITE, 4], ["THE OTHER YOU", "#ff8ca0", 0], ["SAYS HI.", "#ff8ca0", 0]);
+  return out;
+}
+function drawCredits() {
+  rect("#08040e", 0, 0, LW, LH);
+  g.save(); g.translate(OX, 0);
+  const ls = creditLines(); let y = LH - CRED.y;
+  for (const [s2, col, gap] of ls) { if (y > -10 && y < LH + 10) text(s2, 60, y, s2 === "REEL DEEP" ? 2 : 1, col, "center", null); y += 10 + gap + (s2 === "REEL DEEP" ? 10 : 0); }
+  CRED.end = y;
+  if (CRED.done) text("TAP TO CONTINUE", 60, 194, 1, GREY, "center", null);
+  g.restore();
+}
+function creditsTick(dt) {
+  if (!CRED || S.overlay !== "credits") return;
+  if (CRED.end === undefined || CRED.end > LH / 2) CRED.y += dt * (CRED.fast ? 60 : 16); else CRED.done = true;
+}
+
 // The Sleeper's outline, one side mirrored: a lumpy skull, a neck, hunched shoulders, then arms sloping down to the claws.
 const SL_PROF = [[0, 1], [0.1, 0.96], [0.2, 1.01], [0.3, 0.94], [0.38, 0.8], [0.44, 0.64], [0.52, 0.6], [0.6, 0.7], [0.68, 0.74], [0.76, 0.66], [0.84, 0.46], [0.92, 0.24], [1, 0.02]];
 function slShape(u) { u = Math.min(1, Math.abs(u)); let i = 1; while (i < SL_PROF.length - 1 && SL_PROF[i][0] < u) i++; const [u0, h0] = SL_PROF[i - 1], [u1, h1] = SL_PROF[i], k = (u - u0) / (u1 - u0); return h0 + (h1 - h0) * (1 - Math.cos(k * Math.PI)) / 2; }
@@ -1197,6 +1466,7 @@ function drawGiant() {                                   // something very large
 
 function draw() {
   if (S.state === "boss" && BOSS) { drawBoss(); return; }
+  if (S.state === "flip" && FLIP) { drawFlip(); return; }
   const t = T, cam = S.cam, wl = Math.round(-cam), srcY = Math.max(0, Math.round(cam));
   g.save();
   if (KON === "mirror") { g.translate(LW, 0); g.scale(-1, 1); }           // the world flips; menus and buttons stay readable
@@ -1317,7 +1587,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { vip: drawVip, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { credits: drawCredits, vip: drawVip, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -1554,6 +1824,7 @@ const SONGS = [
   ["BAITER'S BOOGIE", null, "EARN MASTER BAITER", 140, "C4 - E4 G4 A4 - G4 E4 C4 - E4 G4 A4 - G4 - F4 - A4 C5 D5 - C5 A4 G4 - E4 C4 D4 - C4 -", "C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 F2 F3 F2 F3 F2 F3 F2 F3 G2 G3 G2 G3 C2 C3 C2 -"],
   ["FULL LOG", null, "LOG EVERY SPECIES", 120, "G4 - C5 - E5 - G5 - - - E5 - G5 - - - A5 - G5 - E5 - C5 - D5 - E5 - C5 - - - - -", "C3 - - - G2 - - - C3 - - - E3 - - - F2 - - - G2 - - - C3 - - - - - - -"],
   ["LULLABY", null, "PUT THE SLEEPER BACK TO SLEEP", 72, "E4 - G4 - B4 - - - A4 - G4 - E4 - - - D4 - E4 - G4 - - - D4 - E4 - - - - -", "E2 - - - B2 - - - C3 - - - G2 - - - A2 - - - E2 - - - B1 - - - E2 - - -"],
+  ["CREDITS THEME", null, "CATCH YOURSELF", 108, "C5 - E5 - G5 - - - E5 - D5 - C5 - A4 - - - G4 - A4 - C5 - D5 - E5 - D5 - C5 - - - - -", "C3 - G2 - A2 - E2 - F2 - C3 - G2 - - - F2 - C3 - G2 - D3 - C3 - G2 - C3 - - -"],
 ];
 const songOwned = i => tav().songs.includes(i);
 function earnSong(i) { if (songOwned(i)) return; tav().songs.push(i); saveStore(); if (S) S.popups.push(["NEW SONG: " + SONGS[i][0], 4, CHIP]); }
@@ -1639,7 +1910,7 @@ let MUS = { song: -1, step: 0, next: 0 };
 function noteHz(n) { const m = /^([A-G])(\d)$/.exec(n); return m ? 440 * Math.pow(2, ({ C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 }[m[1]] + (m[2] - 4) * 12) / 12) : 0; }
 function tone(f, t0, dur, wave, vol) { const o = AC.createOscillator(), ga = AC.createGain(); o.type = wave; o.frequency.setValueAtTime(f, t0); ga.gain.setValueAtTime(vol, t0); ga.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(ga); ga.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 function musicTick() {
-  const want = AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
+  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
   if (want !== MUS.song) { MUS = { song: want, step: 0, next: AC ? AC.currentTime + 0.1 : 0 }; }
   if (want < 0 || AC.state !== "running") return;
   const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), dt = 30 / bpm;
@@ -1650,7 +1921,7 @@ function musicTick() {
     MUS.step++; MUS.next += dt;
   }
 }
-function tavTick(dt) { c21Tick(dt); derbyTick(dt); musicTick(); }
+function tavTick(dt) { c21Tick(dt); derbyTick(dt); creditsTick(dt); musicTick(); }
 
 // ---- drawing
 function drawShack(wl, open) {                             // the tavern on the shore, left of the boat
@@ -1834,10 +2105,10 @@ function drawJukebox() {
   text("JUKEBOX", 60, 8, 1, "#ff8cd2", "center", null);
   chipsLine(19);
   SONGS.forEach((sg, i) => {
-    const y = 26 + i * 13, own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
-    rect(sel ? "#3a2440" : "#24160e", 4, y, 112, 12);
-    text(own || sg[1] ? sg[0] : "???", 7, y + 6, 1, on ? "#ff8cd2" : own ? WHITE : GREY, "left", null);
-    text(on ? "ON" : own ? "" : sg[1] ? sg[1] : "", 113, y + 6, 1, on ? "#ff8cd2" : CHIP, "right", null);
+    const y = 26 + i * 12, own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
+    rect(sel ? "#3a2440" : "#24160e", 4, y, 112, 11);
+    text(own || sg[1] ? sg[0] : "???", 7, y + 5, 1, on ? "#ff8cd2" : own ? WHITE : GREY, "left", null);
+    text(on ? "ON" : own ? "" : sg[1] ? sg[1] : "", 113, y + 5, 1, on ? "#ff8cd2" : CHIP, "right", null);
   });
   const sg = SONGS[TAV.songSel], own = songOwned(TAV.songSel);
   text(own ? (tav().song === TAV.songSel ? "TAP AGAIN: MUSIC OFF" : "TAP AGAIN TO PLAY") : sg[1] ? "TAP AGAIN TO BUY" : "EARNED: " + sg[2], 60, 168, 1, own ? CHIP : sg[1] ? GOLD : GREY, "center", null);
@@ -1992,7 +2263,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     return true;
   }
   if (o === "jukebox") {
-    const i = Math.floor((ly - 26) / 13);
+    const i = Math.floor((ly - 26) / 12);
     if (ly >= 26 && i < SONGS.length) {
       if (i !== TAV.songSel) { TAV.songSel = i; play("tick"); return true; }
       const sg = SONGS[i];
@@ -2034,8 +2305,9 @@ function lineCol(i) {
   return (i * 7 + Math.floor(T * 10)) % 9 === 0 ? "#ffd246" : (i + Math.floor(T * 4)) % 5 === 0 ? "#ffffff" : "#a0a8c8";      // sparkle
 }
 const POKE_SAY = ["HI!", "HELLO!", "YES?", "HEY!", "QUIT IT", "STOP!", "I MEAN IT", "GRR...", "LAST CHANCE"];
-function angler(x, y, eq, wl) {                            // the boat, whoever is fishing today, their hat, pet and flag
-  const [cw, ch] = sprSize("char" + eq.char), P = S.poke;
+function angler(x, y, eq, wl, mon) {                       // the boat, whoever is fishing today, their hat, pet and flag (mon: their Flipside self)
+  const cn = (mon ? "mchar" : "char") + eq.char, hn = (mon && DATA.atlas["mhat" + eq.hat] ? "mhat" : "hat") + eq.hat, pn = (mon && eq.pet ? "mpet" : "pet") + eq.pet;
+  const [cw, ch] = sprSize(cn), P = S.poke;
   if (eq.flag) { rect("#785432", x + 2, y - 17, 1, 17); const wav = Math.floor(T * 3) % 2; spr("flag" + eq.flag, x + 3, y - 17 + wav, false); }
   let cx = x + 10, cy = y - 12, swim = false;
   if (P.fall >= 0) {                                       // poked ten times: overboard, a little swim, and back in
@@ -2046,10 +2318,10 @@ function angler(x, y, eq, wl) {                            // the boat, whoever 
   } else if (P.t < 0.25) { if (P.n <= 3) cy -= 2; else cx += Math.round(Math.sin(T * 60)); }   // a hop for a wave, a shake when annoyed
   g.save();
   if (swim) { g.beginPath(); g.rect(0, 0, LW, wl); g.clip(); }
-  spr("char" + eq.char, cx, cy);
-  if (eq.hat) { const [hw, hh] = sprSize("hat" + eq.hat); spr("hat" + eq.hat, cx + Math.floor((cw - hw) / 2) + 1, cy - hh + 3); }
+  spr(cn, cx, cy);
+  if (eq.hat) { const [hw, hh] = sprSize(hn); spr(hn, cx + Math.floor((cw - hw) / 2) + 1, cy - hh + 3); }
   g.restore();
-  if (eq.pet) { const [, ph] = sprSize("pet" + eq.pet); spr("pet" + eq.pet, x + 22, y - ph + 2 + (Math.floor(T * 2) % 2)); }
+  if (eq.pet) { const [, ph] = sprSize(pn); spr(pn, x + 22, y - ph + 2 + (Math.floor(T * 2) % 2)); }
   spr("boat" + eq.boat, x, y);
   const said = P.fall >= 0 ? (P.fall < 1.4 ? "WAAAH!" : P.fall > 2.6 ? "...SOGGY." : "") : P.n && P.t < 1.6 ? POKE_SAY[Math.min(P.n, POKE_SAY.length) - 1] : "";
   if (said && S.state === "title") {                       // a speech bubble
@@ -2228,14 +2500,16 @@ const SEC_PER = 7;
 function rewardName(rw) {
   if (!rw) return "";
   if (rw[0] === "title") return titleName(rw[1]) + " TITLE";
+  if (rw[0] === "mark") return "A MARK ON THE BOARD";
   const n = (rw[0] === "flag" ? DATA.flags : DATA.flair)[rw[1]];
   return rw[0] === "flag" ? (n.includes("FLAG") ? n : n + " FLAG") : n + " FLAIR";
 }
-function rewardWorn(rw) { return rw[0] === "title" ? store.eq.title === rw[1] : store.eq[rw[0]] === rw[1]; }
+function rewardWorn(rw) { if (rw[0] === "mark") return store.sec.mark !== false; return rw[0] === "title" ? store.eq.title === rw[1] : store.eq[rw[0]] === rw[1]; }
 function secretAct() {                                     // put the selected secret's reward on, or take it off
   const id = store.sec.found[S.secSel], sc = SECRETS.find(q => q[0] === id), rw = sc && sc[3];
   if (!rw) return;
-  if (rw[0] === "title") store.eq.title = rewardWorn(rw) ? "rookie" : rw[1];
+  if (rw[0] === "mark") store.sec.mark = !rewardWorn(rw);
+  else if (rw[0] === "title") store.eq.title = rewardWorn(rw) ? "rookie" : rw[1];
   else store.eq[rw[0]] = rewardWorn(rw) ? 0 : rw[1];
   saveStore(); play("select");
 }
@@ -2326,6 +2600,7 @@ function drawScores() {
       const y = 41 + i * 11, col = i === S.scoreSel ? WHITE : i === 0 ? GOLD : r.n === store.name ? CYAN : "#c8d2f0";
       if (i === S.scoreSel) rect("#1e285a", 4, y - 5, 112, 11);
       text(i + 1, 18, y, 1, i < 3 ? GOLD : GREY, "right", null); text(r.n, 26, y, 1, col, "left", null); text(r.s, 112, y, 1, col, "right", null);
+      if (r.m) { const mx = 26 + textW(r.n, 1) + 2; rect("#ff8ca0", mx, y - 2, 3, 3); rect(INK, mx + 1, y - 1, 1, 1); }   // a little red eye: they've been to the other side
     });
     const r = rows[S.scoreSel], h = r && unpackHaul(r.h);            // what was on the hook for the selected score
     if (r) {
@@ -2549,6 +2824,7 @@ function closeOverlay() {
   play("back");
 }
 function overlayTap(lx, ly) {
+  if (S.overlay === "credits") { if (CRED.done) closeOverlay(); else CRED.fast = true; return; }
   if (tavernTap(lx, ly)) return;
   const arrows = n => { if (ly < 17 && (lx < 24 || lx > 96)) { play("tick"); return (lx > 96 ? 1 : n - 1); } return 0; };
   if (S.overlay === "help") {
@@ -2640,6 +2916,7 @@ canvas.addEventListener("pointerdown", e => {
   if (AC && AC.state === "suspended") AC.resume();
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
+  if (S.state === "flip" && FLIP) { if (rx < 40 && ly > 172) flipPulse(); else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
   if (S.state === "title") { if (titleTap(rx, lx, ly)) return; }
   if (S.state === "down" && rx < 16 && ly < 14) { newDive(); return; }          // give up this dive
@@ -2671,6 +2948,7 @@ window.addEventListener("keydown", e => {
   if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"].includes(c)) e.preventDefault();
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
+  if (S.state === "flip" && FLIP && FLIP.test && c === "Escape") { flipDrone(false); FLIP = null; newDive(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
     const k = { ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[c];
     if (c === "Escape" && BOSS.test) { BOSS = null; newDive(); return; }
@@ -2725,8 +3003,9 @@ function start() {
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id) && !store.sec.found.includes(id)) store.sec.found.push(id); });   // earned before the Secrets page existed
   newDive();
   if (TEST_BOSS) startBoss(true, TEST_BOSS);
+  else if (TEST_FLIP) startFlip(TEST_FLIP);
   LB.load();
-  window.REEL = { nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { get FLIP() { return FLIP; }, startFlip, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;

@@ -100,6 +100,14 @@ items += [("oldman", outlined(pg, from_rows(pg, OLDMAN, {"y": (240, 196, 60), "s
 # ---- secrets and events: a message in a bottle, and seasonal things fish wear
 items += [("bottle", outlined(pg, from_rows(pg, ["..mm..", "..mm..", ".cwwc.", "cwwwwc", "cwwwwc", "ccwwcc", "cccccc", ".cccc."], {"m": (150, 100, 60), "c": (110, 200, 170), "w": (250, 240, 210)}))),
           ("evturkey", from_rows(pg, ["r.e.y", ".rey.", ".mmm."], P)), ("evpumpkin", from_rows(pg, [".z.", "eee", "eke"], P))]
+# ---- the Flipside: the Crossing's creatures, the flesh jelly, and a monster version of every character, pet and hat
+import flipside as FS
+items += [("fc_" + c[0], outlined(pg, from_rows(pg, c[7], FS.PAL))) for c in FS.CREATURES]
+items += [("flurker", outlined(pg, from_rows(pg, FS.LURKER, FS.PAL)))]
+_named = dict(items)
+items += [("mchar%d" % i, FS.monsterify(_named["char%d" % i], 100 + i)) for i in range(len(CHARS))]
+items += [("mpet%d" % i, FS.monsterify(_named["pet%d" % i], 500 + i, eyes=2, teeth=_named["pet%d" % i].get_width() >= 7)) for i in range(1, len(PETS))]
+items += [("mhat%d" % i, FS.monsterify(_named["hat%d" % i], 300 + i, eyes=0, teeth=False)) for i in range(1, len(HATS)) if "hat%d" % i in _named]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()
@@ -219,6 +227,8 @@ data = dict(atlas=pos, glyphs=ac._GLYPHS, species=[list(s[:3]) + [list(s[3])] + 
             lures=[["standard", "STANDARD", "BALANCED. 1 PULSE", 1.0, 1.0, 1, 1.0, 1.0, 0], ["sinker", "HEAVY SINKER", "FAST DROP. 1 PULSE", 1.35, 0.78, 1, 1.0, 1.0, 0],
                    ["glow", "GLOW LURE", "PULLS FISH+JELLIES", 1.0, 1.0, 1, 1.5, 1.2, 26], ["sonar", "SONAR", "3 PULSES. SLOW DROP", 0.85, 1.0, 3, 1.0, 1.0, 0]], vents=wide_vents, glows=wide_glows, waterH=wide_h, waterW=WW, water=[[a, list(c)] for a, c in F.WATER],
             chars=CHARS, boats=[b[0] for b in BOATS], pets=[p[0] for p in PETS], flags=[f[0] for f in FLAGS], flairPos=FLAIR_POS, hooks=[h[0] for h in HOOKS], hats=[h[0] for h in HATS], flair=[f[0] for f in FLAIR],
+            flip=dict(zones=[list(z) for z in FS.ZONES], crossing=FS.CROSSING_M, junk=list(FS.JUNK), mythic=FS.MYTHIC,
+                      species=[[c[0], c[1], c[2], list(c[3]), c[4], c[5], c[6]] for c in FS.CREATURES]),
             dark=[[300, 0], [480, 0.34], [570, 0.38], [600, 0.28], [690, 0.28], [720, 0.34], [830, 0.38], [960, 0.46], [1110, 0.46], [1160, 0.38]],
             consts=dict(MAX_M=F.MAX_M, BOTTOM_M=F.BOTTOM_M, BLEND=F.BLEND, BOTTOM_BONUS=F.BOTTOM_BONUS, BOUNTY_X=F.BOUNTY_X, JELLY_CHANCE=F.JELLY_CHANCE, PER_CHUNK=[list(p) for p in F.PER_CHUNK],
                         CHUNK=F.CHUNK, TROPHY_CHANCE=0.022, LEGEND_BASE=0.05, LEGEND_CHANCE={"chest": 0.1, "pearl": 0.1, "ancient": 0.06}, MYTHIC_CHANCE=0.006, JUNK=list(F.JUNK), FIXED=list(F.FIXED), GLOWS=list(F.GLOWS), CAPACITY=F.CAPACITY))
