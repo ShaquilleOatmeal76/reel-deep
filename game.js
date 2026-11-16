@@ -593,7 +593,7 @@ function pulse() {                                       // scatter everything n
 function steer(dt) {
   const speed = 118 * S.steerK;
   if (S.touchX !== null) S.hx += clamp(S.touchX - S.hx, -speed * dt, speed * dt);
-  else if (S.keys.size) S.hx += [...S.keys].reduce((a, b) => a + b, 0) * speed * dt;
+  else if (heldDir("L", "R")) S.hx += heldDir("L", "R") * (KON === "mirror" ? -1 : 1) * speed * dt;   // read fresh every frame from the keys held
   else if (S.drift) { S.hx += S.drift * speed * 0.6 * dt; if (S.hx <= 4 || S.hx >= LW - 4) S.drift = -S.drift; }
   S.hx = clamp(S.hx, 4, LW - 4);
 }
@@ -999,7 +999,7 @@ function startFlip(test, end) {
   if (!test) { store.sec.crack = true; saveStore(); }       // you've been through it
   FLIP = { test, end, seed, mode: "in", mt: 0, f: test === 2 ? L - 260 : 0, L, rng, chunks: {}, special: [], catch: [], pulses: Lu[5], ring: null, scare: null, scared: false,
     zone: -1, sx: LW / 2, wet: 2, gone: new Set(), fight: null, safe: 0, flick: 1, flickT: 4, dim: 0, rise: 0 };
-  S.sink = Lu[3]; S.steerK = Lu[4]; S.hx = LW / 2; S.keys.clear(); S.touchX = null; S.overlay = null; S.popups = [];
+  S.sink = Lu[3]; S.steerK = Lu[4]; S.hx = LW / 2; syncKeys(); S.touchX = null; S.overlay = null; S.popups = [];
   FLIP_Z.slice(0, end ? FLIP_Z.length : 3).forEach((z, zi) => DATA.flip.species.filter(s => s[2] === zi && s[6]).forEach(s => {   // legendaries: each might be out there
     if (rng.random() < (end ? FL_TUNE.legend : 0.3)) FLIP.special.push({ id: s[0], x: rng.uniform(10, LW - 30), y: rng.uniform(z[1] + 6, z[2] - 6) * M, v: (rng.random() < 0.5 ? -1 : 1) * s[4], ph: rng.uniform(0, 6), lb: rng.randint(s[3][0], s[3][1]), leg: true });
   }));
@@ -1434,7 +1434,7 @@ function startBoss(dream, test) {
   if (test > 1) { BOSS.phase = test; BOSS.hits = SL_PHASES.slice(1, test).reduce((a, q) => a + q.need, 0); BOSS.hp = 1 - BOSS.hits / SL_TOTAL; BOSS.msg = "TEST: PHASE " + test; }
   else if (test) BOSS.msg = "TEST FIGHT";
   slEyes(BOSS);
-  S.overlay = null; S.touchX = null; S.keys.clear(); setState("boss"); play("thunder"); SOUNDS.roar = [[90, 1.2, "sawtooth", 0.35, 40], [60, 1.4, "square", 0.2, 30, 0.1]]; play("roar");
+  S.overlay = null; S.touchX = null; syncKeys(); setState("boss"); play("thunder"); SOUNDS.roar = [[90, 1.2, "sawtooth", 0.35, 40], [60, 1.4, "square", 0.2, 30, 0.1]]; play("roar");
   if (!dream && !store.sec.woke) { store.sec.woke = true; saveStore(); findSecret("sleeper"); }
 }
 function bossHurt(b) {
@@ -3362,6 +3362,14 @@ window.addEventListener("pointerup", e => {
   swipeAt = null;
 });
 function keyDir(e) { return e.code === "ArrowLeft" || e.code === "KeyA" ? -1 : e.code === "ArrowRight" || e.code === "KeyD" ? 1 : 0; }
+// Steering comes from the keys physically held, newest first, so rolling from A to D (or holding an arrow and a letter)
+// never drops the key you're still holding, and a key held through a cast, a menu or a fight still steers afterwards.
+const DIR_KEYS = { ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" };
+let HELD = [];
+function heldDir(neg, pos) { for (let i = HELD.length - 1; i >= 0; i--) { const d = DIR_KEYS[HELD[i]]; if (d === neg) return -1; if (d === pos) return 1; } return 0; }   // the latest key wins
+function syncKeys() {
+  if (BOSS) { BOSS.keys.clear(); const x = heldDir("L", "R"), y = heldDir("U", "D"); if (x) BOSS.keys.add(x < 0 ? "L" : "R"); if (y) BOSS.keys.add(y < 0 ? "U" : "D"); }
+}
 function toggleFullscreen() {
   const d = document, el = d.documentElement;
   if (d.fullscreenElement || d.webkitFullscreenElement) (d.exitFullscreen || d.webkitExitFullscreen).call(d);
@@ -3372,13 +3380,14 @@ window.addEventListener("keydown", e => {
   if (modal.classList.contains("open") || saveModal.classList.contains("open") || !S) return;
   const c = e.code;
   if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"].includes(c)) e.preventDefault();
+  if (DIR_KEYS[c] && !HELD.includes(c)) { HELD.push(c); syncKeys(); }
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
   if (S.state === "flip" && FLIP && FLIP.test && c === "Escape") { flipDrone(false); FLIP = null; newDive(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
     const k = { ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[c];
     if (c === "Escape" && BOSS.test) { BOSS = null; newDive(); return; }
-    if (k) BOSS.keys.add(k); else if (["Space", "ShiftLeft", "ShiftRight", "Enter"].includes(c)) bossPulse();
+    if (!k && ["Space", "ShiftLeft", "ShiftRight", "Enter"].includes(c)) bossPulse();       // movement comes from HELD
     e.preventDefault(); return;
   }
   if (S.state === "title" && konamiKey(c)) { S.overlay = null; return; }   // the Konami code, even with a menu open
@@ -3389,12 +3398,12 @@ window.addEventListener("keydown", e => {
     return;
   }
   const dir = keyDir(e);
-  if (dir) { if (S.state === "title") { S.lure = (S.lure + dir + LURES.length) % LURES.length; play("tick"); } else S.keys.add(KON === "mirror" ? -dir : dir); }
+  if (dir) { if (S.state === "title") { S.lure = (S.lure + dir + LURES.length) % LURES.length; play("tick"); } }   // steering comes from HELD
   else if (c === "ShiftLeft" || c === "ShiftRight" || c === "ArrowDown") pulse();
   else if (c === "Space" || c === "Enter" || (c === "ArrowUp" && S.state !== "title")) { tapAction(); }   // Up doesn't cast: it starts a certain code
 });
-window.addEventListener("keyup", e => { if (BOSS) BOSS.keys.delete({ ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[e.code]); if (S) { S.keys.delete(keyDir(e)); S.keys.delete(-keyDir(e)); } });
-window.addEventListener("blur", () => { if (S) S.keys.clear(); });
+window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } });
+window.addEventListener("blur", () => { HELD = []; syncKeys(); });
 
 // --------------------------------------------------------------------- loop
 const WATER_COL = DATA.water;
