@@ -4081,73 +4081,48 @@ function noteTapWide(rx, ly) {
 }
 
 // ---- PC menus, part 3: the main menu, the haul, the Flipside haul
-// The main menu on a wide screen: a card in the sky (coins, title, best, initials, save code), the lures down the left,
-// today's bounty, CAST and the bet under the boat, and every menu as its own button on the right, so MORE isn't needed.
-function titleWideMenu() {
-  return [["SCORES", CYAN, "scores"], ["LOG", GOLD, "log"], ["SHOP", ORANGE, "shop"], ["TASKS", LIME, "tasks"],
-    [store.sec.found.length ? "SECRETS" : "???", store.sec.found.length ? "#c8a0ff" : GREY, "secrets"]]
-    .concat(store.sec.beat ? [["BESTIARY", "#ff8ca0", "bestiary"]] : []).concat([["HELP", CYAN, "help"]]);
-}
+// The main menu on a wide screen: the phone layout with room to breathe. Kade found a version with side panels and a card
+// in the sky far too crowded (Nov 17, 2026), so the water to the sides stays empty: corners for coins and title, the bounty
+// under the logo, one row of lures, CAST, the bet, and one row of menus (MORE still holds the rest).
+const TITLE_WIDE_BAR = [["SCORES", CYAN, "scores"], ["LOG", GOLD, "log"], ["SHOP", ORANGE, "shop"], ["MORE", WHITE, "more"]];
 function titleWideHits() {
-  const x0 = WX(), h = [];
-  h.push(["name", x0 + 4, 46, 92, 11, 0], ["save", x0 + 4, 59, 92, 11, 0]);
-  LURES.forEach((L, i) => h.push(["lure", x0 + 2, 96 + i * 18, 100, 16, i]));
-  h.push(["cast", x0 + 112, 124, 124, 26, 0], ["bet", x0 + 112, 156, 124, 14, 0]);
-  titleWideMenu().forEach((m, i) => h.push(["menu", x0 + 244, 86 + i * 14, 104, 12, i]));
+  const cx = Math.floor(LW / 2), h = [];
+  LURES.forEach((L, i) => h.push(["lure", cx - 72 + i * 38, 90, 30, 28, i]));
+  h.push(["cast", cx - 50, 132, 100, 22, 0], ["bet", cx - 62, 159, 124, 13, 0]);
+  TITLE_WIDE_BAR.forEach((m, i) => h.push(["menu", cx - 100 + i * 51, 180, 47, 14, i]));
   return h;
 }
 function titleWideAct(id, v) {
   if (id === "lure") { S.lure = v; play("tick"); }
   else if (id === "cast") cast();
   else if (id === "bet") openBet();
-  else if (id === "name") askName();
-  else if (id === "save") openSave();
-  else {
-    const m = titleWideMenu()[v][2];
-    if (m === "secrets" && !store.sec.found.length) { play("miss"); return; }
-    if (m === "scores") { S.overlay = "scores"; S.scoreSel = -1; LB.load(); play("select"); }
-    else if (m === "log" || m === "shop") { S.overlay = m; play("select"); }
-    else openOverlay(m);
-  }
+  else { const m = TITLE_WIDE_BAR[v][2]; S.overlay = m; S.scoreSel = -1; if (m === "scores") LB.load(); play("select"); }
 }
 function drawTitleWide() {
-  const t = T, x0 = WX(), on = Math.floor(t * 2.5) % 2;
-  const panel = (x, y, w, h, col) => { g.globalAlpha = 0.82; rect(INK, x, y, w, h); g.globalAlpha = 1; outline(x, y, w, h, col); };
-  text("REEL", LW / 2 - 27, 22 + Math.floor(Math.sin(t * 2.5) * 1.5), 2, CYAN); text("DEEP", LW / 2 + 27, 22 + Math.floor(Math.sin(t * 2.5 + 1) * 1.5), 2, GOLD);
-  for (const [id, x, y, w, h, v] of titleWideHits()) if (id === "name") panel(x0, 8, 100, 66, "#5a6496");   // the card behind the first buttons
-  disc(GOLD, x0 + 8, 16, 3); rect("#c89628", x0 + 7, 15, 2, 2); text(store.coins + " COINS", x0 + 14, 16, 1, GOLD, "left");
-  text(titleName(store.eq.title).slice(0, 15), x0 + 6, 27, 1, "#c8a0ff", "left");
-  text("BEST " + store.best + " LB", x0 + 6, 37, 1, CYAN, "left");
-  panel(x0, 84, 104, 104, "#5a6496");
-  text("LURE", x0 + 52, 90, 1, GREY, "center", null);
-  panel(x0 + 244, 82, 104, 106, "#5a6496");
-  const left = tasks().d.concat(tasks().w).filter(q => !q.done).length, menu = titleWideMenu();
+  const t = T, cx = Math.floor(LW / 2), on = Math.floor(t * 2.5) % 2;
+  disc(GOLD, 6, 6, 3); rect("#c89628", 5, 5, 2, 2); text(store.coins, 11, 6, 1, GOLD, "left");          // coins, top-left
+  text(titleName(store.eq.title), LW - 92, 6, 1, "#c8a0ff", "right");                                   // your title, left of the full-screen button
+  text("REEL", cx - 27, 22 + Math.floor(Math.sin(t * 2.5) * 1.5), 2, CYAN); text("DEEP", cx + 27, 22 + Math.floor(Math.sin(t * 2.5 + 1) * 1.5), 2, GOLD);
+  const bs = "TODAY'S BOUNTY: " + SPEC[S.bounty][1] + " X" + C.BOUNTY_X, bw = textW(bs, 1) + 8, bx = cx - (bw >> 1);
+  rect(INK, bx, 79, 5, 6); rect(GOLD, bx + 1, 80, 3, 4); rect(INK, bx + 2, 81, 1, 2); text(bs, bx + 8, 83, 1, GOLD, "left");
+  const left = tasks().d.concat(tasks().w).filter(q => !q.done).length;
   for (const [id, x, y, w, h, v] of titleWideHits()) {
-    if (id === "name") btn(x, y, w, h, store.name ? "INITIALS: " + store.name : "SET INITIALS", store.name ? WHITE : GREY);
-    else if (id === "save") btn(x, y, w, h, "SAVE CODE", GOLD);
-    else if (id === "lure") {
+    if (id === "lure") {
       const Lu = LURES[v], sel = v === S.lure;
-      rect(sel ? "#1e285a" : INK, x, y, w, h); outline(x, y, w, h, sel ? GOLD : "#3c4264");
-      lureIcon(v, x + 10, y + 8);
-      text(Lu[1], x + 21, y + 5, 1, sel ? GOLD : WHITE, "left", null);
-      for (let k = 0; k < Lu[5]; k++) rect(CYAN, x + 21 + k * 6, y + 11, 4, 2);
-    } else if (id === "cast") { box(x, y, w, h, on ? WHITE : CYAN); text("CAST", x + w / 2, y + 13, 2, on ? WHITE : CYAN, "center"); }
+      rect(sel ? "#1e285a" : INK, x, y, w, h); outline(x, y, w, h, sel ? GOLD : "#5a6496");
+      lureIcon(v, x + w / 2, y + 11);
+      for (let k = 0; k < Lu[5]; k++) rect(CYAN, x + w / 2 - Lu[5] * 3 + k * 6 + 1, y + 22, 4, 3);
+    } else if (id === "cast") { box(x, y, w, h, on ? WHITE : CYAN); text("CAST", x + w / 2, y + 11, 2, on ? WHITE : CYAN, "center"); }
     else if (id === "bet") {
-      const b = tav().bet, bt = b && !b.cast ? betLabel(b) + ": " + b.stake : "", bl = bt || "PLACE A BET", bx = x + w / 2 - (textW(bl, 1) >> 1) + 4;
-      box(x, y, w, h, bt ? GOLD : CHIP); chipIcon(bx - 6, y + 7); text(bl, bx, y + 7, 1, bt ? GOLD : CHIP, "left", null);
-    } else if (id === "menu") {
-      btn(x, y, w, h, menu[v][0], menu[v][1]);
-      if (menu[v][2] === "tasks" && left) { rect(INK, x + w - 12, y + 2, 9, 9); rect(GOLD, x + w - 11, y + 3, 7, 7); text(left, x + w - 8, y + 6, 1, INK, "center", null); }
+      const b = tav().bet, bt = b && !b.cast ? betLabel(b) + ": " + b.stake : "", bl = bt || "PLACE A BET", lx = x + w / 2 - (textW(bl, 1) >> 1) + 4;
+      box(x, y, w, h, bt ? GOLD : CHIP); chipIcon(lx - 6, y + 6); text(bl, lx, y + 6, 1, bt ? GOLD : CHIP, "left", null);
+    } else {
+      btn(x, y, w, h, TITLE_WIDE_BAR[v][0], TITLE_WIDE_BAR[v][1]);
+      if (TITLE_WIDE_BAR[v][2] === "more" && left) { rect(INK, x + w - 5, y - 5, 9, 9); rect(GOLD, x + w - 4, y - 4, 7, 7); text(left, x + w - 1, y - 1, 1, INK, "center", null); }
     }
   }
-  wrap(LURES[S.lure][2], 16).slice(0, 2).forEach((l, i) => text(l, x0 + 52, 172 + i * 9, 1, "#8c96c8", "center", null));
-  panel(x0 + 112, 84, 124, 34, GOLD);                        // today's bounty
-  text("TODAY'S BOUNTY", x0 + 174, 90, 1, "#a08c50", "center", null);
-  fitDraw(atlas, S.bounty, x0 + 174, 101, 60, 12, 1);
-  text(SPEC[S.bounty][1] + " X" + C.BOUNTY_X, x0 + 174, 112, 1, GOLD, "center", null);
-  text(KEYS ? "OR PRESS SPACE" : "OR TAP THE WATER", x0 + 174, 178, 1, "#c8ecff", "center", null);
-  if (KEYS) text("A/D: STEER   SHIFT: PULSE   F: FULL SCREEN", LW / 2, 195, 1, "#a0d2f0", "center", null);
-  S.popups.slice(-2).forEach((p, i) => { const tw = textW(p[0], 1); box(Math.floor(LW / 2 - tw / 2) - 4, 33 - i * 13, tw + 8, 11, p[2]); text(p[0], LW / 2, 38 - i * 13, 1, p[2], "center", null); });
+  text(LURES[S.lure][1], cx, 125, 1, GOLD, "center");
+  S.popups.slice(-2).forEach((p, i) => { const tw = textW(p[0], 1); box(Math.floor(cx - tw / 2) - 4, 47 - i * 13, tw + 8, 11, p[2]); text(p[0], cx, 52 - i * 13, 1, p[2], "center", null); });
 }
 // the haul on a wide screen: a wider card, each fish with its picture and full name
 function drawHaulWide(h, t) {
@@ -4572,12 +4547,11 @@ function tintPage() {                                    // the page around the 
   for (let i = 1; i < WATER_COL.length; i++) if (m <= WATER_COL[i][0]) { col = lerpCol(WATER_COL[i - 1][1].map(v => v * 0.55), WATER_COL[i][1].map(v => v * 0.55), (m - WATER_COL[i - 1][0]) / (WATER_COL[i][0] - WATER_COL[i - 1][0])); break; }
   if (col !== pageCol) { pageCol = col; document.body.style.background = col; }
 }
-let wasTitle = null, wasWide = null;
+let wasTitle = null;
 function step(dt) {
   T += dt; S.stT += dt; if (!S.overlay) update(dt); tavTick(dt); draw(); tintPage();
   const title = S.state === "title" && !S.overlay;
   if (title !== wasTitle) { wasTitle = title; document.body.classList.toggle("playing", !title); }   // the key reminder only shows on the title screen
-  const wm = wideMenus(); if (wm !== wasWide) { wasWide = wm; document.body.classList.toggle("widemenu", wm); }   // the PC main menu shows its own key help
 }
 let last = 0;
 function frame(ms) { const dt = Math.min(0.05, (ms - last) / 1000 || 0.016); last = ms; requestAnimationFrame(frame); step(dt); }   // schedule first, so one bad frame can't stop the game
