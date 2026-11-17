@@ -17,6 +17,7 @@
   @media (hover: hover) and (pointer: fine) and (min-aspect-ratio: 1/1) { #fsBtn { display: block; } #keys { display: block; left: auto; right: 12px; text-align: right; line-height: 1.7; } }
   :fullscreen #fsBtn { display: none; }
   body.playing #keys, body.playing #fsBtn { display: none; }
+  body.widemenu #keys { display: none; }                 /* the wide (PC) main menu shows the keys itself */
   #nameModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 20, .82); }
   #nameModal.open { display: flex; }
   #nameModal form { background: #1a1628; border: 3px solid #5ae6ff; padding: 22px 24px; text-align: center; color: #fafaff; width: min(300px, 80vw); }
