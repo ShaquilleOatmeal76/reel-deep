@@ -2578,7 +2578,11 @@ function drawC21() {
 }
 const derbyLane = d => d.racers.length > 5 ? 15 : 20;
 function drawDerby() {
-  const d = TAV.derby, t = T;
+  const d = TAV.derby, by = derbyLanes(d);
+  g.save(); g.translate(OX, 0); drawDerbyNarrowPanel(d, by); g.restore();
+}
+function derbyLanes(d) {                                     // the water, lanes, finish line and racers -> y below the lanes
+  const t = T;
   for (let i = 0; i < 14; i++) rect(lerpCol([40, 120, 200], [20, 70, 150], i / 13), 0, i * 15, LW, 15);
   const x0 = 16, x1 = LW - 14, n = d.racers.length, LH_ = derbyLane(d), y1 = 22 + n * LH_, by = y1 + 4;
   text(d.vip ? "VIP DERBY" : "THE DERBY", LW / 2, 9, 1, GOLD, "center");
@@ -2594,7 +2598,9 @@ function drawDerby() {
     if (d.phase === "pick") text((r.mine ? r.name.slice(0, 7) + " " : "") + "X" + r.pays, x1 - 4, y, 1, r.mine ? CHIP : GOLD, "right");
     if (d.phase === "done" && i === d.winner) text("WINNER", x - 3, y, 1, GOLD, "right");
   });
-  g.save(); g.translate(OX, 0);
+  return by;
+}
+function drawDerbyNarrowPanel(d, by) {
   box(2, by, 116, 24, WHITE);
   wrap(d.call, 18).slice(0, 2).forEach((l, i) => text(l, 60, by + 6 + i * 10, 1, WHITE, "center", null));
   if (d.phase === "pick") stakeRow(by + 27, d.bet, "RACE");
@@ -2605,7 +2611,6 @@ function drawDerby() {
   }
   if (tav().fish && d.phase === "pick" && !d.vip) { box(8, 172, 104, 11, d.withMine ? CHIP : "#2a4a6a"); text(d.withMine ? "YOUR RACER IS IN" : "RACE YOUR FISH", 60, 177, 1, d.withMine ? CHIP : "#8cb4dc", "center", null); }
   text(d.phase === "race" ? "" : d.phase === "done" ? "TAP FOR ANOTHER RACE" : "TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
-  g.restore();
 }
 function drawBet() {                                         // betting on the next dive, from the cast screen
   rect("#08140f", 0, 0, LW, LH);
@@ -2836,8 +2841,8 @@ function tavernTap(lx, ly) {                                 // -> true if handl
   }
   if (o === "jukebox") {
     const pages = Math.ceil(SONGS.length / SONG_PER), page = Math.floor(TAV.songSel / SONG_PER), i = page * SONG_PER + Math.floor((ly - 26) / 12);
-    if (ly < 17 && (lx < 24 || lx > 96)) { TAV.songSel = ((page + (lx > 96 ? 1 : pages - 1)) % pages) * SONG_PER; play("tick"); return true; }
-    if (ly >= 26 && ly < 26 + SONG_PER * 12 && i < Math.min(SONGS.length, page * SONG_PER + SONG_PER)) {
+    if (ly < 17 && (lx < 24 || lx > 96)) { TAV.songSel = ((page + (lx > 96 ? 1 : pages - 1)) % pages) * SONG_PER; if (!SONGS[TAV.songSel]) TAV.songSel++; play("tick"); return true; }
+    if (ly >= 26 && ly < 26 + SONG_PER * 12 && i < Math.min(SONGS.length, page * SONG_PER + SONG_PER) && SONGS[i]) {   // (slot 11 is empty)
       if (i !== TAV.songSel) { TAV.songSel = i; play("tick"); return true; }
       const sg = SONGS[i];
       if (songOwned(i)) { tav().song = tav().song === i ? -1 : i; saveStore(); }
@@ -3659,6 +3664,433 @@ const WIDE = {
   help: { draw: drawHelpWide, tap: helpTapWide, key: d => { S.helpPage = (S.helpPage + d + HELP.length) % HELP.length; play("tick"); } },
 };
 
+// ---- PC menus, part 2: the Rusty Hook. Same rules as part 1 (WIDE, ...Hits lists), tavern colours.
+function chipsAt(x, y, align) { const s = tav().chips + " CHIPS", w = textW(s, 1) + 8, x0 = align === "right" ? x - w : align === "center" ? Math.round(x - w / 2) : x; chipIcon(x0 + 3, y); text(s, x0 + 8, y, 1, CHIP, "left", null); }
+const tapWide = (hits, rx, ly, act, back) => { const h = hitAt(hits, rx, ly); if (h) act(h[0], h[5]); else if (ly > 186) (back || closeOverlay)(); };
+const btn = (x, y, w, h, lab, col, sub, subCol) => { box(x, y, w, h, col); text(lab, x + w / 2, y + (sub ? 6 : h >> 1), 1, col, "center", null); if (sub) text(sub, x + w / 2, y + 15, 1, subCol || "#d8c8b0", "center", null); };
+
+// the bar: the old man and his shelf on the left, everything you can do on the right
+function tavernWideHits() {
+  const x0 = WX(), h = tavRows().map(([lab, col, id], i) => [id, x0 + 186, 26 + i * 22, 162, 18, i]);
+  h.push(["board", x0 + 186, 26 + h.length * 22, 162, 18, 0]);
+  return h;
+}
+function drawTavernWide() {
+  tavernBg();
+  const x0 = WX(), cx = x0 + 86;
+  text("THE RUSTY HOOK", cx, 10, 1, GOLD, "center");
+  rect("#4a2e1c", cx - 40, 34, 80, 3);                                                       // the shelf
+  ["#5ad2a0", "#c84a3c", "#ffd246", "#5a8cff", "#ff8cd2", "#c8a0ff"].forEach((c, i) => { rect(c, cx - 34 + i * 13, 24 + (i % 2) * 2, 4, 10 - (i % 2) * 2); rect(c, cx - 33 + i * 13, 21 + (i % 2) * 2, 2, 3); });
+  bestCatches().forEach((sp, i) => {                                                         // the trophy wall
+    const x = i ? cx + 44 : cx - 72, a = DATA.atlas[sp[0]], k = Math.min(1, 24 / a[2], 14 / a[3]), w = Math.floor(a[2] * k), hh = Math.floor(a[3] * k);
+    rect("#5a3a22", x, 40, 28, 24); rect("#7a5232", x + 1, 41, 26, 22);
+    g.drawImage(atlas, a[0], a[1], a[2], a[3], x + 14 - (w >> 1), 48 - (hh >> 1), w, hh);
+    text(store.log[sp[0]].rec, x + 14, 58, 1, GOLD, "center", null);
+  });
+  spr("oldman", cx - 14, 40, false, 2);
+  rect("#6a4428", x0, 72, 172, 10); rect("#8a5c38", x0, 72, 172, 2);                       // the bar
+  if (tav().carved) text(tav().carved + " WAS HERE", cx, 78, 1, "#3c2414", "center", null);
+  rect("#1e120c", x0 + 4, 90, 164, 40); outline(x0 + 4, 90, 164, 40, "#5a3a22");
+  wrap(TAV.say, 26).slice(0, 3).forEach((l, i, a) => text(l, cx, 110 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
+  text("DIVES " + store.dives + "   BEST WIN " + tav().stats.win, cx, 142, 1, "#a08c70", "center", null);
+  text("BIGGEST STACK " + tav().stats.stack, cx, 153, 1, "#a08c70", "center", null);
+  chipsAt(x0 + 348, 10, "right");
+  const rows = tavRows();
+  for (const [id, x, y, w, h, i] of tavernWideHits()) { if (id === "board") btn(x, y, w, h, "TAVERN BOARD", CYAN); else btn(x, y, w, h, rows[i][0], rows[i][1]); }
+  closeLine("TAP HERE TO LEAVE");
+}
+function tavernTapWide(rx, ly) {
+  tapWide(tavernWideHits(), rx, ly, id => {
+    if (id === "board") { TAV.board = 0; BOARDS.forEach(([k]) => tavLoad(k)); openOverlay("tavboard"); }
+    else if (id === "vip") { TAV.vipSay = "KEEP YOUR VOICE DOWN"; openOverlay("vip"); }
+    else if (id === "c21") { if (!TAV.c21 || TAV.c21.vip) c21New(false); openOverlay("c21"); }
+    else if (id === "derby") { if (!TAV.derby || TAV.derby.phase === "done" || TAV.derby.vip) derbyNew(false); openOverlay("derby"); }
+    else if (id === "plinko") { plinkoOpen(); openOverlay("plinko"); }
+    else if (id === "shop") { TAV.shopSel = 0; openOverlay("chipshop"); }
+    else if (claimDaily()) { TAV.say = "DON'T SPEND IT ALL"; play("fanfare"); } else { TAV.say = "COME BACK TOMORROW"; play("miss"); }
+  });
+}
+
+// the chip shop: a long list on the left, the picked thing on the right (cosmetics shown on you, like the coin shop)
+const CSHOP_WIDE_PER = 11;
+function chipShopWideHits() {
+  const x0 = WX(), pages = Math.ceil(SHOP_ROWS.length / CSHOP_WIDE_PER), page = Math.floor(TAV.shopSel / CSHOP_WIDE_PER), h = [];
+  SHOP_ROWS.slice(page * CSHOP_WIDE_PER, page * CSHOP_WIDE_PER + CSHOP_WIDE_PER).forEach((r, k) => h.push(["row", x0, 22 + k * 14, 220, 13, page * CSHOP_WIDE_PER + k]));
+  if (pages > 1) { h.push(["page", x0 + 70, 2, 16, 13, -1]); h.push(["page", x0 + 134, 2, 16, 13, 1]); }
+  h.push(["act", x0 + 228, 150, 120, 18, 0]);
+  return h;
+}
+function drawChipShopWide() {
+  tavernBg();
+  const x0 = WX(), pages = Math.ceil(SHOP_ROWS.length / CSHOP_WIDE_PER), px = x0 + 228, pw = 120;
+  text("BUY THINGS", x0, 8, 1, GOLD, "left", null);
+  if (pages > 1) text((Math.floor(TAV.shopSel / CSHOP_WIDE_PER) + 1) + "/" + pages, x0 + 110, 8, 1, "#d8c8b0", "center", null);
+  chipsAt(x0 + 348, 8, "right");
+  for (const [id, x, y, w, h, v] of chipShopWideHits()) {
+    if (id === "row") { const [lab, price] = shopRowState(v), sel = v === TAV.shopSel; rect(sel ? "#5a3a22" : "#24160e", x, y, w, h); if (sel) outline(x, y, w, h, GOLD); text(lab, x + 4, y + 6, 1, sel ? WHITE : "#d8c8b0", "left", null); if (price !== null) text(price, x + w - 4, y + 6, 1, CHIP, "right", null); }
+    else if (id === "page") arrowBtn(x, y, w, h, v, GOLD);
+  }
+  const [lab, price, note] = shopRowState(TAV.shopSel), sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid];
+  rect("#1e120c", px, 22, pw, 70); outline(px, 22, pw, 70, GOLD);
+  g.save(); g.beginPath(); g.rect(px + 1, 23, pw - 2, 68); g.clip();
+  if (cm && ["hat", "boat", "pet", "flag"].includes(cm[0])) { rect("#5aa0e6", px + 1, 23, pw - 2, 44); rect("#2a6ab4", px + 1, 67, pw - 2, 24); const eq = Object.assign({}, store.eq, { [cm[0]]: cm[1], mon: 0, mhat: 0, mpet: 0 }); g.translate(px + pw / 2, 67); g.scale(2, 2); angler(-24, 1, eq, 0); }
+  else if (cm) { g.translate(px + pw / 2 - 33, 30); g.scale(3, 3); shopPreview(cm[0], cm[1], 0, 0, true); }
+  else if (sid === "fish" && tav().fish) fitDraw(atlas, tav().fish.id, px + pw / 2, 57, 80, 40, 3);
+  else if (sid === "scratch") fitDraw(atlas, "gboot", px + pw / 2, 57, 40, 40, 3);
+  else if (["magnet", "rumour"].includes(sid) && price !== null) fitDraw(atlas, "bottle", px + pw / 2, 57, 40, 40, 3);
+  else spr("oldman", px + pw / 2 - 14, 30, false, 2);
+  g.restore();
+  text(lab, px + pw / 2, 102, 1, WHITE, "center", null);
+  wrap(note, 19).slice(0, 3).forEach((l, i) => text(l, px + pw / 2, 115 + i * 10, 1, "#e8dcc4", "center", null));
+  const opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox);
+  const act = opens ? "OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAKE OFF" : "PUT ON") : price === null ? (sid === "story" && tav().stories ? "READ" : "") : sid === "dream" ? "DREAM FOR " + price : (tav().chips >= price ? "BUY " : "NEEDS ") + price;
+  if (act) btn(px, 150, pw, 18, act, price !== null && tav().chips < price ? GREY : CHIP);
+  closeLine("TAP HERE TO GO BACK");
+}
+function chipShopTapWide(rx, ly) {
+  const pages = Math.ceil(SHOP_ROWS.length / CSHOP_WIDE_PER), page = Math.floor(TAV.shopSel / CSHOP_WIDE_PER);
+  tapWide(chipShopWideHits(), rx, ly, (id, v) => {
+    if (id === "row") { if (v === TAV.shopSel) shopBuy(v); else { TAV.shopSel = v; play("tick"); } }
+    else if (id === "page") { TAV.shopSel = ((page + v + pages) % pages) * CSHOP_WIDE_PER; play("tick"); }
+    else shopBuy(TAV.shopSel);
+  });
+}
+
+// the jukebox: every song in two columns
+// SONGS has an empty slot at 11 (a stray comma long ago). Songs are saved by position, so it stays; menus skip it.
+const SONG_IDS = SONGS.map((sg, i) => i).filter(i => SONGS[i]);
+function jukeWideHits() { const x0 = WX(), half = Math.ceil(SONG_IDS.length / 2); return SONG_IDS.map((i, k) => ["song", x0 + (k < half ? 0 : 178), 24 + (k % half) * 15, 170, 13, i]); }
+function drawJukeboxWide() {
+  tavernBg();
+  const x0 = WX(), P = "#ff8cd2";
+  text("JUKEBOX", x0, 8, 1, P, "left", null);
+  chipsAt(x0 + 348, 8, "right");
+  for (const [, x, y, w, h, i] of jukeWideHits()) {
+    const sg = SONGS[i], own = songOwned(i), on = tav().song === i, sel = i === TAV.songSel;
+    rect(sel ? "#3a2440" : "#24160e", x, y, w, h); if (sel) outline(x, y, w, h, P);
+    text(own || sg[1] ? sg[0] : "???", x + 4, y + 6, 1, on ? P : own ? WHITE : GREY, "left", null);
+    text(on ? "ON" : own ? "" : sg[1] ? sg[1] : "", x + w - 4, y + 6, 1, on ? P : CHIP, "right", null);
+  }
+  const sg = SONGS[TAV.songSel], own = songOwned(TAV.songSel);
+  text(own ? (tav().song === TAV.songSel ? "TAP AGAIN: MUSIC OFF" : "TAP AGAIN TO PLAY") : sg[1] ? "TAP AGAIN TO BUY: " + sg[1] + " CHIPS" : "EARNED: " + sg[2], LW / 2, 172, 1, own ? CHIP : sg[1] ? GOLD : GREY, "center", null);
+  closeLine("TAP HERE TO GO BACK");
+}
+function jukeTapWide(rx, ly) {
+  tapWide(jukeWideHits(), rx, ly, (id, i) => {
+    if (i !== TAV.songSel) { TAV.songSel = i; play("tick"); return; }
+    const sg = SONGS[i];
+    if (songOwned(i)) { tav().song = tav().song === i ? -1 : i; saveStore(); }
+    else if (sg[1] && tav().chips >= sg[1]) { addChips(-sg[1]); tav().songs.push(i); tav().song = i; saveStore(); play("fanfare"); }
+    else play("miss");
+  });
+}
+
+// your derby fish: it on the left, its training on the right
+function myFishWideHits() { const x0 = WX(), f = tav().fish; return [0, 1, 2].filter(i => f.lv[i] < 10).map(i => ["train", x0 + 290, 40 + i * 34, 58, 18, i]); }
+function drawMyFishWide() {
+  tavernBg();
+  const x0 = WX(), f = tav().fish, cx = x0 + 80;
+  text("YOUR RACER", x0, 8, 1, CHIP, "left", null);
+  chipsAt(x0 + 348, 8, "right");
+  rect("#1e4a7a", x0, 26, 160, 80); for (let x = x0; x < x0 + 160; x += 6) rect("#3c6a9a", x + Math.floor(T * 4) % 6, 30 + (x % 18), 3, 1);
+  outline(x0, 26, 160, 80, CHIP);
+  fitDraw(atlas, f.id, cx, 66 + Math.round(Math.sin(T * 3) * 2), 120, 50, 3);
+  text(f.name, cx, 118, 1, GOLD, "center", null);
+  text(f.races + " RACES, " + f.wins + " WINS", cx, 130, 1, "#d8c8b0", "center", null);
+  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACE IT IN THE DERBY", cx, 142, 1, GREY, "center", null);
+  ["SPEED", "STAMINA", "BURST"].forEach((lab, i) => {
+    const y = 40 + i * 34, lv = f.lv[i];
+    text(lab, x0 + 172, y + 2, 1, WHITE, "left", null);
+    for (let k = 0; k < 10; k++) rect(k < lv ? CHIP : "#3c2a1e", x0 + 172 + k * 11, y + 10, 9, 5);
+    if (lv >= 10) text("MAX", x0 + 319, y + 9, 1, CHIP, "center", null);
+  });
+  for (const [, x, y, w, h, i] of myFishWideHits()) { const c = trainCost(f.lv[i]); btn(x, y, w, h, "+" + c, tav().chips >= c ? GOLD : GREY); }
+  text("TRAINING COSTS CHIPS", x0 + 260, 150, 1, "#a08c70", "center", null);
+  closeLine("TAP HERE TO GO BACK");
+}
+function myFishTapWide(rx, ly) {
+  tapWide(myFishWideHits(), rx, ly, (id, i) => { const f = tav().fish, cost = trainCost(f.lv[i]); if (tav().chips >= cost) { addChips(-cost); f.lv[i]++; saveStore(); play("chime"); } else play("miss"); });
+}
+
+// the tavern board: all three boards side by side
+function drawTavBoardWide() {
+  tavernBg();
+  const x0 = WX(), st = tav().stats;
+  text("TAVERN BOARD", LW / 2, 8, 1, GOLD, "center", null);
+  BOARDS.forEach(([k, name], c) => {
+    const x = x0 + c * 118, b = TAV.boards[k] || { rows: null, msg: "" };
+    rect("#1e120c", x, 18, 112, 156); outline(x, 18, 112, 156, "#5a3a22");
+    text(name, x + 56, 26, 1, CYAN, "center", null);
+    if (b.msg) wrap(b.msg, 17).forEach((l, i) => text(l, x + 56, 50 + i * 10, 1, ORANGE, "center", null));
+    (b.rows || []).forEach((r, i) => {
+      const y = 40 + i * 11, col = i === 0 ? GOLD : r.n === store.name ? CYAN : "#d8c8b0";
+      text(i + 1, x + 14, y, 1, i < 3 ? GOLD : GREY, "right", null); text(r.n, x + 20, y, 1, col, "left", null);
+      text(k === "fast" ? ((10000 - r.s) / 100).toFixed(2) + "S" : r.s, x + 108, y, 1, col, "right", null);
+    });
+    if (b.rows && !b.rows.length) text("NOBODY YET", x + 56, 60, 1, GREY, "center", null);
+    text("YOURS: " + (k === "fast" ? (st.fast ? (st.fast / 100).toFixed(2) + "S" : "-") : st[k]), x + 56, 166, 1, CHIP, "center", null);
+  });
+  if (!store.name) text("SET INITIALS TO JOIN", LW / 2, 182, 1, GREY, "center", null);
+  closeLine("TAP HERE TO GO BACK");
+}
+
+// betting on your dive: the five bets with what they mean on the left, the stake on the right
+function betWideHits() {
+  const x0 = WX(), b = TAV.bet, h = b.opts.map((o, i) => ["opt", x0, 24 + i * 28, 214, 24, i]);
+  h.push(["minus", x0 + 230, 60, 20, 18, -1], ["plus", x0 + 328, 60, 20, 18, 1], ["place", x0 + 230, 112, 118, 20, 0]);
+  return h;
+}
+function drawBetWide() {
+  rect("#08140f", 0, 0, LW, LH);
+  const x0 = WX(), b = TAV.bet, px = x0 + 230;
+  text("BET ON YOUR DIVE", x0, 8, 1, CHIP, "left", null);
+  chipsAt(x0 + 348, 8, "right");
+  for (const [id, x, y, w, h, v] of betWideHits()) {
+    if (id === "opt") { const [k, lab, pays, desc] = b.opts[v], sel = v === b.sel; box(x, y, w, h, sel ? CHIP : "#2a4a3c"); text(lab, x + 6, y + 7, 1, sel ? WHITE : "#a0c8b4", "left", null); text(desc || "", x + 6, y + 17, 1, k === "under" ? ORANGE : sel ? "#c8e6d2" : "#5a8a74", "left", null); text("X" + pays, x + w - 6, y + 12, 1, sel ? GOLD : "#8a9a6a", "right", null); }
+    else if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
+    else { const ok = tav().chips >= b.stake && b.stake >= 5; btn(x, y, w, h, ok ? "PLACE BET" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
+  }
+  text("STAKE", px + 59, 48, 1, "#a0c8b4", "center", null);
+  text(b.stake, px + 59, 69, 2, WHITE, "center");
+  text("MAX " + MAX_STAKE, px + 59, 90, 1, GREY, "center", null);
+  text("WIN " + Math.floor(b.stake * b.opts[b.sel][2]), px + 59, 100, 1, GOLD, "center", null);
+  text("NEW BETS", px + 59, 150, 1, "#5a8a74", "center", null); text("EVERY DIVE", px + 59, 160, 1, "#5a8a74", "center", null);
+  closeLine("TAP HERE FOR NO BET");
+}
+function betTapWide(rx, ly) {
+  const b = TAV.bet;
+  tapWide(betWideHits(), rx, ly, (id, v) => {
+    if (id === "opt") { b.sel = v; play("tick"); }
+    else if (id === "place") placeBet();
+    else { b.stake = stakeStep(b.stake, v); play("tick"); }
+  }, () => { S.overlay = null; play("back"); });
+}
+
+// Catch 21: a wide felt table, the rules beside it
+function c21WideHits() {
+  const x0 = WX(), c = TAV.c21;
+  if (c.phase === "play") return [["hit", x0, 134, 70, 20, 0], ["stand", x0 + 76, 134, 70, 20, 0], ["double", x0 + 152, 134, 70, 20, 0]];
+  if (c.phase === "stake") return [["minus", x0, 134, 24, 20, -1], ["plus", x0 + 92, 134, 24, 20, 1], ["deal", x0 + 124, 134, 98, 20, 0]];
+  return [];
+}
+function drawC21Wide() {
+  rect(FELT, 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
+  const x0 = WX(), c = TAV.c21, px = x0 + 236;
+  text(c.vip ? "VIP CATCH 21" : "CATCH 21", x0, 10, 1, GOLD, "left", null);
+  chipsAt(x0 + 348, 10, "right");
+  const hand = (lab, cards, y, hide, sumCol) => {
+    text(lab, x0, y, 1, "#c8e6d2", "left", null);
+    if (cards.length) text(hide ? "?" : c21Sum(cards), x0 + 222, y, 1, sumCol, "right", null);
+    cards.slice(0, 8).forEach((q, i) => fishCard(x0 + i * Math.min(26, 200 / Math.max(1, cards.length - 1)), y + 6, q, hide && i === 1));
+  };
+  hand("THE OLD MAN", c.dealer, 24, c.hide, WHITE);
+  box(x0, 64, 222, 15, c.win > 0 ? GOLD : CHIP); text(c.msg, x0 + 111, 71, 1, c.win > 0 ? GOLD : WHITE, "center", null);
+  hand("YOU", c.you, 88, false, GOLD);
+  for (const [id, x, y, w, h] of c21WideHits()) {
+    if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
+    else if (id === "deal") btn(x, y, w, h, "DEAL", GOLD);
+    else { const ok = id !== "double" || (c.you.length === 2 && tav().chips >= c.staked); btn(x, y, w, h, id.toUpperCase(), ok ? WHITE : "#3c6a54"); }
+  }
+  if (c.phase === "stake") text(c.bet, x0 + 58, 144, 1, WHITE, "center", null);
+  else if (c.phase !== "play") text("...", x0 + 111, 144, 1, WHITE, "center", null);
+  rect("#0a3a24", px, 24, 112, 110); outline(px, 24, 112, 110, "#2a6a4a");
+  text("HOUSE RULES", px + 56, 33, 1, GOLD, "center", null);
+  ["TROPHIES COUNT X2", c.vip ? "LEGENDS PAY 2:1" : "LEGENDS WIN NOW", "HE STOPS AT 17", c.vip ? "TIES PUSH" : "TIES GO TO YOU", "NATURAL PAYS 3:2", "MAX BET " + c.max].forEach((l, i) => text(l, px + 56, 50 + i * 13, 1, i === 1 && c.vip ? GOLD : "#8cc8a8", "center", null));
+  text("HANDS WON " + tav().stats.hands, px + 56, 148, 1, "#5a8a74", "center", null);
+  closeLine(c.phase === "play" || c.phase === "dealer" ? "" : "TAP HERE TO LEAVE");
+}
+function c21TapWide(rx, ly) {
+  const c = TAV.c21;
+  tapWide(c21WideHits(), rx, ly, (id, v) => {
+    if (id === "hit") c21Hit(false); else if (id === "stand") c21Stand(); else if (id === "double") c21Hit(true);
+    else if (id === "deal") c21Deal(); else { c.bet = stakeStep(c.bet, v, c.max); play("tick"); }
+  }, () => { if (c.phase !== "play" && c.phase !== "dealer") closeOverlay(); });
+}
+
+// the derby: the lanes already use the whole width; the controls move beside the race call
+function derbyWideHits() {
+  const x0 = WX(), d = TAV.derby, by = 22 + d.racers.length * derbyLane(d) + 4, h = [];
+  if (d.phase === "pick") {
+    h.push(["minus", x0 + 216, by, 20, 18, -1], ["plus", x0 + 280, by, 20, 18, 1], ["race", x0 + 304, by, 44, 18, 0]);
+    if (tav().fish && !d.vip) h.push(["mine", x0 + 216, by + 24, 132, 14, 0]);
+  }
+  return h;
+}
+function drawDerbyWide() {
+  const d = TAV.derby, by = derbyLanes(d), x0 = WX();
+  box(x0, by, 208, 26, WHITE);
+  wrap(d.call, 32).slice(0, 2).forEach((l, i, a) => text(l, x0 + 104, by + 13 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
+  if (d.phase !== "pick") { const r = d.racers[d.pick]; text("YOU: " + (d.pick + 1) + " " + r.name.slice(0, 13), x0 + 104, by + 34, 1, GOLD, "center", null); text(d.phase === "done" ? (d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME") : "BET " + d.bet + " PAYS X" + r.pays, x0 + 104, by + 45, 1, CHIP, "center", null); }
+  chipsAt(x0 + 348, 9, "right");
+  for (const [id, x, y, w, h] of derbyWideHits()) {
+    if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
+    else if (id === "race") btn(x, y, w, h, "RACE", GOLD);
+    else btn(x, y, w, h, d.withMine ? "YOUR RACER IS IN" : "RACE YOUR FISH", d.withMine ? CHIP : "#8cb4dc");
+  }
+  if (d.phase === "pick") text(d.bet, x0 + 258, by + 9, 1, WHITE, "center", null);
+  closeLine(d.phase === "race" ? "" : d.phase === "done" ? "TAP FOR ANOTHER RACE" : "TAP HERE TO LEAVE");
+}
+function derbyTapWide(rx, ly) {
+  const d = TAV.derby, L_ = derbyLane(d), n = d.racers.length;
+  if (d.phase === "race") return;
+  if (d.phase === "done") { derbyNew(d.withMine, d.vip); return; }
+  const h = hitAt(derbyWideHits(), rx, ly);
+  if (h) { if (h[0] === "race") derbyGo(); else if (h[0] === "mine") { derbyNew(!d.withMine); play("tick"); } else { d.bet = stakeStep(d.bet, h[5], d.max); play("tick"); } }
+  else if (ly >= 22 && ly < 22 + n * L_) { d.pick = clamp(Math.floor((ly - 22) / L_), 0, n - 1); play("tick"); }
+  else if (ly > 186) closeOverlay();
+}
+
+// the scratch card, bigger, with the prize list beside it
+function scratchWideHits() {
+  const x0 = WX(), sc = TAV.scratch, h = sc.cells.map((k, i) => ["cell", x0 + 30 + (i % 3) * 38, 26 + Math.floor(i / 3) * 38, 36, 36, i]);
+  h.push(sc.paid ? ["again", x0 + 30, 146, 112, 18, 0] : ["all", x0 + 30, 146, 112, 18, 0]);
+  return h;
+}
+function drawScratchWide() {
+  tavernBg();
+  const x0 = WX(), sc = TAV.scratch, px = x0 + 196;
+  text("SCRATCH CARD", x0, 8, 1, GOLD, "left", null);
+  chipsAt(x0 + 348, 8, "right");
+  rect("#d8c8a0", x0 + 26, 22, 120, 120);
+  for (const [id, x, y, w, h, v] of scratchWideHits()) {
+    if (id === "cell") {
+      if (!sc.open[v]) { rect("#9aa0b4", x, y, w, h); rect("#b8bed0", x + 2, y + 2, w - 4, 3); text("?", x + w / 2, y + h / 2, 1, "#6a7088", "center", null); continue; }
+      const k = sc.cells[v], sy = sc.syms[k];
+      rect(sc.paid && k === sc.win ? "#fff0b4" : "#efe4c8", x, y, w, h);
+      fitDraw(atlas, sy[0], x + w / 2, y + 15, 30, 22, 2);
+      if (sy[1]) text("X" + sy[1], x + w / 2, y + 30, 1, "#5a3a22", "center", null);
+    } else if (id === "all") btn(x, y, w, h, "SCRATCH ALL", CHIP);
+    else { const price = SHOP_ROWS.find(r => r[0] === "scratch")[2]; btn(x, y, w, h, "ANOTHER: " + price, tav().chips >= price ? GOLD : GREY); }
+  }
+  if (sc.paid) text(sc.msg, x0 + 86, 176, 1, sc.win >= 0 ? GOLD : GREY, "center", null);
+  else text("TAP THE SQUARES", x0 + 86, 176, 1, "#d8c8b0", "center", null);
+  rect("#1e120c", px, 22, 152, 140); outline(px, 22, 152, 140, "#5a3a22");
+  text("THREE ALIKE WINS", px + 76, 32, 1, GOLD, "center", null);
+  SCRATCH.filter(q => q[1] && DATA.atlas[q[0]]).forEach((q, i) => { const y = 50 + i * 22; fitDraw(atlas, q[0], px + 22, y, 26, 16, 1); text("X" + q[1], px + 50, y, 1, WHITE, "left", null); text("+" + 5 * q[1], px + 144, y, 1, CHIP, "right", null); });
+  closeLine("TAP HERE TO GO BACK");
+}
+function scratchTapWide(rx, ly) {
+  const sc = TAV.scratch;
+  tapWide(scratchWideHits(), rx, ly, (id, v) => {
+    if (id === "again") { const [, price] = shopRowState(SHOP_ROWS.findIndex(r => r[0] === "scratch")); if (tav().chips >= price) { addChips(-price); scratchNew(); } else play("miss"); return; }
+    if (sc.paid) return;
+    if (id === "cell") { sc.open[v] = true; play("tick"); } else { sc.open = sc.open.map(() => true); play("tick"); }
+    if (sc.open.every(o => o)) {
+      sc.paid = true;
+      if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay, "win"); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); } else { sc.msg = "NO LUCK"; play("miss"); }
+      saveStore();
+    }
+  }, () => { S.overlay = "chipshop"; play("back"); });
+}
+
+// the back room
+function vipWideHits() { const x0 = WX(); return ["c21", "derby", "rename"].map((id, i) => [id, x0 + 186, 30 + i * 40, 162, 32, i]); }
+function drawVipWide() {
+  velvetBg();
+  const x0 = WX(), cx = x0 + 86;
+  text("THE BACK ROOM", cx, 10, 1, GOLD, "center");
+  spr("oldman", cx - 14, 30, false, 2);
+  rect("#2a0a10", x0, 62, 172, 5);
+  rect("#1e060a", x0 + 4, 80, 164, 30); outline(x0 + 4, 80, 164, 30, "#c8a03c");
+  wrap(TAV.vipSay || "", 26).slice(0, 2).forEach((l, i, a) => text(l, cx, 95 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
+  chipsAt(x0 + 348, 10, "right");
+  const L = [["VIP CATCH 21", GOLD, "BETS UP TO 200"], ["VIP DERBY", GOLD, "7 RACERS, LONGER"], ["RENAME A FISH", "#ff8cd2", RENAME + " CHIPS"]];
+  for (const [, x, y, w, h, i] of vipWideHits()) btn(x, y, w, h, L[i][0], L[i][1], L[i][2], "#d8b4b4");
+  closeLine("TAP HERE TO GO BACK");
+}
+function vipTapWide(rx, ly) {
+  tapWide(vipWideHits(), rx, ly, id => {
+    if (id === "c21") { if (!TAV.c21 || !TAV.c21.vip) c21New(true); openOverlay("c21"); }
+    else if (id === "derby") { if (!TAV.derby || TAV.derby.phase === "done" || !TAV.derby.vip) derbyNew(false, true); openOverlay("derby"); }
+    else { TAV.renSel = 0; openOverlay("rename"); }
+  }, () => { S.overlay = "tavern"; play("back"); });
+}
+
+// renaming: the fish you've caught in a long list, the picked one big on the right
+const REN_WIDE_PER = 11;
+function renameWideHits() {
+  const x0 = WX(), list = renameList(), pages = Math.max(1, Math.ceil(list.length / REN_WIDE_PER)), page = Math.floor((TAV.renSel || 0) / REN_WIDE_PER), h = [];
+  list.slice(page * REN_WIDE_PER, page * REN_WIDE_PER + REN_WIDE_PER).forEach((sp, k) => h.push(["fish", x0, 22 + k * 14, 214, 13, page * REN_WIDE_PER + k]));
+  if (pages > 1) { h.push(["page", x0 + 100, 2, 16, 13, -1]); h.push(["page", x0 + 160, 2, 16, 13, 1]); }
+  if (list.length) h.push(["act", x0 + 226, 150, 122, 18, 0]);
+  return h;
+}
+function drawRenameWide() {
+  velvetBg();
+  const x0 = WX(), list = renameList(), sel = TAV.renSel || 0, px = x0 + 226, pw = 122, P = "#ff8cd2", pages = Math.max(1, Math.ceil(list.length / REN_WIDE_PER));
+  text("RENAME A FISH", x0, 8, 1, P, "left", null);
+  if (pages > 1) text((Math.floor(sel / REN_WIDE_PER) + 1) + "/" + pages, x0 + 138, 8, 1, WHITE, "center", null);
+  chipsAt(x0 + 348, 8, "right");
+  for (const [id, x, y, w, h, v] of renameWideHits()) {
+    if (id === "fish") { const sp = list[v], own = tav().names && tav().names[sp[0]]; rect(v === sel ? "#6a1e2c" : "#2a0a10", x, y, w, h); text(nameOf(sp[0]).slice(0, 34), x + 4, y + 6, 1, own ? P : WHITE, "left", null); }
+    else if (id === "page") arrowBtn(x, y, w, h, v, GOLD);
+    else btn(x, y, w, h, tav().chips >= RENAME ? "RENAME: " + RENAME : "NEEDS " + RENAME, tav().chips >= RENAME ? CHIP : GREY);
+  }
+  if (!list.length) { text("CATCH SOMETHING FIRST", LW / 2, 80, 1, GREY, "center", null); closeLine("TAP HERE TO GO BACK"); return; }
+  const sp = list[Math.min(sel, list.length - 1)];
+  rect("#2a0a10", px, 22, pw, 70); outline(px, 22, pw, 70, "#c8a03c");
+  fitDraw(atlas, sp[0], px + pw / 2, 57, 110, 60, 3);
+  text(nameOf(sp[0]).slice(0, 20), px + pw / 2, 104, 1, tav().names && tav().names[sp[0]] ? P : WHITE, "center", null);
+  if (tav().names && tav().names[sp[0]]) { text("REALLY:", px + pw / 2, 118, 1, GREY, "center", null); text(sp[1].slice(0, 20), px + pw / 2, 128, 1, GREY, "center", null); }
+  closeLine("TAP HERE TO GO BACK");
+}
+function renameTapWide(rx, ly) {
+  const list = renameList(), pages = Math.max(1, Math.ceil(list.length / REN_WIDE_PER)), page = Math.floor((TAV.renSel || 0) / REN_WIDE_PER);
+  tapWide(renameWideHits(), rx, ly, (id, v) => {
+    if (id === "fish") { if (v === TAV.renSel) renameFish(list[v][0]); else { TAV.renSel = v; play("tick"); } }
+    else if (id === "page") { TAV.renSel = ((page + v + pages) % pages) * REN_WIDE_PER; play("tick"); }
+    else renameFish(list[TAV.renSel || 0][0]);
+  });
+}
+
+// the old man's stories and the bottle messages: wider paper, longer lines
+function paperArrows(n) { const x0 = WX(); return n > 1 ? [["prev", x0, 2, 16, 13, -1], ["next", x0 + 332, 2, 16, 13, 1]] : []; }
+function drawStoryWide() {
+  tavernBg();
+  const x0 = WX(), n = tav().stories;
+  for (const [, x, y, w, h, v] of paperArrows(n)) arrowBtn(x, y, w, h, v, GOLD);
+  text("STORY " + (TAV.story + 1) + (n > 1 ? " OF " + n : ""), LW / 2, 8, 1, GOLD, "center", null);
+  spr("oldman", x0 + 26, 60, false, 2);
+  rect("#1a100a", x0 + 84, 22, 264, 156); outline(x0 + 84, 22, 264, 156, "#5a3a22");
+  const ls = wrap(STORIES[TAV.story] || "", 40);
+  ls.forEach((l, i) => text(l, x0 + 216, 100 - ls.length * 5 + i * 10, 1, "#e8dcc4", "center", null));
+  closeLine("TAP HERE TO GO BACK");
+}
+function storyTapWide(rx, ly) {
+  const n = tav().stories;
+  tapWide(paperArrows(n), rx, ly, (id, v) => { TAV.story = (TAV.story + v + n) % n; play("tick"); }, () => { S.overlay = "chipshop"; play("back"); });
+}
+function drawNoteWide() {
+  rect("#06101c", 0, 0, LW, LH);
+  const x0 = WX(), list = store.sec.bottles, id = list[S.noteIdx];
+  for (const [, x, y, w, h, v] of paperArrows(list.length)) arrowBtn(x, y, w, h, v, "#b4f0dc");
+  text("A MESSAGE IN A BOTTLE", LW / 2, 8, 1, "#b4f0dc", "center", null);
+  if (list.length > 1) text((S.noteIdx + 1) + " OF " + list.length, LW / 2, 18, 1, "#5a8a8a", "center", null);
+  fitDraw(atlas, "bottle", x0 + 40, 100, 40, 40, 4);
+  rect("#ece0bc", x0 + 84, 28, 240, 140); rect("#d2c296", x0 + 84, 167, 240, 1); rect("#d2c296", x0 + 323, 28, 1, 140);
+  if (id !== undefined) { const ls = wrap(BOTTLES[id][0], 34); ls.forEach((l, i) => text(l, x0 + 204, 98 - ls.length * 5 + i * 10, 1, "#3c2c1e", "center", null)); }
+  closeLine();
+}
+function noteTapWide(rx, ly) {
+  const n = store.sec.bottles.length, h = hitAt(paperArrows(n), rx, ly);
+  if (h) { S.noteIdx = (S.noteIdx + h[5] + n) % n; play("tick"); } else closeOverlay();
+}
+Object.assign(WIDE, {
+  tavern: { draw: drawTavernWide, tap: tavernTapWide, key: () => {} },
+  chipshop: { draw: drawChipShopWide, tap: chipShopTapWide, key: d => { TAV.shopSel = (TAV.shopSel + d + SHOP_ROWS.length) % SHOP_ROWS.length; play("tick"); } },
+  jukebox: { draw: drawJukeboxWide, tap: jukeTapWide, key: d => { const k = SONG_IDS.indexOf(TAV.songSel); TAV.songSel = SONG_IDS[(Math.max(0, k) + d + SONG_IDS.length) % SONG_IDS.length]; play("tick"); } },
+  myfish: { draw: drawMyFishWide, tap: myFishTapWide, key: () => {} },
+  tavboard: { draw: drawTavBoardWide, tap: (rx, ly) => { if (ly > 186) closeOverlay(); }, key: () => {} },
+  bet: { draw: drawBetWide, tap: betTapWide, key: d => { TAV.bet.stake = stakeStep(TAV.bet.stake, d); play("tick"); } },
+  c21: { draw: drawC21Wide, tap: c21TapWide, key: d => { const c = TAV.c21; if (c.phase === "stake") { c.bet = stakeStep(c.bet, d, c.max); play("tick"); } } },
+  derby: { draw: drawDerbyWide, tap: derbyTapWide, key: d => { const r = TAV.derby; if (r.phase === "pick") { r.pick = (r.pick + d + r.racers.length) % r.racers.length; play("tick"); } } },
+  scratch: { draw: drawScratchWide, tap: scratchTapWide, key: () => {} },
+  vip: { draw: drawVipWide, tap: vipTapWide, key: () => {} },
+  rename: { draw: drawRenameWide, tap: renameTapWide, key: d => { const n = renameList().length; if (n) { TAV.renSel = ((TAV.renSel || 0) + d + n) % n; play("tick"); } } },
+  story: { draw: drawStoryWide, tap: storyTapWide, key: d => { const n = tav().stories; if (n > 1) { TAV.story = (TAV.story + d + n) % n; play("tick"); } } },
+  note: { draw: drawNoteWide, tap: noteTapWide, key: d => { const n = store.sec.bottles.length; if (n > 1) { S.noteIdx = (S.noteIdx + d + n) % n; play("tick"); } } },
+});
+
 function drawShop() {
   rect("#080e28", 0, 0, LW, LH);
   g.save(); g.translate(OX, 0);
@@ -3839,8 +4271,8 @@ function closeOverlay() {
 }
 function overlayTap(lx, ly) {
   if (S.overlay === "credits") { if (CRED.done) closeOverlay(); else CRED.fast = true; return; }
-  if (tavernTap(lx, ly)) return;
   if (wideMenus() && WIDE[S.overlay]) { WIDE[S.overlay].tap(lx + OX, ly); return; }   // the PC layouts
+  if (tavernTap(lx, ly)) return;
   const arrows = n => { if (ly < 17 && (lx < 24 || lx > 96)) { play("tick"); return (lx > 96 ? 1 : n - 1); } return 0; };
   if (S.overlay === "help") {
     const d = arrows(HELP.length);
@@ -4035,7 +4467,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits, tavern: tavernWideHits, chipshop: chipShopWideHits, jukebox: jukeWideHits, myfish: myFishWideHits, bet: betWideHits, c21: c21WideHits, derby: derbyWideHits, scratch: scratchWideHits, vip: vipWideHits, rename: renameWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
