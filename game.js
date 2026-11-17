@@ -390,9 +390,12 @@ function todaysBounty() {                              // one ordinary species i
   const d = new Date(), pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && s[2] <= 6 && s[5] >= 2).map(s => s[0]);
   return RNG((d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 7 + 1).choice(pool);
 }
-function stormNow() {                                 // the weather follows the clock: each hour is stormy or not, the same for everybody
-  return RNG(Math.floor(Date.now() / 3600000) * 2654435761 + 17).random() < 0.14;
-}
+// The weather follows the clock, the same for everybody, so refreshing can't reroll it. Storms were whole clock hours,
+// which meant a lunch-break session could be all storm (Kade, Nov 17, 2026). Now each 15 minutes is stormy about 1 time in
+// 7, never two spells in a row: about 13% of the time, as before, in short bursts.
+const STORM_MS = 15 * 60000, STORM_P = 0.15;
+const stormBlock = b => RNG(b * 2654435761 + 17).random() < STORM_P;
+function stormNow(ms) { const b = Math.floor((ms || Date.now()) / STORM_MS); return stormBlock(b) && !stormBlock(b - 1); }
 function zoneOf(m) { for (let i = 0; i < ZONES.length; i++) if (m < ZONES[i][2]) return i; return ZONES.length - 1; }
 
 // ------------------------------------------------------------- leaderboard
@@ -652,6 +655,14 @@ function hookCheck() {                                   // whatever the hook is
     else land(i, f);
     break;
   }
+}
+function bottleXY(bt, cam, t) { return [Math.floor(bt.x + Math.sin(t * 0.9) * 3), Math.floor(bt.y - cam + Math.sin(t * 2) * 1.5) - 4]; }
+function bottleTwinkle(bt, cam, t) {                       // a little four-point star that pops on and off beside the bottle
+  const [bx, by] = bottleXY(bt, cam, t), ph = (t * 0.8) % 1;
+  if (by < -16 || by > LH + 16 || ph > 0.45) return;
+  const k = Math.floor(t * 0.8), sx = bx + [7, -2, 6, 0][k % 4], sy = by + [-2, 1, 9, -3][k % 4], r = ph < 0.15 || ph > 0.3 ? 1 : 2;
+  rect(WHITE, sx, sy - r, 1, 2 * r + 1); rect(WHITE, sx - r, sy, 2 * r + 1, 1);
+  if (r > 1) { g.globalAlpha = 0.5; rect("#bfffe6", sx - 1, sy - 1, 3, 3); g.globalAlpha = 1; rect(WHITE, sx, sy, 1, 1); }
 }
 function darknessAt(m) {
   const d = DATA.dark;
@@ -1732,7 +1743,14 @@ function draw() {
     if (f.id === S.bounty && Math.floor(t * 3) % 2) { const bx = x + (w >> 1); rect(INK, bx - 2, y - 7, 5, 6); rect(GOLD, bx - 1, y - 6, 3, 4); rect(INK, bx, y - 5, 1, 2); }   // today's bounty wears a tag
   }
   const bt = S.bottle;
-  if (bt && !bt.got && S.prepared) { const by = Math.floor(bt.y - cam + Math.sin(t * 2) * 1.5); if (by > -12 && by < LH + 12) spr("bottle", bt.x + Math.sin(t * 0.9) * 3, by - 4); }
+  if (bt && !bt.got && S.prepared) {                       // a message in a bottle: it glows and twinkles so it's easy to spot
+    const [bx, by] = bottleXY(bt, cam, t), [bw, bh] = sprSize("bottle"), cx = bx + bw / 2, cy = by + bh / 2, pu = 0.5 + 0.5 * Math.sin(t * 4);
+    if (by > -16 && by < LH + 16) {
+      g.globalAlpha = 0.16 + 0.14 * pu; disc("#bfffe6", cx, cy, Math.round(7 + 3 * pu));
+      g.globalAlpha = 0.3 + 0.2 * pu; disc("#eafff6", cx, cy, 4); g.globalAlpha = 1;
+      spr("bottle", bx, by);
+    }
+  }
   const diving = ["down", "turn", "up", "fight", "rise"].includes(S.state);
   if (diving) {                                          // the line, the hook and whatever is on it
     const pts = wl > -20 ? [[OX + 63, wl - 13]] : [];
@@ -1769,7 +1787,7 @@ function draw() {
       lights.push([Math.floor(lx), Math.floor(f.y - cam), SPEC[f.id] && SPEC[f.id][7] ? 30 : 18]);
     }
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
-    if (bt && !bt.got) lights.push([Math.floor(bt.x + 3), Math.floor(bt.y - cam), 14]);       // bottles catch the light a little
+    if (bt && !bt.got && S.prepared) { const [bx, by] = bottleXY(bt, cam, t); lights.push([Math.floor(bx + 3), Math.floor(by + 4), Math.round(20 + 4 * Math.sin(t * 4))]); }   // a bottle glows
     if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), 10]);       // the crack glows, faintly
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
     for (const gl of DATA.glows) if (gl[1] > cam - 20 && gl[1] < cam + LH + 20) lights.push([gl[0] - BG_O + OX, Math.floor(gl[1] - cam), gl[2]]);   // crystals and vent mouths
@@ -1778,6 +1796,7 @@ function draw() {
     lights.forEach(([x, y, r]) => disc("rgba(0,0,0,1)", x, y, Math.floor(r * 0.68), dg));
     g.drawImage(dark, 0, 0);
   }
+  if (bt && !bt.got && S.prepared && diving) bottleTwinkle(bt, cam, t);   // on top of the dark, so it shows at any depth
   if (wl > -30) {                                        // the surface, boat and angler
     for (let x = 0; x < LW; x += 4) rect(WHITE, x + Math.floor(t * 3) % 4, wl + Math.floor(Math.sin(t * 2 + x * 0.3) * (S.storm ? 2.4 : 1.2)), 2, 1);
     const bob = Math.floor(Math.sin(t * (S.storm ? 3.4 : 2)) * (S.storm ? 3 : 1.5));
