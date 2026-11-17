@@ -672,6 +672,7 @@ function darknessAt(m) {
 }
 function update(dt) {
   if (S.state === "flip" && FLIP) { flipUpdate(dt); S.shake = Math.max(0, (S.shake || 0) - dt); return; }
+  if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartUpdate(dt); return; }   // FIN PRIX (finprix.js)
   if (S.state === "boss" && BOSS) { bossUpdate(dt); S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt); return; }
   S.immune = Math.max(0, S.immune - dt); S.flash = Math.max(0, S.flash - dt);
   if (S.ring !== null) { S.ring += dt; if (S.ring > 0.5) S.ring = null; }
@@ -1682,6 +1683,7 @@ function drawGiant() {                                   // something very large
 }
 
 function draw() {
+  if (S.state === "kart" && typeof KART !== "undefined" && KART) { drawKart(); return; }
   if (S.state === "boss" && BOSS) { drawBoss(); return; }
   if (S.state === "flip" && FLIP) { drawFlip(); return; }
   const t = T, cam = S.cam, wl = Math.round(-cam), srcY = Math.max(0, Math.round(cam));
@@ -4473,6 +4475,7 @@ canvas.addEventListener("pointerdown", e => {
   if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) { AC = null; } }
   if (AC && AC.state === "suspended") AC.resume();
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
+  if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartTouch(rx, ly, true); return; }
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
   if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) flipPulse(); else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
@@ -4487,6 +4490,7 @@ window.addEventListener("pointerup", e => {
   if (!S) return;
   S.touchX = null;
   if (BOSS) BOSS.touch = null;
+  if (typeof KART !== "undefined" && KART) kartTouch(0, 0, false);
   if (swipeAt && S.state === "title" && !S.overlay) {      // a swipe in the sky is an arrow key; a tap is a tap
     const [x, y] = pointerPos(e), dx = x - swipeAt[0], dy = y - swipeAt[1];
     konamiKey(Math.max(Math.abs(dx), Math.abs(dy)) < 8 ? "TAP" : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "ArrowRight" : "ArrowLeft") : (dy > 0 ? "ArrowDown" : "ArrowUp"));
@@ -4515,6 +4519,7 @@ window.addEventListener("keydown", e => {
   if (DIR_KEYS[c] && !HELD.includes(c)) { HELD.push(c); syncKeys(); }
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
+  if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartKey(e, true); if (["Space", "ShiftLeft", "ShiftRight"].includes(c)) e.preventDefault(); return; }   // FIN PRIX
   if (S.state === "flip" && FLIP && FLIP.test && c === "Escape") { flipDrone(false); FLIP = null; newDive(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
     const k = { ArrowLeft: "L", KeyA: "L", ArrowRight: "R", KeyD: "R", ArrowUp: "U", KeyW: "U", ArrowDown: "D", KeyS: "D" }[c];
@@ -4535,7 +4540,7 @@ window.addEventListener("keydown", e => {
   else if (c === "ShiftLeft" || c === "ShiftRight" || c === "ArrowDown") pulse();
   else if (c === "Space" || c === "Enter" || (c === "ArrowUp" && S.state !== "title")) { tapAction(); }   // Up doesn't cast: it starts a certain code
 });
-window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } });
+window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } if (typeof KART !== "undefined" && KART) kartKey(e, false); });
 window.addEventListener("blur", () => { HELD = []; syncKeys(); });
 
 // --------------------------------------------------------------------- loop
