@@ -14,7 +14,22 @@ const FP = {
 const FP_COL = { water: [12, 40, 86], fogNear: [26, 70, 120], sand: ["#c8b480", "#bca874"], off: ["#1e5a50", "#1a5048"], rumble: ["#f05050", "#fafaff"], lane: "#e6dcb4" };
 const TEST_FP = (() => { try { return new URLSearchParams(location.search).has("finprix"); } catch (e) { return false; } })();
 let KART = null;
-const FP_TUNE = { skill: 0.97, spread: 0.07, lead: 0.035 };   // AI difficulty; tuned with tools/tests/test_finprix.py
+const FP_TUNE = { skill: 1.01, spread: 0.02, lead: 0.035 };   // AI difficulty; tuned with tools/tests/test_finprix.py
+const FP_DRIFT = { hop: 0.22, grip: 0.4, scrub: 0.15, levels: [0.6, 1.3, 2.2], boost: [0, 0.45, 0.8, 1.2] };   // blue, orange, purple
+// The other seven racers, each with a way of driving (Kade: they all did the same thing). top: top speed; corner: speed
+// kept through a sharp bend when not drifting; line: how far onto the inside line they go; noise: how much they wander.
+const FP_CREW = [
+  { name: "ZIPPY", id: "marlin", style: "SPEEDSTER", top: 1.06, corner: 0.93, line: 0.4, noise: 0.06, drift: "never", alt: "sword" },
+  { name: "DRIFTY", id: "parrot", style: "DRIFTER", top: 0.965, corner: 0.95, line: 1.1, noise: 0.05, drift: "always", alt: "bass" },
+  { name: "BRUISER", id: "shark", style: "BULLY", top: 1.0, corner: 0.93, line: 0.9, noise: 0.05, drift: "big", aggro: 1, alt: "grouper" },
+  { name: "TRICKY", id: "octo", style: "TRICKSTER", top: 0.99, corner: 0.93, line: 0.9, noise: 0.05, drift: "big", trick: 1, alt: "puffer" },
+  { name: "STEADY", id: "turtle", style: "STEADY", top: 0.995, corner: 0.97, line: 1, noise: 0, drift: "big", alt: "trout" },
+  { name: "WILDFIN", id: "ember", style: "WILDCARD", top: 1.02, corner: 0.9, line: 0.8, noise: 0.3, drift: "random", wild: 1, alt: "perch" },
+  { name: "WALL", id: "ray", style: "BLOCKER", top: 0.995, corner: 0.93, line: 0.9, noise: 0.04, drift: "big", block: 1, alt: "tuna" },
+];
+// How your fish (and theirs) are drawn: "kart" a little shell kart with the fish riding in it, "turn" the real fish turned
+// away from the camera, "blob" the first prototype's rear view. M cycles them in the test.
+let FP_MODEL = (() => { try { const v = new URLSearchParams(location.search).get("finprix"); return ["kart", "turn", "blob"].includes(v) ? v : "kart"; } catch (e) { return "kart"; } })();
 
 // ---- the track: pieces of [ease in, hold, ease out, curve, height change in segments]
 function fpTrack() {
@@ -68,8 +83,8 @@ function fpFishColors(id) {                  // the two main colours of a fish s
 function startKart(test, bot) {             // bot (tests only): a robot drives your fish: { noise, lag, lv }
   const segs = fpTrack(), len = segs.length * FP.SEG, f = tav().fish, rng = RNG((Math.random() * 4294967296) >>> 0);
   const me = { name: f ? f.name : "YOU", id: f ? f.id : "clown", me: true, lv: bot ? bot.lv : f ? f.lv : [5, 5, 5], bot };
-  const pool = C21_POOL.filter(id => id !== me.id), racers = [me];
-  while (racers.length < FP.RACERS) { const id = rng.choice(pool); if (!racers.some(r => r.id === id)) racers.push({ id, name: FP_NAMES[racers.length - 1], skill: FP_TUNE.skill + rng.random() * FP_TUNE.spread }); }
+  const racers = [me].concat(FP_CREW.map(p => ({ id: p.id === me.id ? p.alt : p.id, name: p.name, p, skill: FP_TUNE.skill + rng.random() * FP_TUNE.spread })));
+  for (let i = racers.length - 1; i > 1; i--) { const j = 1 + Math.floor(rng.random() * i); [racers[i], racers[j]] = [racers[j], racers[i]]; }   // a shuffled grid behind you
   racers.forEach((r, i) => {
     Object.assign(r, { z: (FP.RACERS - 1 - i) * -FP.SEG * 2.2 + len, x: (i % 2 ? 0.45 : -0.45), speed: 0, lap: 0, done: false, place: i + 1, item: null, roll: 0,
       spin: 0, boost: 0, drift: 0, dcharge: 0, dir: 0, hop: 0, ink: 0, cols: fpFishColors(r.id), finishT: 0, aiItemT: 2 + Math.random() * 4, aim: 0 });
@@ -106,6 +121,7 @@ function kartKey(e, down) {
   if (down) KART.keys.add(c); else KART.keys.delete(c);
   if (!down) return;
   if (c === "Escape" && KART.test) { KART = null; newDive(); return; }
+  if (c === "KeyM" && KART.test) { FP_MODEL = { kart: "turn", turn: "blob", blob: "kart" }[FP_MODEL]; play("tick"); return; }   // compare the fish models
   if (KART.phase === "done" && ["Space", "Enter"].includes(c)) { startKart(KART.test); return; }
   if ((c === "Space" || c === "KeyE" || c === "Enter") && KART.phase === "race") fpUseItem(KART.me);
 }
@@ -124,7 +140,7 @@ function kartUpdate(dt) {
   lead.forEach((r, i) => { if (!r.done) r.place = i + 1; });
   for (const r of K.racers) {
     if (K.phase === "count") continue;
-    const seg = fpSeg(r.z), max = FP.MAX * (r.me ? 0.94 + r.lv[0] * 0.008 : r.skill * fpRubber(r, me)), spdPct = r.speed / FP.MAX;
+    const seg = fpSeg(r.z), max = FP.MAX * (r.me ? 0.94 + r.lv[0] * 0.008 : r.skill * r.p.top * fpRubber(r, me) * (r.surge > 0 ? 1.12 : 1)), spdPct = r.speed / FP.MAX;
     let steer = 0, gas = true, brake = false, driftKey = false;
     if (r.me && r.bot && !r.done) { [steer, driftKey] = fpAI(r, seg, dt); }
     else if (r.me && !r.done) {
@@ -133,20 +149,34 @@ function kartUpdate(dt) {
     } else { [steer, driftKey] = fpAI(r, seg, dt); }
     r.dir = lerp(r.dir, steer, Math.min(1, dt * 10));
     if (r.spin > 0) { r.spin -= dt; r.speed = Math.max(0, r.speed + FP.BRAKE * 0.35 * dt); continue_(r, seg, dt); continue; }
-    // drifting: hold drift while turning to slide and charge a mini-turbo; let go to fire it
-    if (driftKey && Math.abs(steer) > 0.3 && spdPct > 0.45 && !r.drift) { r.drift = Math.sign(steer); r.hop = 0.18; r.dcharge = 0; }
+    // drifting, Mario Kart style: Shift hops; land steering and the drift starts. A drift keeps its grip at full speed
+    // (normal steering through a bend scrubs speed), and holding into the turn charges blue, orange, then purple sparks.
+    if (driftKey && !r.shiftWas && !r.drift && r.hop <= 0 && r.spin <= 0) { r.hop = FP_DRIFT.hop; if (r.me) play("reel"); }
+    if (!r.drift && r.hop > 0 && driftKey && Math.abs(steer) > 0.3 && spdPct > 0.45) { r.drift = Math.sign(steer); r.dcharge = 0; r.dlvl = 0; }
+    r.shiftWas = driftKey;
     if (r.drift) {
-      if (!driftKey || spdPct < 0.3) { const b = r.dcharge > 1.5 ? 0.9 : r.dcharge > 0.8 ? 0.5 : 0; if (b) { r.boost = Math.max(r.boost, b * (0.8 + (r.me ? r.lv[2] : 6) * 0.04)); if (r.me) play("pulse"); } r.drift = 0; r.dcharge = 0; }
-      else { r.dcharge += dt * (Math.sign(steer) === r.drift ? 1.25 : 0.6); }
+      if (!driftKey || spdPct < 0.3) {
+        const b = FP_DRIFT.boost[r.dlvl || 0];
+        if (b) { r.boost = Math.max(r.boost, b * (0.85 + (r.me ? r.lv[2] : 6) * 0.03)); r.turboFx = 0.4; if (r.me) { play("pulse"); KART.flash = 0.08; } }
+        r.drift = 0; r.dcharge = 0; r.dlvl = 0;
+      } else {
+        const into = Math.sign(steer) === r.drift ? 1 : steer ? -1 : 0;
+        r.dcharge += dt * (into > 0 ? 1.3 : into < 0 ? 0.45 : 0.9);
+        const lvl = FP_DRIFT.levels.filter(q => r.dcharge >= q).length;
+        if (lvl > (r.dlvl || 0)) { r.dlvl = lvl; if (r.me) play(lvl === 3 ? "chime" : "tick"); }
+      }
     }
-    const turn = r.drift ? (r.drift * 0.45 + steer * 0.75) * FP.DRIFT_STEER : steer * FP.STEER;   // in a drift: hold in to tighten, out to widen
+    const turn = r.drift ? (r.drift * 0.4 + steer * 0.6) * FP.DRIFT_STEER : steer * FP.STEER;   // in a drift: hold in to tighten, out to widen
     r.x += turn * dt * spdPct;
-    r.x -= dt * spdPct * spdPct * seg.curve * FP.CENTRIFUGAL;   // curves push you outward
-    const off = Math.abs(r.x) > 1, top = (off ? max * FP.OFF_MAX : max) * (r.boost > 0 ? 1.35 : 1) * (r.ink > 0 && !r.me ? 0.88 : 1);
+    r.x -= dt * spdPct * spdPct * seg.curve * FP.CENTRIFUGAL * (r.drift ? FP_DRIFT.grip : 1);   // curves push you outward (less in a drift)
+    r.yaw = lerp(r.yaw || 0, r.drift ? r.drift * 0.85 + steer * 0.15 : r.dir * 0.35, Math.min(1, dt * 8));
+    const off = Math.abs(r.x) > 1, top = (off ? max * FP.OFF_MAX : max) * (r.boost > 0 ? 1.35 : 1) * (r.ink > 0 && !r.me ? 0.88 : 1) * (r.p && !r.drift && Math.abs(seg.curve) > 3 ? r.p.corner : 1);
     if (brake) r.speed += FP.BRAKE * dt;
     else if (r.speed > top) r.speed += (off ? FP.OFF_DECEL : FP.DECEL * 1.5) * dt;
     else if (gas) r.speed += FP.ACCEL * (0.8 + (r.me ? r.lv[1] : 6) * 0.04) * dt * (1 - r.speed / (top * 1.05));
+    if (!r.drift && spdPct > 0.7) r.speed -= Math.abs(steer) * (0.25 + Math.abs(seg.curve) * 0.06) * FP.MAX * FP_DRIFT.scrub * dt;   // turning hard without drifting costs speed
     if (r.boost > 0) { r.boost -= dt; r.speed = Math.max(r.speed, top * 0.98); }
+    r.turboFx = Math.max(0, (r.turboFx || 0) - dt);
     r.speed = clamp(r.speed, 0, FP.MAX * 1.5); r.x = clamp(r.x, -2.2, 2.2);
     continue_(r, seg, dt);
   }
@@ -155,7 +185,8 @@ function kartUpdate(dt) {
 }
 function continue_(r, seg, dt) {             // move along, count laps, item boxes, bumps
   const K = KART, z0 = r.z;
-  r.z += r.speed * dt; r.hop = Math.max(0, r.hop - dt); r.ink = Math.max(0, r.ink - dt);
+  r.z += r.speed * dt; r.hop = Math.max(0, r.hop - dt); r.ink = Math.max(0, r.ink - dt); r.surge = Math.max(0, (r.surge || 0) - dt);
+  if (r.me) KART.bumpT = Math.max(0, (KART.bumpT || 0) - dt);
   if (r.roll > 0) { r.roll -= dt; if (r.roll <= 0) r.item = r.rolling; }
   if (r.z >= K.len) { r.z -= K.len; r.lap++; if (r.lap >= FP.LAPS && !r.done) { r.done = true; r.finishT = K.t; if (r.me) { K.msg = "FINISH!"; K.msgT = 3; } } else if (r.me && r.lap === FP.LAPS - 1) { K.msg = "FINAL LAP!"; K.msgT = 2; play("chime"); } }
   const s = fpSeg(r.z);
@@ -163,7 +194,9 @@ function continue_(r, seg, dt) {             // move along, count laps, item box
     b.gone = 3; r.roll = r.me ? 1.2 : 0.4; r.rolling = fpRollItem(r.place); if (r.me) play("chime");
   }
   for (const o of K.racers) if (o !== r && Math.abs(fpDist(o) - fpDist(r)) < FP.SEG * 0.6 && Math.abs(o.x - r.x) < 0.28) {   // bump
-    const push = (r.x < o.x ? -1 : 1) * 0.6 * dt * 8; r.x += push * 0.5; o.x -= push * 0.5;
+    const hard = (r.p && r.p.aggro) || (o.p && o.p.aggro) ? 2.6 : 1, push = (r.x < o.x ? -1 : 1) * 0.6 * dt * 8 * hard;
+    r.x += push * 0.5 * (r.p && r.p.aggro ? 0.3 : 1); o.x -= push * 0.5 * (o.p && o.p.aggro ? 0.3 : 1);
+    if (hard > 1 && (r.me || o.me) && !KART.bumpT) { KART.shake = 0.25; KART.bumpT = 0.6; play("hit"); }
   }
 }
 function fpRubber(r, me) {                   // the AI's rubber band: harder when you lead, a little help when far behind
@@ -174,23 +207,45 @@ function fpRubber(r, me) {                   // the AI's rubber band: harder whe
   if (me.place === 1) k += FP_TUNE.lead;                       // you're leading: everyone pushes
   return k;
 }
-function fpAI(r, seg, dt) {                  // -> [steer, drift]: follow the inside line, dodge mines, use items
-  const K = KART, ahead = fpSeg(r.z + FP.SEG * 12);
-  const noise = r.bot ? r.bot.noise : 0.12;
-  let target = clamp(ahead.curve * 0.12, -0.6, 0.6) + Math.sin(K.t * 0.7 + (r.skill || 1) * 40) * noise;   // the inside of the coming bend
-  for (const m of K.mines) { const dz = m.z - r.z; if (dz > 0 && dz < FP.SEG * 8 && Math.abs(m.x - target) < 0.35) target += m.x > target ? -0.45 : 0.45; }
-  for (const s of fpSeg(r.z + FP.SEG * 6).boxes) if (!s.gone && !r.item && Math.abs(s.x - target) < 0.4) target = lerp(target, s.x, 0.5);
-  const ff = seg.curve * FP.CENTRIFUGAL * (r.speed / FP.MAX) / FP.STEER;      // lean into the curve
+function fpAI(r, seg, dt) {                  // -> [steer, drift]: drive the way this racer drives
+  const K = KART, p = r.p || { line: 1, noise: r.bot ? r.bot.noise : 0.12, drift: "big" }, ahead = fpSeg(r.z + FP.SEG * 12), me = K.me;
+  const noise = r.bot ? r.bot.noise : p.noise, wob = p.wild ? Math.sin(K.t * 1.7 + r.z * 0.0007) * Math.sin(K.t * 0.53) : Math.sin(K.t * 0.7 + (r.skill || 1) * 40);
+  let target = clamp(ahead.curve * 0.12 * (p.line || 1), -0.65, 0.65) + wob * noise;   // the inside of the coming bend
+  const near = o => fpDist(o) - fpDist(r);                    // + ahead of me, - behind me
+  if (p.aggro && Math.abs(near(me)) < FP.SEG * 3 && !me.done) target = me.x;                       // BRUISER: go for you
+  if (p.block) { const chaser = K.racers.find(o => o !== r && near(o) < 0 && near(o) > -FP.SEG * 4); if (chaser) target = lerp(target, chaser.x, 0.8); }   // WALL: sit in their line
+  if (p.trick && !r.item) for (const b of fpSeg(r.z + FP.SEG * 10).boxes) if (!b.gone) { target = b.x; break; }                                  // TRICKY: always grabs a box
+  for (const m of K.mines) { const dz = m.z - r.z; if (dz > 0 && dz < FP.SEG * 8 && Math.abs(m.x - target) < 0.35 && !p.wild) target += m.x > target ? -0.45 : 0.45; }
+  if (!p.trick && !r.item) for (const b of fpSeg(r.z + FP.SEG * 6).boxes) if (!b.gone && Math.abs(b.x - target) < 0.4) target = lerp(target, b.x, 0.5);
+  if (p.wild) { r.wildT = (r.wildT || 3) - dt; if (r.wildT <= 0) { r.wildT = 3 + Math.random() * 5; if (Math.random() < 0.4) r.surge = 1.2; else if (Math.random() < 0.3) r.swerve = 0.8 * (Math.random() < 0.5 ? -1 : 1); } }   // WILDFIN: bursts and blunders
+  if (r.swerve) { target += r.swerve; r.swerve *= Math.pow(0.2, dt); if (Math.abs(r.swerve) < 0.05) r.swerve = 0; }
+  const ff = seg.curve * FP.CENTRIFUGAL * (r.speed / FP.MAX) * (r.drift ? FP_DRIFT.grip : 1) / FP.STEER;   // lean into the curve
   let steer = clamp((target - r.x) * 6 + ff, -1, 1);
   if (r.bot && r.bot.lag) { r.lagSteer = lerp(r.lagSteer || 0, steer, Math.min(1, dt / r.bot.lag)); steer = r.lagSteer; }
+  fpAIItems(r, p, dt);
+  const bend = Math.abs(ahead.curve), here = Math.abs(seg.curve), fast = r.speed > FP.MAX * 0.6;
+  let want;
+  if (r.bot && r.bot.noDrift) want = false;
+  else if (p.drift === "never") want = false;
+  else if (p.drift === "always") want = r.drift ? here > 0.8 || bend > 1 : bend > 1.5 && fast;     // DRIFTY: every bend, long drifts
+  else if (p.drift === "random") want = r.drift ? here > 1.5 : bend > 2.5 && fast && Math.random() < 0.02;
+  else want = r.drift ? here > 1.5 || bend > 2 : bend > 3 && fast;
+  if (!r.drift && want) steer = Math.sign(ahead.curve) * Math.max(0.5, Math.abs(steer));   // turn in as it hops
+  return [steer, want];
+}
+function fpAIItems(r, p, dt) {               // when to use an item, by personality
+  const K = KART;
   r.aiItemT -= dt;
-  if (r.item && r.aiItemT <= 0) {
-    const close = K.racers.some(o => o !== r && fpDist(o) > fpDist(r) && fpDist(o) - fpDist(r) < FP.SEG * 15 && Math.abs(o.x - r.x) < 0.4);
-    const behind = K.racers.some(o => o !== r && fpDist(r) - fpDist(o) > 0 && fpDist(r) - fpDist(o) < FP.SEG * 10);
-    if (r.item === "shrimp" || r.item === "ink" || (r.item === "urchin" && close) || (r.item === "puffer" && behind)) { fpUseItem(r); r.aiItemT = 1.5 + Math.random() * 3; }
-  }
-  const wantDrift = Math.abs(ahead.curve) > 3 && Math.sign(ahead.curve) === Math.sign(seg.curve || ahead.curve) && Math.abs(r.x - target) < 0.35 && r.speed > FP.MAX * 0.6;
-  return [steer, (r.drift ? Math.abs(seg.curve) > 1.5 || Math.abs(ahead.curve) > 2 : wantDrift) && !(r.bot && r.bot.noDrift)];
+  if (!r.item || r.aiItemT > 0) return;
+  const near = o => fpDist(o) - fpDist(r), others = K.racers.filter(o => o !== r);
+  const inFront = others.some(o => near(o) > 0 && near(o) < FP.SEG * 15 && Math.abs(o.x - r.x) < 0.35);
+  const behind = others.some(o => near(o) < 0 && near(o) > -FP.SEG * 10), bendSoon = Math.abs(fpSeg(r.z + FP.SEG * 10).curve) > 3;
+  let use;
+  if (p.trick) use = r.item === "puffer" ? behind && bendSoon : r.item === "urchin" ? inFront : r.item === "ink" ? r.place > 2 : Math.abs(fpSeg(r.z).curve) < 0.5;   // TRICKY waits for the moment
+  else if (p.style === "STEADY") use = r.item === "shrimp" ? Math.abs(fpSeg(r.z).curve) < 0.5 : r.item === "urchin" ? inFront : true;
+  else if (p.aggro) use = r.item === "urchin" ? inFront || Math.abs(near(K.me)) < FP.SEG * 6 : true;
+  else use = r.item === "shrimp" || r.item === "ink" || (r.item === "urchin" && inFront) || (r.item === "puffer" && behind);
+  if (use) { fpUseItem(r); r.aiItemT = 1 + Math.random() * 2.5; } else r.aiItemT = 0.3;
 }
 function fpObjects(dt) {
   const K = KART;
@@ -270,15 +325,54 @@ function drawKart() {
   // you, big at the bottom
   const pw = 34 + (me.boost > 0 ? 2 : 0), py = LH - 22 - me.hop * 40 + Math.sin(t * 8) * 1;
   fpFish(me, LW / 2 + me.dir * 4, py, pw, 0);
-  if (me.drift && me.dcharge > 0.8) for (let q = 0; q < 6; q++) { const sx = LW / 2 + (q % 2 ? -1 : 1) * (pw * 0.45 + Math.random() * 6), sy = LH - 12 - Math.random() * 6; rect(me.dcharge > 1.5 ? ORANGE : "#5ae6ff", sx, sy, 2, 2); }
+  if (me.drift) {
+    for (let q = 0; q < 5; q++) { const sx = LW / 2 - me.drift * (pw * 0.5 + Math.random() * 10), sy = LH - 14 - Math.random() * 8; rect("#dcf5ff", sx, sy, 1 + (q % 2), 1 + (q % 2)); }   // a bubble spray off the outside
+    if (me.dlvl) for (let q = 0; q < 4 + me.dlvl * 3; q++) { const sx = LW / 2 + (q % 2 ? -1 : 1) * (pw * 0.3 + Math.random() * 8), sy = LH - 10 - Math.random() * 7; rect(["#5ae6ff", ORANGE, "#c87aff"][me.dlvl - 1], sx, sy, 2, 2); }
+  }
+  if (me.turboFx > 0) { g.globalAlpha = me.turboFx; for (let q = 0; q < 10; q++) rect("#fff4c8", LW / 2 + (Math.random() - 0.5) * pw, py + Math.random() * 18, 2, 3); g.globalAlpha = 1; }
   if (me.boost > 0) for (let q = 0; q < 8; q++) rect(q % 2 ? "#fafaff" : "#c8f0ff", LW / 2 - 6 + Math.random() * 12, py + 6 + Math.random() * 14, 1, 2);
   // ink on your screen
   if (me.ink > 0) { g.globalAlpha = Math.min(0.85, me.ink / 2); for (let q = 0; q < 7; q++) disc("#14121e", (q * 53 + 30) % LW, 40 + (q * 37) % 110, 18 + (q % 3) * 8); g.globalAlpha = 1; }
   g.restore();
   fpHud();
 }
-function fpFish(r, x, y, w, fog) {           // a fish seen from behind: body, fins, tail, a flash when boosting
-  const [c1, c2] = r.cols, h = w * 0.55, tilt = r.spin > 0 ? Math.sin(r.spin * 20) * 0.9 : r.dir * 0.25 + (r.drift || 0) * 0.3;
+function fpFish(r, x, y, w, fog) { if (FP_MODEL === "kart") fpKart(r, x, y, w, fog); else if (FP_MODEL === "turn") fpTurned(r, x, y, w, fog); else fpBlob(r, x, y, w, fog); }
+function fpShadow(x, y, w) { g.fillStyle = "rgba(0,0,0,0.25)"; g.beginPath(); g.ellipse(x, y, w * 0.42, Math.max(1, w * 0.09), 0, 0, 7); g.fill(); }
+// the real fish, turned away from the camera: its side sprite squeezed by how far it's turned, facing the way it's going
+function fpTurned(r, x, y, w, fog) {
+  const a = DATA.atlas[r.id], yaw = clamp(r.spin > 0 ? Math.sin(r.spin * 18) : r.yaw || 0, -1, 1), face = yaw > 0.05 ? 1 : yaw < -0.05 ? -1 : (r.face || 1);
+  r.face = face;
+  const h = w * 0.62, k = h / a[3], sx = 0.32 + 0.68 * Math.min(1, Math.abs(yaw) * 1.4), fw = a[2] * k;
+  fpShadow(x, y, w);
+  g.save(); if (fog > 0.05) g.globalAlpha = 1 - fog * 0.5;
+  g.translate(x, y - h * 0.15 + Math.sin(KART.t * 6 + w) * w * 0.02); g.scale(face * sx, 1);
+  g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(-fw / 2), Math.round(-h), Math.round(fw), Math.round(h));
+  g.restore(); g.globalAlpha = 1;
+  if (r.boost > 0 && w > 6) { g.globalAlpha = 0.6; rect("#ffe08c", x - w * 0.08, y - h * 0.4, w * 0.16, w * 0.3); g.globalAlpha = 1; }
+}
+// a little shell kart from behind, with the fish riding in it (its real sprite), like a Mario Kart driver
+function fpKart(r, x, y, w, fog) {
+  const [c1, c2] = r.cols, a = DATA.atlas[r.id], yaw = r.spin > 0 ? Math.sin(r.spin * 18) : r.yaw || 0, h = w * 0.42, t = KART.t;
+  fpShadow(x, y, w);
+  g.save(); if (fog > 0.05) g.globalAlpha = 1 - fog * 0.5;
+  g.translate(x, y - h * 0.15); g.rotate(yaw * 0.22);
+  const fk = Math.min(w * 0.85 / a[2], h * 1.5 / a[3]), fw = a[2] * fk, fh = a[3] * fk, face = yaw > 0.05 ? 1 : yaw < -0.05 ? -1 : (r.face || 1);   // the fish, sitting in
+  r.face = face;
+  g.save(); g.translate(yaw * w * 0.06, -h * 0.55 + Math.sin(t * 7 + w) * w * 0.015); g.scale(face, 1);
+  g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(-fw / 2), Math.round(-fh), Math.round(fw), Math.round(fh)); g.restore();
+  g.fillStyle = "#e8e0c8"; g.beginPath(); g.ellipse(0, -h * 0.5, w * 0.36, h * 0.18, 0, 0, 7); g.fill();          // the cockpit rim
+  g.fillStyle = c2; g.beginPath(); g.ellipse(0, -h * 0.15, w * 0.46, h * 0.5, 0, Math.PI, 0); g.fill();               // the shell (back half)
+  g.fillStyle = c1; g.fillRect(-w * 0.46, -h * 0.17, w * 0.92, h * 0.42);                                               // the body
+  g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(-w * 0.4, -h * 0.12, w * 0.8, Math.max(1, h * 0.07));            // a shine
+  g.fillStyle = "#2a2438"; g.fillRect(-w * 0.34, h * 0.08, w * 0.18, h * 0.2); g.fillRect(w * 0.16, h * 0.08, w * 0.18, h * 0.2);   // two bubble jets
+  if (w > 10) { g.fillStyle = r.boost > 0 ? "#ffe08c" : "#8ce6ff"; g.fillRect(-w * 0.3, h * 0.12, w * 0.1, h * 0.12); g.fillRect(w * 0.2, h * 0.12, w * 0.1, h * 0.12); }
+  g.fillStyle = c2; g.beginPath(); g.moveTo(-w * 0.46, -h * 0.1); g.lineTo(-w * 0.6, h * 0.2); g.lineTo(-w * 0.46, h * 0.25); g.fill();   // little fins
+  g.beginPath(); g.moveTo(w * 0.46, -h * 0.1); g.lineTo(w * 0.6, h * 0.2); g.lineTo(w * 0.46, h * 0.25); g.fill();
+  g.restore(); g.globalAlpha = 1;
+  if (w > 8) for (let q = 0; q < 3; q++) { const u = (t * 3 + q / 3 + w) % 1; rect(r.boost > 0 ? "#ffe08c" : "#c8f0ff", x + (q - 1) * w * 0.25, y + u * w * 0.25, 1, 1); }   // the bubble trail
+}
+function fpBlob(r, x, y, w, fog) {           // the first prototype's fish from behind
+  const [c1, c2] = r.cols, h = w * 0.55, tilt = r.spin > 0 ? Math.sin(r.spin * 20) * 0.9 : (r.yaw || 0) * 0.4;
   g.save(); g.translate(x, y - h / 2); g.rotate(tilt);
   if (fog > 0.05) g.globalAlpha = 1 - fog * 0.5;
   g.fillStyle = "rgba(0,0,0,0.25)"; g.beginPath(); g.ellipse(0, h * 0.62, w * 0.42, h * 0.16, 0, 0, 7); g.fill();     // shadow on the sand
@@ -310,9 +404,14 @@ function fpHud() {
     const y = 20 + i * 9; rect(r.me ? "#1e285a" : "rgba(0,0,0,0.3)", LW - 62, y - 4, 58, 8);
     text(i + 1, LW - 58, y, 1, r.me ? GOLD : GREY, "left", null); text(r.name.slice(0, 7), LW - 50, y, 1, r.me ? GOLD : WHITE, "left", null);
   });
+  if (K.phase === "count" && LW >= 300) {                       // who you're racing, and how they drive
+    g.globalAlpha = 0.8; rect(INK, 4, 30, 112, 82); g.globalAlpha = 1; outline(4, 30, 112, 82, "#5a6496");
+    text("THE FIELD", 60, 37, 1, GOLD, "center", null);
+    K.racers.filter(r => r.p).forEach((r, i) => { text(r.name, 8, 47 + i * 9, 1, WHITE, "left", null); text(r.p.style, 112, 47 + i * 9, 1, "#8c96c8", "right", null); });
+  }
   if (K.phase === "count") { const n = Math.ceil(K.ct - 0.6); text(n > 0 ? String(n) : "GO!", LW / 2, 80, 4, n > 0 ? WHITE : LIME, "center"); }
   else if (K.msgT > 0 && K.phase === "race") text(K.msg, LW / 2, 70, 2, GOLD, "center");
-  if (K.test && K.phase !== "done") text(KEYS ? "TEST  ESC: QUIT" : "TEST", 4, 18, 1, GREY, "left", null);
+  if (K.test && K.phase !== "done") text(KEYS ? "TEST  ESC: QUIT  M: " + FP_MODEL.toUpperCase() : "TEST", 4, 18, 1, GREY, "left", null);
   if (K.phase === "race" && K.t < 8) (KEYS ? ["A D: STEER   S: BRAKE", "HOLD SHIFT IN A TURN: DRIFT", "SPACE: USE ITEM"] : ["HOLD A SIDE TO STEER"]).forEach((l, i) => text(l, LW / 2, 104 + i * 10, 1, WHITE, "center", null));
   if (K.phase === "done") fpResults();
 }
@@ -326,11 +425,11 @@ function fpResults() {
   const K = KART, order = K.racers.slice().sort((a, b) => (a.done && b.done ? a.finishT - b.finishT : b.done - a.done || fpDist(b) - fpDist(a))), w = 150, x = LW / 2 - w / 2;
   g.globalAlpha = 0.88; rect(INK, x, 30, w, 140); g.globalAlpha = 1; outline(x, 30, w, 140, GOLD);
   text(K.me.place === 1 ? "YOU WIN!" : ORD(K.me.place) + " PLACE", LW / 2, 40, 2, K.me.place === 1 ? GOLD : WHITE, "center");
-  order.forEach((r, i) => { const y = 58 + i * 12; text(ORD(i + 1), x + 8, y, 1, i < 3 ? GOLD : GREY, "left", null); fitDraw(atlas, r.id, x + 44, y, 18, 9, 1); text(r.name.slice(0, 9), x + 56, y, 1, r.me ? GOLD : WHITE, "left", null); if (r.done) text(fpTime(r.finishT - 3.6), x + w - 6, y, 1, "#c8d2f0", "right", null); });
+  order.forEach((r, i) => { const y = 58 + i * 12; text(ORD(i + 1), x + 8, y, 1, i < 3 ? GOLD : GREY, "left", null); fitDraw(atlas, r.id, x + 44, y, 18, 9, 1); text(r.name.slice(0, 9), x + 56, y, 1, r.me ? GOLD : WHITE, "left", null); if (r.p && w > 140 && LW >= 300) text(r.p.style, x + w + 6, y, 1, "#7a86b4", "left", null); if (r.done) text(fpTime(r.finishT - 3.6), x + w - 6, y, 1, "#c8d2f0", "right", null); });
   if (Math.floor(K.t * 2) % 2) text(KEYS ? "SPACE: RACE AGAIN" + (K.test ? "  ESC: QUIT" : "") : "TAP TO RACE AGAIN", LW / 2, 162, 1, WHITE, "center", null);
 }
 
-window.FPX = { FP_TUNE, get K() { return KART; }, startKart, FP, fpDist, fpTrack, kartUpdate,
+window.FPX = { FP_TUNE, setModel(m) { FP_MODEL = m; }, get K() { return KART; }, startKart, FP, fpDist, fpTrack, kartUpdate,
   race(bot) {                               // simulate one whole race with a robot driving: -> stats
     startKart(true, bot); const K = KART; let off = 0, n = 0;
     while (!K.me.done && K.t < 400) { kartUpdate(1 / 60); K.racers.forEach(r => { if (!r.me) { n++; if (Math.abs(r.x) > 1) off++; } }); }
