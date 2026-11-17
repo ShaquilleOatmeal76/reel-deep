@@ -2956,6 +2956,7 @@ function lureIcon(i, x, y) {
 const TITLE_BAR = [["SCORES", CYAN, 0, 39], ["LOG", GOLD, 41, 21], ["SHOP", ORANGE, 64, 27], ["MORE", WHITE, 93, 27]];
 function drawHud() {
   const t = T, st = S.state;
+  if (st === "title" && wideMenus()) { drawTitleWide(); return; }   // the PC main menu
   g.save(); g.translate(OX, 0);                          // menus sit in a 120-wide column in the middle; x = -OX is the screen's left edge
   if (st === "title") {
     const L = 0, R = 120;                                // inside the menu column, clear of the full-screen button
@@ -3041,7 +3042,8 @@ function drawFightBox(fg, name, leg) {                       // the timing bar, 
 }
 function drawHaulBox() {                                     // the haul screen, in the menu column
   const st = S.state, t = T;
-  if (st === "haul") {
+  if (st === "haul" && wideMenus()) drawHaulWide(S.haul, t);
+  else if (st === "haul") {
     const h = S.haul;
     box(6, 84, 108, 112, CYAN);
     text("THE HAUL", 60, 92, 1, CYAN, "center", null);
@@ -3062,7 +3064,9 @@ function drawHaulBox() {                                     // the haul screen,
       if (h.record && h.total > 0) text("YOUR NEW BEST!", 60, 76, 1, GOLD);
       if (Math.floor(t * 2.5) % 2) text("TAP TO CONTINUE", 60, 188, 1, WHITE, "center", null);
     }
-    const k = (S.stT - 0.5) / 0.42, i = Math.floor(k);    // each fish flies out of the water into the boat as it is weighed
+  }
+  if (st === "haul") {
+    const h = S.haul, k = (S.stT - 0.5) / 0.42, i = Math.floor(k);    // each fish flies out of the water into the boat as it is weighed
     if (i >= 0 && i < h.rows.length) {
       const u = k - i, [w, hh] = sprSize(h.rows[i][0], h.rows[i][3] ? 1.7 : 1), wl = Math.round(-S.cam);
       const fx = Math.floor(lerp(72, 44, u) - w / 2), fy = Math.floor(wl - 4 - Math.sin(u * Math.PI) * 30 - hh / 2);
@@ -4075,6 +4079,103 @@ function noteTapWide(rx, ly) {
   const n = store.sec.bottles.length, h = hitAt(paperArrows(n), rx, ly);
   if (h) { S.noteIdx = (S.noteIdx + h[5] + n) % n; play("tick"); } else closeOverlay();
 }
+
+// ---- PC menus, part 3: the main menu, the haul, the Flipside haul
+// The main menu on a wide screen: the phone layout with room to breathe. Kade found a version with side panels and a card
+// in the sky far too crowded (Nov 17, 2026), so the water to the sides stays empty: corners for coins and title, the bounty
+// under the logo, one row of lures, CAST, the bet, and one row of menus (MORE still holds the rest).
+const TITLE_WIDE_BAR = [["SCORES", CYAN, "scores"], ["LOG", GOLD, "log"], ["SHOP", ORANGE, "shop"], ["MORE", WHITE, "more"]];
+function titleWideHits() {
+  const cx = Math.floor(LW / 2), h = [];
+  LURES.forEach((L, i) => h.push(["lure", cx - 72 + i * 38, 90, 30, 28, i]));
+  h.push(["cast", cx - 50, 132, 100, 22, 0], ["bet", cx - 62, 159, 124, 13, 0]);
+  TITLE_WIDE_BAR.forEach((m, i) => h.push(["menu", cx - 100 + i * 51, 180, 47, 14, i]));
+  return h;
+}
+function titleWideAct(id, v) {
+  if (id === "lure") { S.lure = v; play("tick"); }
+  else if (id === "cast") cast();
+  else if (id === "bet") openBet();
+  else { const m = TITLE_WIDE_BAR[v][2]; S.overlay = m; S.scoreSel = -1; if (m === "scores") LB.load(); play("select"); }
+}
+function drawTitleWide() {
+  const t = T, cx = Math.floor(LW / 2), on = Math.floor(t * 2.5) % 2;
+  disc(GOLD, 6, 6, 3); rect("#c89628", 5, 5, 2, 2); text(store.coins, 11, 6, 1, GOLD, "left");          // coins, top-left
+  text(titleName(store.eq.title), LW - 92, 6, 1, "#c8a0ff", "right");                                   // your title, left of the full-screen button
+  text("REEL", cx - 27, 22 + Math.floor(Math.sin(t * 2.5) * 1.5), 2, CYAN); text("DEEP", cx + 27, 22 + Math.floor(Math.sin(t * 2.5 + 1) * 1.5), 2, GOLD);
+  const bs = "TODAY'S BOUNTY: " + SPEC[S.bounty][1] + " X" + C.BOUNTY_X, bw = textW(bs, 1) + 8, bx = cx - (bw >> 1);
+  rect(INK, bx, 79, 5, 6); rect(GOLD, bx + 1, 80, 3, 4); rect(INK, bx + 2, 81, 1, 2); text(bs, bx + 8, 83, 1, GOLD, "left");
+  const left = tasks().d.concat(tasks().w).filter(q => !q.done).length;
+  for (const [id, x, y, w, h, v] of titleWideHits()) {
+    if (id === "lure") {
+      const Lu = LURES[v], sel = v === S.lure;
+      rect(sel ? "#1e285a" : INK, x, y, w, h); outline(x, y, w, h, sel ? GOLD : "#5a6496");
+      lureIcon(v, x + w / 2, y + 11);
+      for (let k = 0; k < Lu[5]; k++) rect(CYAN, x + w / 2 - Lu[5] * 3 + k * 6 + 1, y + 22, 4, 3);
+    } else if (id === "cast") { box(x, y, w, h, on ? WHITE : CYAN); text("CAST", x + w / 2, y + 11, 2, on ? WHITE : CYAN, "center"); }
+    else if (id === "bet") {
+      const b = tav().bet, bt = b && !b.cast ? betLabel(b) + ": " + b.stake : "", bl = bt || "PLACE A BET", lx = x + w / 2 - (textW(bl, 1) >> 1) + 4;
+      box(x, y, w, h, bt ? GOLD : CHIP); chipIcon(lx - 6, y + 6); text(bl, lx, y + 6, 1, bt ? GOLD : CHIP, "left", null);
+    } else {
+      btn(x, y, w, h, TITLE_WIDE_BAR[v][0], TITLE_WIDE_BAR[v][1]);
+      if (TITLE_WIDE_BAR[v][2] === "more" && left) { rect(INK, x + w - 5, y - 5, 9, 9); rect(GOLD, x + w - 4, y - 4, 7, 7); text(left, x + w - 1, y - 1, 1, INK, "center", null); }
+    }
+  }
+  text(LURES[S.lure][1], cx, 125, 1, GOLD, "center");
+  S.popups.slice(-2).forEach((p, i) => { const tw = textW(p[0], 1); box(Math.floor(cx - tw / 2) - 4, 47 - i * 13, tw + 8, 11, p[2]); text(p[0], cx, 52 - i * 13, 1, p[2], "center", null); });
+}
+// the haul on a wide screen: a wider card, each fish with its picture and full name
+function drawHaulWide(h, t) {
+  g.save(); g.translate(-OX, 0);
+  const x = Math.floor(LW / 2) - 114, w = 228;
+  box(x, 82, w, 114, CYAN);
+  text("THE HAUL", x + w / 2, 90, 1, CYAN, "center", null);
+  const rows = h.rows.slice(0, h.shown);
+  rows.forEach(([fid, lb, tag, tr], i) => {
+    const y = 103 + i * 12;
+    fitDraw(atlas, fid, x + 16, y, 22, 10, 1);
+    text((SPEC[fid][7] ? "!" : tr ? "*" : "") + SPEC[fid][1], x + 32, y, 1, HIDDEN.includes(fid) ? "#c8a0ff" : SPEC[fid][7] ? LEGEND : tr ? TROPHY : WHITE, "left", null);
+    if (tag) text(tag, x + 184, y, 1, tag[0] === "X" ? GOLD : tag === "NEW" ? LIME : tag === "???" ? "#c8a0ff" : "#ff8c32", "right", null);
+    text(lb + " LB", x + w - 6, y, 1, WHITE, "right", null);
+  });
+  if (!h.rows.length) text("NOTHING BUT SEAWEED", x + w / 2, 112, 1, WHITE, "center", null);
+  h.extra.slice(0, Math.max(0, h.shown - h.rows.length)).forEach(([txt, col], j) => text(txt, x + w / 2, 143 + j * 10, 1, col, "center", null));
+  const done = h.shown >= h.n;
+  rect(CYAN, x + 6, 166, w - 12, 1);
+  text("TOTAL", x + 8, 177, 1, CYAN, "left", null); text("LB", x + w - 6, 179, 1, GOLD, "right", null);
+  text(done ? h.total : rows.reduce((a, r) => a + r[1], 0), x + w - 22, 176, 2, GOLD, "right", null);
+  if (done && S.stT > h.end) {
+    if (h.record && h.total > 0) text("YOUR NEW BEST!", LW / 2, 74, 1, GOLD);
+    if (Math.floor(t * 2.5) % 2) text("TAP TO CONTINUE", x + w / 2, 189, 1, WHITE, "center", null);
+  }
+  g.restore();
+}
+// the Flipside haul: your monster self big on the left, the catch on the right
+function drawFHaulWide() {
+  rect("#14050a", 0, 0, LW, LH);
+  const x0 = WX(), h = S.fhaul, P = "#ff8ca0", px = x0 + 130, pw = 218;
+  text("YOU CAUGHT YOURSELF", x0 + 60, 10, 1, P, "center", null);
+  rect("#1e0a12", x0, 20, 120, 150); outline(x0, 20, 120, 150, P);
+  g.save(); g.translate(x0 + 60, 120 + (Math.floor(T * 2) % 2)); g.scale(4, 4); const mc = "mchar" + store.eq.char, [cw, ch] = sprSize(mc); spr(mc, -cw / 2, -ch); g.restore();
+  text("SEE YOU DOWN THERE", x0 + 60, 158, 1, "#c88c9c", "center", null);
+  box(px, 20, pw, 168, P);
+  text("THE FLIPSIDE HAUL", px + pw / 2, 28, 1, P, "center", null);
+  h.rows.forEach(([id, lb, tr, isNew], i) => {
+    const y = 42 + i * 12, sp = FSPEC[id];
+    fitDraw(atlas, "fc_" + id, px + 14, y, 20, 10, 1);
+    text((sp[6] ? "!" : tr ? "*" : "") + sp[1], px + 28, y, 1, id === DATA.flip.mythic ? "#ffd2f0" : sp[6] ? LEGEND : tr ? TROPHY : WHITE, "left", null);
+    if (isNew) text("NEW", px + 176, y, 1, LIME, "right", null);
+    text(lb + " LB", px + pw - 6, y, 1, WHITE, "right", null);
+  });
+  if (!h.rows.length) text("AN EMPTY HOOK", px + pw / 2, 52, 1, GREY, "center", null);
+  if (h.sets.length) text(h.sets.map(s => s[1]).join(" + ").slice(0, 34) + " X" + h.mult, px + pw / 2, 84, 1, LIME, "center", null);
+  h.news.slice(0, 5).forEach(([txt, col], j) => text(txt.slice(0, 34), px + pw / 2, 98 + j * 10, 1, col, "center", null));
+  rect(P, px + 6, 152, pw - 12, 1);
+  text("SCORE", px + 8, 163, 1, P, "left", null); text(h.total, px + pw - 6, 162, 2, GOLD, "right", null);
+  if (h.record && h.total > 0) text("YOUR FLIPSIDE BEST!", px + pw / 2, 178, 1, GOLD, "center", null);
+  if (Math.floor(T * 2.5) % 2) text("TAP TO CONTINUE", LW / 2, 194, 1, WHITE, "center", null);
+}
+WIDE.fhaul = { draw: drawFHaulWide, tap: () => closeOverlay(), key: () => {} };
 Object.assign(WIDE, {
   tavern: { draw: drawTavernWide, tap: tavernTapWide, key: () => {} },
   chipshop: { draw: drawChipShopWide, tap: chipShopTapWide, key: d => { TAV.shopSel = (TAV.shopSel + d + SHOP_ROWS.length) % SHOP_ROWS.length; play("tick"); } },
@@ -4349,6 +4450,12 @@ function titleTap(rx, lx, ly) {                            // -> true if the tap
     else { S.popups.push(["CLOSED. " + (TAV_OPEN_AT - store.dives) + " DIVES TO GO", 2.4, ORANGE]); play("miss"); }
     return true;
   }
+  if (wideMenus()) {                                       // the PC main menu: its own buttons; the rest of the water casts
+    const h = hitAt(titleWideHits(), rx, ly);
+    if (h) { titleWideAct(h[0], h[5]); return true; }
+    if (ly < wl) { swipeAt = [rx, ly]; return true; }
+    return false;
+  }
   if (ly < wl) { swipeAt = [rx, ly]; return true; }       // the rest of the sky: swipes and taps there can enter a certain code
   if (ly >= 159 && ly < 173 && lx >= 8 && lx < 106) { openBet(); return true; }
   if (ly >= 96 && ly < 124 && lx >= 6 && lx < 114) { S.lure = clamp(Math.floor((lx - 6) / 27), 0, LURES.length - 1); play("tick"); return true; }
@@ -4467,7 +4574,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits, tavern: tavernWideHits, chipshop: chipShopWideHits, jukebox: jukeWideHits, myfish: myFishWideHits, bet: betWideHits, c21: c21WideHits, derby: derbyWideHits, scratch: scratchWideHits, vip: vipWideHits, rename: renameWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits, tavern: tavernWideHits, chipshop: chipShopWideHits, jukebox: jukeWideHits, myfish: myFishWideHits, bet: betWideHits, c21: c21WideHits, derby: derbyWideHits, scratch: scratchWideHits, vip: vipWideHits, rename: renameWideHits, title: titleWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
