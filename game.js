@@ -390,9 +390,12 @@ function todaysBounty() {                              // one ordinary species i
   const d = new Date(), pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && s[2] <= 6 && s[5] >= 2).map(s => s[0]);
   return RNG((d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 7 + 1).choice(pool);
 }
-function stormNow() {                                 // the weather follows the clock: each hour is stormy or not, the same for everybody
-  return RNG(Math.floor(Date.now() / 3600000) * 2654435761 + 17).random() < 0.14;
-}
+// The weather follows the clock, the same for everybody, so refreshing can't reroll it. Storms were whole clock hours,
+// which meant a lunch-break session could be all storm (Kade, Nov 17, 2026). Now each 15 minutes is stormy about 1 time in
+// 7, never two spells in a row: about 13% of the time, as before, in short bursts.
+const STORM_MS = 15 * 60000, STORM_P = 0.15;
+const stormBlock = b => RNG(b * 2654435761 + 17).random() < STORM_P;
+function stormNow(ms) { const b = Math.floor((ms || Date.now()) / STORM_MS); return stormBlock(b) && !stormBlock(b - 1); }
 function zoneOf(m) { for (let i = 0; i < ZONES.length; i++) if (m < ZONES[i][2]) return i; return ZONES.length - 1; }
 
 // ------------------------------------------------------------- leaderboard
@@ -578,6 +581,7 @@ function pulse() {                                       // scatter everything n
   if (S.state === "boss") { bossPulse(); return; }
   if (S.state === "flip") { flipPulse(); return; }
   if (!["down", "rise"].includes(S.state) || S.pulses <= 0) return;
+  S.pulsed = true;                                         // for the NO PULSES dive bet
   if (!S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; startBoss(false); return; }   // knock on the eye with an empty hook
   if (store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) { knockCrack(); if (S.state === "flip" || S.toFlip) { S.pulses--; return; } }   // knock on the crack
   S.pulses--; S.ring = 0; S.immune = Math.max(S.immune, 0.5);
@@ -641,7 +645,7 @@ function hookCheck() {                                   // whatever the hook is
     if (f.gh === 1) { f.gh = 2; say("ghost", "IT WENT RIGHT THROUGH!", "#dcf0ff"); continue; }
     if (f.gh === 2) continue;
     const legend = f.id !== "jelly" && SPEC[f.id][7];
-    if (f.id === "jelly") { play("zap"); S.flash = 0.2; S.rising = false; setState("turn", "ZAPPED!"); }     // dive over; you keep what's hooked
+    if (f.id === "jelly") { play("zap"); S.flash = 0.2; S.rising = false; S.stung = true; setState("turn", "ZAPPED!"); }     // dive over; you keep what's hooked
     else if (legend && S.catch.some(c => SPEC[c[0]][7])) {
       if (C.FIXED.includes(f.id)) continue;
       scare(f, f.x + 10 >= S.hx ? 1 : -1, 2.0, true);
@@ -651,6 +655,14 @@ function hookCheck() {                                   // whatever the hook is
     else land(i, f);
     break;
   }
+}
+function bottleXY(bt, cam, t) { return [Math.floor(bt.x + Math.sin(t * 0.9) * 3), Math.floor(bt.y - cam + Math.sin(t * 2) * 1.5) - 4]; }
+function bottleTwinkle(bt, cam, t) {                       // a little four-point star that pops on and off beside the bottle
+  const [bx, by] = bottleXY(bt, cam, t), ph = (t * 0.8) % 1;
+  if (by < -16 || by > LH + 16 || ph > 0.45) return;
+  const k = Math.floor(t * 0.8), sx = bx + [7, -2, 6, 0][k % 4], sy = by + [-2, 1, 9, -3][k % 4], r = ph < 0.15 || ph > 0.3 ? 1 : 2;
+  rect(WHITE, sx, sy - r, 1, 2 * r + 1); rect(WHITE, sx - r, sy, 2 * r + 1, 1);
+  if (r > 1) { g.globalAlpha = 0.5; rect("#bfffe6", sx - 1, sy - 1, 3, 3); g.globalAlpha = 1; rect(WHITE, sx, sy, 1, 1); }
 }
 function darknessAt(m) {
   const d = DATA.dark;
@@ -746,6 +758,7 @@ function update(dt) {
 function land(i, f) {
   removeFish(i, f);
   S.catch.push([f.id, f.lb, f.tr, Math.floor(S.hy / M)]);
+  if (S.resume === "rise") S.riseN = (S.riseN || 0) + 1;  // caught on the slow ride up from the floor
   catchSound(S.catch.length - 1);
   splash(S.hx, S.hy, 6, "#c8ecff");
   const legend = SPEC[f.id][7];
@@ -812,6 +825,7 @@ function fightTap() {
 const SHORT = { "TROPHY CASE": "TROPHIES", "3 OF A KIND": "TRIPLE", "DEEP TRIO": "DEEP", "GRAND TOUR": "TOUR", "A PAIR": "PAIR" };
 function beginHaul() {
   const rows = [];
+  let newN = 0, recN = 0;
   for (const [fid, lb, tr] of S.catch) {
     const hot = fid === S.bounty;
     let tag = hot ? "X" + C.BOUNTY_X : "";
@@ -822,6 +836,7 @@ function beginHaul() {
       if (isNew) e = store.log[fid] = { n: 0, rec: 0 };
       const rec = lb > e.rec;
       e.n++; if (tr) e.star = true; if (rec) e.rec = lb;
+      if (isNew) newN++; else if (rec) recN++;
       if (!hot) tag = isNew ? "NEW" : rec ? "REC" : "";
     }
     rows.push([fid, hot ? lb * C.BOUNTY_X : lb, tag, tr]);
@@ -841,7 +856,9 @@ function beginHaul() {
   if (sets.length) { const long = sets.map(s => s[1]).join("+"), short = sets.map(s => SHORT[s[1]]).join("+"); extra.push([(sets.length === 1 ? long : short.length <= 13 ? short : sets.length + " BONUSES") + " X" + mult, LIME]); }
   if (S.bossWon) extra.push(["THE SLEEPER SLEEPS", "#c8a0ff"]);
   if (S.bottom) extra.push(["SEA FLOOR +" + C.BOTTOM_BONUS, CYAN]);
-  const dive = { total, mult, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty };
+  const dive = { total, mult, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty, newN, recN,
+    stung: !!S.stung, pulsed: !!S.pulsed, riseN: S.riseN || 0, last: tav().hist.length ? tav().hist[tav().hist.length - 1][0] : null,
+    best: store.best, board: LB.url && LB.today ? LB.today.map(e => e.s).sort((a, b) => b - a) : null };
   let coins = total > 0 ? Math.floor(total / 25) + 1 : 0;
   if (ids.includes("poop")) coins += 500;
   store.coins += coins;
@@ -849,7 +866,7 @@ function beginHaul() {
   const news = progressTasks(dive).map(([, c]) => ["TASK DONE! +" + c + " COINS", 4, LIME]).concat(checkTitles(dive).map(n => ["NEW TITLE: " + n, 5, GOLD]));
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id)) findSecret(id); });
   const q = tav(), chips = 2 + (S.reached >= 600 ? 3 : 0) + (S.bottom ? 5 : 0);       // a few chips per dive, more for deep ones
-  q.hist.push([total, S.bottom ? 1 : 0, S.catch.some(c => c[2]) ? 1 : 0, S.catch.some(c => SPEC[c[0]][7]) ? 1 : 0]);
+  q.hist.push([total, S.bottom ? 1 : 0, S.catch.some(c => c[2]) ? 1 : 0, S.catch.some(c => SPEC[c[0]][7]) ? 1 : 0, betMask(dive, betLine())]);
   if (q.hist.length > 20) q.hist.shift();
   addChips(chips);
   const betNews = settleBet(dive);
@@ -1726,7 +1743,14 @@ function draw() {
     if (f.id === S.bounty && Math.floor(t * 3) % 2) { const bx = x + (w >> 1); rect(INK, bx - 2, y - 7, 5, 6); rect(GOLD, bx - 1, y - 6, 3, 4); rect(INK, bx, y - 5, 1, 2); }   // today's bounty wears a tag
   }
   const bt = S.bottle;
-  if (bt && !bt.got && S.prepared) { const by = Math.floor(bt.y - cam + Math.sin(t * 2) * 1.5); if (by > -12 && by < LH + 12) spr("bottle", bt.x + Math.sin(t * 0.9) * 3, by - 4); }
+  if (bt && !bt.got && S.prepared) {                       // a message in a bottle: it glows and twinkles so it's easy to spot
+    const [bx, by] = bottleXY(bt, cam, t), [bw, bh] = sprSize("bottle"), cx = bx + bw / 2, cy = by + bh / 2, pu = 0.5 + 0.5 * Math.sin(t * 4);
+    if (by > -16 && by < LH + 16) {
+      g.globalAlpha = 0.16 + 0.14 * pu; disc("#bfffe6", cx, cy, Math.round(7 + 3 * pu));
+      g.globalAlpha = 0.3 + 0.2 * pu; disc("#eafff6", cx, cy, 4); g.globalAlpha = 1;
+      spr("bottle", bx, by);
+    }
+  }
   const diving = ["down", "turn", "up", "fight", "rise"].includes(S.state);
   if (diving) {                                          // the line, the hook and whatever is on it
     const pts = wl > -20 ? [[OX + 63, wl - 13]] : [];
@@ -1763,7 +1787,7 @@ function draw() {
       lights.push([Math.floor(lx), Math.floor(f.y - cam), SPEC[f.id] && SPEC[f.id][7] ? 30 : 18]);
     }
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
-    if (bt && !bt.got) lights.push([Math.floor(bt.x + 3), Math.floor(bt.y - cam), 14]);       // bottles catch the light a little
+    if (bt && !bt.got && S.prepared) { const [bx, by] = bottleXY(bt, cam, t); lights.push([Math.floor(bx + 3), Math.floor(by + 4), Math.round(20 + 4 * Math.sin(t * 4))]); }   // a bottle glows
     if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), 10]);       // the crack glows, faintly
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
     for (const gl of DATA.glows) if (gl[1] > cam - 20 && gl[1] < cam + LH + 20) lights.push([gl[0] - BG_O + OX, Math.floor(gl[1] - cam), gl[2]]);   // crystals and vent mouths
@@ -1772,6 +1796,7 @@ function draw() {
     lights.forEach(([x, y, r]) => disc("rgba(0,0,0,1)", x, y, Math.floor(r * 0.68), dg));
     g.drawImage(dark, 0, 0);
   }
+  if (bt && !bt.got && S.prepared && diving) bottleTwinkle(bt, cam, t);   // on top of the dark, so it shows at any depth
   if (wl > -30) {                                        // the surface, boat and angler
     for (let x = 0; x < LW; x += 4) rect(WHITE, x + Math.floor(t * 3) % 4, wl + Math.floor(Math.sin(t * 2 + x * 0.3) * (S.storm ? 2.4 : 1.2)), 2, 1);
     const bob = Math.floor(Math.sin(t * (S.storm ? 3.4 : 2)) * (S.storm ? 3 : 1.5));
@@ -1831,15 +1856,109 @@ function betLine() {                                        // over / under line
   if (h.length < 5) return 150;
   return Math.max(30, Math.round(h[h.length >> 1] / 10) * 10);
 }
-function betOdds() {                                        // [[kind, label, pays]], priced from your own recent dives
-  const h = tav().hist, n = h.length, line = betLine();
-  const p = (k, dflt) => n < 5 ? dflt : (h.filter(k).length + 1) / (n + 2);
-  const pays = q => Math.min(20, Math.max(1.1, Math.floor(EDGE / q * 10) / 10));
-  const over = p(r => r[0] > line, 0.5);
-  return [["over", "OVER " + line + " LB", pays(over)], ["under", "UNDER " + line + " LB", pays(Math.max(0.05, 1 - over))],
-    ["floor", "TOUCH FLOOR", pays(p(r => r[1], 0.3))], ["trophy", "A TROPHY", pays(p(r => r[2], 0.25))], ["legend", "A LEGENDARY", pays(p(r => r[3], 0.08))]];
+// ---- Bet on your dive (rotating since Nov 17, 2026): a pool of 50 bets, five on the board at a time (two safer, two
+// medium, one long shot), a fresh board after every dive. The board is seeded by the dive count, so reopening the panel
+// can't reroll it. Every bet is priced from your own last 20 dives: each dive's history row keeps, as its 5th field, the
+// bets that dive would have won (betMask). Rows from before this update only count for the five old bets. New bets start
+// from `prior` and move toward your real record. No bet pays for a bad dive (UNDER only counts on a real, deep dive).
+// BETS is append-only: history rows refer to bets by position. [id, label (13 chars max), what it means (19 max),
+// prior chance, test(dive, line) -> true / false / null (null = can't tell: the stake comes back)]
+const ZONE_N = i => d => d.catch.some(c => SPEC[c[0]][2] === i);
+const FULL = d => d.catch.length === C.CAPACITY;
+const isLeg = c => !!SPEC[c[0]][7];
+const BETS = [
+  ["over", "OVER {L} LB", "SCORE OVER THE LINE", 0.5, (d, L) => d.total > L],
+  ["under", "UNDER {L} LB", "3 FISH BELOW 400 M", 0.45, (d, L) => d.total >= L ? false : FULL(d) && d.catch.every(c => (c[3] || 0) >= 400) ? true : null],
+  ["floor", "TOUCH FLOOR", "REACH THE SEA FLOOR", 0.3, d => d.bottom],
+  ["trophy", "A TROPHY", "LAND A TROPHY FISH", 0.25, d => d.catch.some(c => c[2])],
+  ["legend", "A LEGENDARY", "LAND A LEGENDARY", 0.08, d => d.catch.some(isLeg)],
+  ["over2", "OVER {2L} LB", "DOUBLE THE LINE", 0.12, (d, L) => d.total > 2 * L],
+  ["over15", "OVER {1.5L} LB", "1.5X THE LINE", 0.25, (d, L) => d.total > Math.round(1.5 * L / 10) * 10],
+  ["online", "ON THE LINE", "WITHIN 15 OF {L} LB", 0.12, (d, L) => d.catch.length > 0 && Math.abs(d.total - L) <= 15],
+  ["fish50", "50 LB FISH", "ONE FISH 50 LB+", 0.3, d => d.catch.some(c => c[1] >= 50)],
+  ["fish200", "200 LB FISH", "ONE FISH 200 LB+", 0.06, d => d.catch.some(c => c[1] >= 200)],
+  ["all10", "ALL OVER 10", "3 FISH, EACH 10 LB+", 0.3, d => FULL(d) && d.catch.every(c => c[1] >= 10)],
+  ["beatlast", "BEAT LAST", "BEAT YOUR LAST DIVE", 0.45, d => d.last === null ? null : d.total > d.last],
+  ["odd", "ODD TOTAL", "AN ODD SCORE", 0.5, d => d.total > 0 && d.total % 2 === 1],
+  ["seven", "ENDS IN 7", "SCORE ENDS IN 7", 0.1, d => d.total % 10 === 7],
+  ["heavylast", "HEAVY LAST", "BIGGEST FISH LAST", 0.33, d => FULL(d) && d.catch[2][1] >= Math.max(...d.catch.map(c => c[1]))],
+  ["d600", "PAST 600 M", "DIVE BELOW 600 M", 0.5, d => d.reached >= 600],
+  ["d900", "PAST 900 M", "DIVE BELOW 900 M", 0.35, d => d.reached >= 900],
+  ["floor3", "FLOOR+3 FISH", "FLOOR, FULL HOOK", 0.15, d => d.bottom && FULL(d)],
+  ["deephook", "DEEP HOOK", "ALL 3 BELOW 500 M", 0.2, d => FULL(d) && d.catch.every(c => (c[3] || 0) >= 500)],
+  ["rise", "ON THE RISE", "CATCH ON THE WAY UP", 0.2, d => d.riseN > 0],
+  ["tight", "TIGHT HOOK", "3 FISH WITHIN 50 M", 0.25, d => FULL(d) && Math.max(...d.catch.map(c => c[3] || 0)) - Math.min(...d.catch.map(c => c[3] || 0)) <= 50],
+  ["z3", "WRECK FISH", "FROM THE WRECK", 0.4, ZONE_N(3)],
+  ["z4", "ABYSS FISH", "FROM THE ABYSS", 0.35, ZONE_N(4)],
+  ["z5", "CAVE FISH", "FROM CRYSTAL CAVES", 0.3, ZONE_N(5)],
+  ["z6", "VENT FISH", "FROM THE VENTS", 0.25, ZONE_N(6)],
+  ["z7", "BONE FISH", "FROM THE BONE YARD", 0.2, ZONE_N(7)],
+  ["z8", "TRENCH FISH", "FROM THE TRENCH", 0.15, ZONE_N(8)],
+  ["z9", "FLOOR FISH", "FROM THE FLOOR ZONE", 0.12, ZONE_N(9)],
+  ["onezone", "ONE ZONE", "3 FISH, SAME ZONE", 0.12, d => FULL(d) && new Set(d.catch.map(c => SPEC[c[0]][2])).size === 1],
+  ["tour", "3 ZONES", "3 FISH, 3 ZONES", 0.3, d => d.sets.some(x => x[1] === "GRAND TOUR")],
+  ["deeptrio", "DEEP TRIO", "3 FROM BONE YARD+", 0.08, d => d.sets.some(x => x[1] === "DEEP TRIO")],
+  ["trophy2", "2 TROPHIES", "TWO TROPHY FISH", 0.04, d => d.catch.filter(c => c[2]).length >= 2],
+  ["pair", "A PAIR", "TWO OF ONE SPECIES", 0.15, d => d.catch.length - new Set(d.catch.map(c => c[0])).size >= 1],
+  ["triple", "3 OF A KIND", "3 OF ONE SPECIES", 0.02, d => FULL(d) && new Set(d.catch.map(c => c[0])).size === 1],
+  ["bounty", "BOUNTY FISH", "TODAY'S BOUNTY FISH", 0.12, d => d.catch.some(c => c[0] === d.bounty)],
+  ["newsp", "NEW SPECIES", "NEW TO YOUR LOG", 0.2, d => d.newN > 0],
+  ["record", "FISH RECORD", "BEAT A FISH RECORD", 0.25, d => d.recN > 0],
+  ["setx2", "SET X2", "SET BONUS X2+", 0.2, d => d.mult >= 2],
+  ["setx3", "SET X3", "SET BONUS X3+", 0.04, d => d.mult >= 3],
+  ["clean", "CLEAN DIVE", "FULL HOOK, NO STING", 0.6, d => FULL(d) && !d.stung],
+  ["pb", "NEW BEST", "BEAT YOUR BEST", 0.04, d => d.total > d.best],
+  ["top10", "TODAY TOP 10", "MAKE TODAY'S TOP 10", 0.25, d => !d.board ? null : d.total > 0 && (d.board.length < 10 || d.total > d.board[9])],
+  ["beat1", "TODAY'S #1", "BEAT TODAY'S LEADER", 0.06, d => !d.board ? null : d.total > 0 && (!d.board.length || d.total > d.board[0])],
+  ["floortr", "FLOOR+TROPHY", "FLOOR AND A TROPHY", 0.08, d => d.bottom && d.catch.some(c => c[2])],
+  ["floorlg", "FLOOR+LEGEND", "FLOOR AND A LEGEND", 0.03, d => d.bottom && d.catch.some(isLeg)],
+  ["lgtr", "LEGEND+TROPHY", "ONE OF EACH", 0.02, d => d.catch.some(isLeg) && d.catch.some(c => c[2] && !isLeg(c))],
+  ["trbounty", "TROPHY+BOUNTY", "A TROPHY AND BOUNTY", 0.03, d => d.catch.some(c => c[2]) && d.catch.some(c => c[0] === d.bounty)],
+  ["newtr", "NEW+TROPHY", "NEW SPECIES, TROPHY", 0.05, d => d.newN > 0 && d.catch.some(c => c[2])],
+  ["deepover", "900 M+OVER", "900 M AND OVER {L}", 0.2, (d, L) => d.reached >= 900 && d.total > L],
+  ["nopulse", "NO PULSES", "FULL HOOK, NO PULSE", 0.3, d => FULL(d) && !d.pulsed],
+];
+const BET_I = Object.fromEntries(BETS.map((b, i) => [b[0], i]));
+const MASK_CH = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_";   // one character per bet (64 max)
+function betMask(dive, line) {                              // -> "w..|v.." bets this dive won | bets it couldn't decide
+  let won = "", skip = "";
+  BETS.forEach((b, i) => { const r = b[4](dive, line); if (r === null) skip += MASK_CH[i]; else if (r) won += MASK_CH[i]; });
+  return won + "|" + skip;
 }
-function betLabel(b) { return b.k === "over" ? "OVER " + b.line : b.k === "under" ? "UNDER " + b.line : b.k === "floor" ? "FLOOR" : b.k === "trophy" ? "TROPHY" : "LEGEND"; }
+function betChance(i) {                                     // your chance of winning bet i, from your recent dives
+  const id = BETS[i][0], old = { over: r => r[0] > betLine(), floor: r => !!r[1], trophy: r => !!r[2], legend: r => !!r[3] }[id];
+  let n = 0, hit = 0;
+  for (const r of tav().hist) {
+    if (typeof r[4] === "string") { const [w, sk] = r[4].split("|"); if ((sk || "").includes(MASK_CH[i])) continue; n++; if (w.includes(MASK_CH[i])) hit++; }
+    else if (old) { n++; if (old(r)) hit++; }                // rows from before the rotating bets
+  }
+  const k = 3;                                              // a light pull toward the starting odds
+  return clamp((hit + k * BETS[i][3]) / (n + k), 0.01, 0.97);
+}
+const betPays = q => { const x = EDGE / q; return Math.min(50, Math.max(1.1, x >= 10 ? Math.floor(x) : Math.floor(x * 10) / 10)); };
+function betAvail(i) {
+  const id = BETS[i][0];
+  if ((id === "top10" || id === "beat1") && !LB.url) return false;             // no shared board here
+  if ((id === "newsp" || id === "newtr") && LOGGED.every(s => store.log[s[0]])) return false;   // nothing new left to log
+  if ((id === "beatlast") && !tav().hist.length) return false;
+  return true;
+}
+function betText(t, line) { return t.replace("{L}", line).replace("{2L}", 2 * line).replace("{1.5L}", Math.round(1.5 * line / 10) * 10); }
+function betBoard() {                                       // -> five bet indexes for this dive: 2 safer, 2 medium, 1 long shot
+  const r = RNG(hashStr("bets" + (store.dives || 0) + (store.name || ""))), ch = BETS.map((b, i) => betChance(i));
+  const all = BETS.map((b, i) => i).filter(betAvail);
+  const tier = (lo, hi) => all.filter(i => ch[i] >= lo && ch[i] < hi);
+  const pick = (pool, n, out) => { pool = pool.filter(i => !out.includes(i)); for (let k = 0; k < n && pool.length; k++) out.push(pool.splice(Math.floor(r.random() * pool.length), 1)[0]); };
+  const out = [];
+  pick(tier(0.3, 1), 2, out); pick(tier(0.08, 0.3), 2, out); pick(tier(0, 0.08), 1, out);
+  pick(all, 5 - out.length, out);                           // a thin tier: fill from anywhere
+  return out.sort((a, b) => ch[b] - ch[a]);
+}
+function betOdds() {                                        // [[id, label, pays, what it means]] for this dive's board
+  const line = betLine();
+  return betBoard().map(i => [BETS[i][0], betText(BETS[i][1], line), betPays(betChance(i)), betText(BETS[i][2], line)]);
+}
+function betLabel(b) { const i = BET_I[b.k]; return i === undefined ? b.k.toUpperCase() : betText(BETS[i][1], b.line).replace(" LB", ""); }
 function openBet() {
   claimDaily();
   const q = tav(), o = betOdds();
@@ -1864,13 +1983,8 @@ function settleBet(dive) {                                  // -> a popup line f
   const b = tav().bet;
   if (!b) return null;
   tav().bet = null;
-  const deep = dive.catch.length === C.CAPACITY && dive.catch.every(c => (c[3] || 0) >= 400);
-  let won = { over: dive.total > b.line, floor: dive.bottom, trophy: dive.catch.some(c => c[2]), legend: dive.catch.some(c => SPEC[c[0]][7]) }[b.k];
-  if (b.k === "under") {
-    if (dive.total >= b.line) won = false;
-    else if (!deep) { addChips(b.stake); return ["BET VOID: STAKE BACK", 4, CHIP]; }    // under only counts on a real dive
-    else won = true;
-  }
+  const i = BET_I[b.k], won = i === undefined ? null : BETS[i][4](dive, b.line);
+  if (won === null) { addChips(b.stake); return ["BET VOID: STAKE BACK", 4, CHIP]; }    // e.g. UNDER without a real dive
   if (!won) { saveStore(); return ["BET LOST", 3, ORANGE]; }
   const pay = Math.floor(b.stake * b.pays);
   addChips(pay, "win");
@@ -2503,13 +2617,14 @@ function drawBet() {                                         // betting on the n
     const y = 29 + i * 17, sel = i === b.sel;
     box(4, y, 112, 15, sel ? CHIP : "#2a4a3c"); text(lab, 8, y + 7, 1, sel ? WHITE : "#a0c8b4", "left", null); text("X" + pays, 112, y + 7, 1, sel ? GOLD : "#8a9a6a", "right", null);
   });
-  text(b.opts[b.sel][0] === "under" ? "NEEDS 3 FISH BELOW 400M" : "STAKE", 60, 120, 1, b.opts[b.sel][0] === "under" ? ORANGE : "#a0c8b4", "center", null);
+  text(b.opts[b.sel][3] || "STAKE", 60, 120, 1, b.opts[b.sel][0] === "under" ? ORANGE : "#c8e6d2", "center", null);
   box(22, 126, 16, 15, CHIP); text("-", 30, 133, 1, CHIP, "center", null);
   text(b.stake, 60, 133, 2, WHITE, "center");
   box(82, 126, 16, 15, CHIP); text("+", 90, 133, 1, CHIP, "center", null);
   text("MAX " + MAX_STAKE + "  WIN " + Math.floor(b.stake * b.opts[b.sel][2]), 60, 148, 1, GREY, "center", null);
   const ok = tav().chips >= b.stake && b.stake >= 5;
   box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
+  text("NEW BETS EVERY DIVE", 60, 180, 1, "#5a8a74", "center", null);
   text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
   g.restore();
 }
@@ -3591,7 +3706,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
