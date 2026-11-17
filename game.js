@@ -1812,7 +1812,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -3331,6 +3331,334 @@ function shopPreview(kind, i, x, y, owned) {               // a small picture of
   else text(owned ? "*" : "?", cx, cy, 1, owned ? "#c8a0ff" : GREY, "center", null);
   g.restore();
 }
+// ===================================================================== PC menus
+// On a wide window (LW >= 320, e.g. any 16:9 browser) the collection menus use the whole screen instead of the 120-wide
+// phone column (Kade, Nov 17, 2026). Phones keep the column layouts. Each wide menu in WIDE has:
+//   hits()  -> [[id, x, y, w, h, value], ...] in screen coordinates: everything you can tap
+//   draw()  -> draws the menu (using the same hits, so buttons and taps can't drift apart)
+//   tap(rx, ly) and key(dir) for Left / Right. Enter / Space still go through overlayTap like before.
+const wideMenus = () => LW >= 320;
+const WX = () => Math.floor((LW - 348) / 2);                 // the wide menus are 348 wide, centred
+const hitAt = (hits, rx, ly) => hits.find(([, x, y, w, h]) => rx >= x && rx < x + w && ly >= y && ly < y + h);
+function outline(x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, 1); g.fillRect(x, y + h - 1, w, 1); g.fillRect(x, y, 1, h); g.fillRect(x + w - 1, y, 1, h); }
+const THEME = { blue: ["#080e28", "#10163a", "#24305e", "#8c96c8"], red: ["#14050a", "#1e0a12", "#3c1020", "#c88c9c"], purple: ["#0c0820", "#141030", "#2a1e4a", "#a096c8"] };
+function sideTab(th, x, y, w, h, label, on, accent, right) {
+  const [, bg, bgOn, dim] = THEME[th];
+  rect(on ? bgOn : bg, x, y, w, h); if (on) rect(accent, x, y, 2, h);
+  const room = Math.floor((w - 10 - (right ? textW(right, 1) + 6 : 0)) / 6);
+  text(label.length > room ? label.slice(0, room) : label, x + 6, y + (h >> 1), 1, on ? WHITE : dim, "left", null);
+  if (right) text(right, x + w - 4, y + (h >> 1), 1, on ? accent : dim, "right", null);
+}
+function arrowBtn(x, y, w, h, dir, col) { box(x, y, w, h, col); text(dir < 0 ? "<" : ">", x + w / 2, y + (h >> 1), 1, col, "center", null); }
+function fitDraw(img, name, cx, cy, maxw, maxh, kmax) {     // a sprite, scaled to fit a box, centred
+  const a = DATA.atlas[name], k = Math.min(kmax || 1, maxw / a[2], maxh / a[3]), w = Math.max(1, Math.floor(a[2] * k)), h = Math.max(1, Math.floor(a[3] * k));
+  g.drawImage(img, a[0], a[1], a[2], a[3], Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
+}
+const closeLine = lab => text(lab || "TAP HERE TO CLOSE", LW / 2, 194, 1, WHITE, "center", null);
+
+// ---- the coin shop: categories down the side, 30 items a page, and a try-on panel
+const SHOP_WIDE_PER = 30;
+function shopWideHits() {
+  const x0 = WX(), items = CATS[S.shopCat][2], pages = Math.ceil(items.length / SHOP_WIDE_PER), page = Math.floor(S.shopSel / SHOP_WIDE_PER), h = [];
+  CATS.forEach((c, i) => h.push(["cat", x0, 22 + i * 16, 86, 14, i]));
+  for (let k = 0; k < SHOP_WIDE_PER && page * SHOP_WIDE_PER + k < items.length; k++) h.push(["item", x0 + 92 + (k % 6) * 23, 34 + Math.floor(k / 6) * 20, 22, 19, page * SHOP_WIDE_PER + k]);
+  if (pages > 1) { h.push(["page", x0 + 112, 138, 18, 13, -1]); h.push(["page", x0 + 190, 138, 18, 13, 1]); }
+  h.push(["act", x0 + 234, 140, 114, 18, 0]);
+  return h;
+}
+function shopTapWide(rx, ly) {
+  const hit = hitAt(shopWideHits(), rx, ly);
+  if (!hit) { if (ly > 186) closeOverlay(); return; }
+  const [id, , , , , v] = hit, n = CATS[S.shopCat][2].length, pages = Math.ceil(n / SHOP_WIDE_PER), page = Math.floor(S.shopSel / SHOP_WIDE_PER);
+  if (id === "cat") { if (v !== S.shopCat) { S.shopCat = v; S.shopSel = 0; play("tick"); } }
+  else if (id === "item") { if (v === S.shopSel) shopAct(); else { S.shopSel = v; play("tick"); } }
+  else if (id === "page") { S.shopSel = ((page + v + pages) % pages) * SHOP_WIDE_PER; play("tick"); }
+  else shopAct();
+}
+function drawShopWide() {
+  rect("#080e28", 0, 0, LW, LH);
+  const x0 = WX(), [cname, kind, items] = CATS[S.shopCat], pages = Math.ceil(items.length / SHOP_WIDE_PER), page = Math.floor(S.shopSel / SHOP_WIDE_PER);
+  text("THE SHOP", x0, 8, 1, GOLD, "left", null);
+  text(store.coins + " COINS", x0 + 348, 8, 1, GOLD, "right", null);
+  for (const [id, x, y, w, h, v] of shopWideHits()) {
+    if (id === "cat") sideTab("blue", x, y, w, h, CATS[v][0], v === S.shopCat, ORANGE);
+    else if (id === "item") {
+      const [owned, worn] = shopState(S.shopCat, v);
+      rect(owned ? "#1e285a" : "#141a36", x, y, w, h); outline(x, y, w, h, v === S.shopSel ? WHITE : worn ? GOLD : INK);
+      shopPreview(kind, v, x, y, owned);
+    } else if (id === "page") arrowBtn(x, y, w, h, v, CYAN);
+  }
+  const ownedN = items.filter((it, i) => shopState(S.shopCat, i)[0]).length;
+  text(cname, x0 + 92, 26, 1, WHITE, "left", null);
+  text(ownedN + "/" + items.length, x0 + 229, 26, 1, GREY, "right", null);
+  if (pages > 1) text((page + 1) + "/" + pages, x0 + 160, 144, 1, WHITE, "center", null);
+  const i = Math.min(S.shopSel, items.length - 1), [owned, worn] = shopState(S.shopCat, i), cost = items[i][1];
+  const px = x0 + 234, pw = 114, top = 22;                   // the try-on panel: you, on your boat, wearing what you've picked
+  rect("#5aa0e6", px, top, pw, 46); rect("#2a6ab4", px, top + 46, pw, 26); for (let x = px; x < px + pw; x += 4) rect("#c8ecff", x + Math.floor(T * 3) % 4, top + 46, 2, 1);
+  g.save(); g.beginPath(); g.rect(px, top, pw, 72); g.clip();
+  if (kind === "title") text(owned || shopTitle(i)[2] ? items[i][0] : "???", px + pw / 2, top + 30, 1, owned ? "#c8a0ff" : GREY, "center");
+  else if (["char", "hat", "boat", "pet", "flag"].includes(kind)) { const eq = Object.assign({}, store.eq, { [kind]: i, mon: 0, mhat: 0, mpet: 0 }); g.translate(px + pw / 2, top + 46); g.scale(2, 2); angler(-24, 1, eq, 0); }
+  else { g.translate(px + pw / 2 - 33, top + 8); g.scale(3, 3); shopPreview(kind, i, 0, 0, true); }
+  g.restore();
+  outline(px, top, pw, 72, ORANGE);
+  if (kind === "title") {
+    text(owned ? "EARNED" : "LOCKED", px + pw / 2, 104, 1, owned ? LIME : GREY, "center", null);
+    wrap(owned ? "SHOWS BY YOUR NAME" : shopTitle(i)[2] || "A SECRET", 19).slice(0, 2).forEach((l, k) => text(l, px + pw / 2, 118 + k * 10, 1, "#8c96c8", "center", null));
+  } else {
+    text(items[i][0], px + pw / 2, 104, 1, WHITE, "center", null);
+    text(worn ? "WEARING" : owned ? "OWNED" : cost + " COINS", px + pw / 2, 118, 1, worn ? GOLD : owned ? LIME : GOLD, "center", null);
+  }
+  const lab = worn ? "WEARING" : owned ? (kind === "title" ? "USE TITLE" : "PUT ON") : kind === "title" ? "LOCKED" : store.coins >= cost ? "BUY" : "NEED " + (cost - store.coins) + " MORE";
+  const bc = worn || (!owned && (kind === "title" || store.coins < cost)) ? GREY : owned ? CYAN : GOLD;
+  box(px, 140, pw, 18, bc); text(lab, px + pw / 2, 149, 1, bc, "center", null);
+  text("TAP AGAIN TO BUY", px + pw / 2, 166, 1, "#5a6496", "center", null);
+  closeLine();
+}
+
+// ---- the fish log: zones down the side with how many you've caught, the zone's fish, and a big look at the one picked
+function logWideHits() {
+  const x0 = WX(), h = [];
+  ZONES.forEach((z, i) => h.push(["zone", x0, 22 + i * 16, 124, 14, i]));
+  LOGGED.filter(q => q[2] === S.logPage).forEach((q, i) => h.push(["fish", x0 + 128 + (i % 4) * 28, 22 + Math.floor(i / 4) * 20, 27, 19, i]));
+  return h;
+}
+function drawLogWide() {
+  rect("#080e28", 0, 0, LW, LH);
+  const x0 = WX(), page = LOGGED.filter(q => q[2] === S.logPage);
+  text("FISH LOG", x0, 8, 1, GOLD, "left", null);
+  text("CAUGHT " + LOGGED.filter(q => store.log[q[0]]).length + "/" + LOGGED.length, x0 + 348, 8, 1, WHITE, "right", null);
+  for (const [id, x, y, w, h, v] of logWideHits()) {
+    if (id === "zone") { const zf = LOGGED.filter(q => q[2] === v), got = zf.filter(q => store.log[q[0]]).length; sideTab("blue", x, y, w, h, ZONES[v][0], v === S.logPage, got === zf.length ? GOLD : CYAN, got + "/" + zf.length); }
+    else { const q = page[v], e = store.log[q[0]]; rect(e ? ZONE_COL[q[2]] : "#141a36", x, y, w, h); outline(x, y, w, h, v === S.logSel ? WHITE : q[7] && e ? GOLD : INK); fitDraw(e ? atlas : sil, q[0], x + 14, y + 10, 23, 15); if (e && e.star) text("*", x + 22, y + 5, 1, GOLD, "center", null); }
+  }
+  const q = page[Math.min(S.logSel, page.length - 1)], e = store.log[q[0]], px = x0 + 244, pw = 104;
+  rect(e ? ZONE_COL[q[2]] : "#141a36", px, 22, pw, 70); outline(px, 22, pw, 70, q[7] && e ? GOLD : CYAN);
+  fitDraw(e ? atlas : sil, q[0], px + pw / 2, 57, 94, 60, 3);
+  const lines = e ? [[nameOf(q[0]), tav().names && tav().names[q[0]] ? "#ff8cd2" : q[7] ? GOLD : WHITE], ["CAUGHT X" + e.n, CYAN], ["BEST " + e.rec + " LB", CYAN],
+    [q[7] ? "! LEGENDARY !" : e.star ? "* TROPHY CAUGHT" : "NO TROPHY YET", q[7] ? LEGEND : e.star ? TROPHY : GREY]]
+    : [["???", GREY], [q[7] ? "LEGENDARY" : "NOT CAUGHT YET", GREY]];
+  lines.push([q[6] ? "COMES OUT AT " + q[6] : ZONES[q[2]][0], "#5a6496"]);
+  lines.forEach(([l, c], k) => text(l, px + pw / 2, 102 + k * 11, 1, c, "center", null));
+  text("TROPHIES " + Object.values(store.log).filter(v => v.star).length + "/" + LOGGED.filter(r => !r[7] && r[4] > 0).length, px + pw / 2, 172, 1, GOLD, "center", null);
+  closeLine();
+}
+function logTapWide(rx, ly) {
+  const hit = hitAt(logWideHits(), rx, ly);
+  if (!hit) { if (ly > 186) closeOverlay(); return; }
+  if (hit[0] === "zone") { if (hit[5] !== S.logPage) { S.logPage = hit[5]; S.logSel = 0; play("tick"); } }
+  else { S.logSel = hit[5]; play("tick"); }
+}
+
+// ---- the Bestiary: the same, for the Flipside, with the rewards as an eleventh tab
+const B_WIDE_PER = 10;
+function bestiaryWideHits() {
+  const x0 = WX(), h = [], rew = S.bPage >= FLIP_Z.length;
+  FLIP_Z.forEach((z, i) => h.push(["zone", x0, 22 + i * 15, 124, 13, i]));
+  h.push(["zone", x0, 22 + FLIP_Z.length * 15, 124, 13, FLIP_Z.length]);
+  if (!rew) BESTIARY.filter(q => q[2] === S.bPage).forEach((q, i) => h.push(["fish", x0 + 128 + (i % 4) * 28, 22 + Math.floor(i / 4) * 20, 27, 19, i]));
+  else {
+    const r = S.bRew || 0, page = Math.floor(r / B_WIDE_PER), pages = Math.ceil(FLIP_REWARDS.length / B_WIDE_PER);
+    FLIP_REWARDS.slice(page * B_WIDE_PER, page * B_WIDE_PER + B_WIDE_PER).forEach((rw, k) => h.push(["rew", x0 + 128, 22 + k * 14, 112, 13, page * B_WIDE_PER + k]));
+    if (pages > 1) { h.push(["rpage", x0 + 128, 165, 18, 13, -1]); h.push(["rpage", x0 + 222, 165, 18, 13, 1]); }
+    h.push(["ract", x0 + 244, 150, 104, 16, 0]);
+  }
+  return h;
+}
+function drawBestiaryWide() {
+  rect("#14050a", 0, 0, LW, LH);
+  const x0 = WX(), PINK = "#ff8ca0", rew = S.bPage >= FLIP_Z.length, px = x0 + 244, pw = 104;
+  text("BESTIARY", x0, 8, 1, PINK, "left", null);
+  text("CAUGHT " + BESTIARY.filter(q => store.flip.log[q[0]]).length + "/" + BESTIARY.length, x0 + 348, 8, 1, WHITE, "right", null);
+  const page = rew ? [] : BESTIARY.filter(q => q[2] === S.bPage);
+  for (const [id, x, y, w, h, v] of bestiaryWideHits()) {
+    if (id === "zone") {
+      if (v < FLIP_Z.length) { const zf = BESTIARY.filter(q => q[2] === v), got = zf.filter(q => store.flip.log[q[0]]).length; sideTab("red", x, y, w, h, FLIP_Z[v][0], v === S.bPage, got === zf.length ? GOLD : PINK, got + "/" + zf.length); }
+      else sideTab("red", x, y, w, h, "REWARDS", rew, GOLD, FLIP_REWARDS.filter(r => r[3]()).length + "/" + FLIP_REWARDS.length);
+    } else if (id === "fish") { const q = page[v], e = store.flip.log[q[0]]; rect(e ? "#4a1424" : "#1e0a12", x, y, w, h); outline(x, y, w, h, v === S.bSel ? WHITE : q[6] && e ? GOLD : INK); fitDraw(e ? atlas : sil, "fc_" + q[0], x + 14, y + 10, 23, 15); if (e && e.star) text("*", x + 22, y + 5, 1, GOLD, "center", null); }
+    else if (id === "rew") { const r = FLIP_REWARDS[v], ok = r[3](), sel = v === (S.bRew || 0); rect(sel ? "#3c1020" : "#1e0a12", x, y, w, h); if (sel) outline(x, y, w, h, PINK); text(r[1].slice(0, 17), x + 3, y + 6, 1, !ok ? GREY : flipRewardWorn(r[4]) ? GOLD : WHITE, "left", null); if (ok) text("+", x + w - 3, y + 6, 1, LIME, "right", null); }
+    else if (id === "rpage") arrowBtn(x, y, w, h, v, PINK);
+  }
+  if (!rew) {
+    const q = page[Math.min(S.bSel, page.length - 1)], e = store.flip.log[q[0]];
+    rect(e ? "#4a1424" : "#1e0a12", px, 22, pw, 70); outline(px, 22, pw, 70, q[6] && e ? GOLD : PINK);
+    fitDraw(e ? atlas : sil, "fc_" + q[0], px + pw / 2, 57, 94, 60, 3);
+    const lines = e ? [[q[1], q[6] ? GOLD : WHITE], ["CAUGHT X" + e.n, PINK], ["BEST " + e.rec + " LB", PINK], [q[6] ? "! LEGENDARY !" : e.star ? "* TROPHY CAUGHT" : "NO TROPHY YET", q[6] ? LEGEND : e.star ? TROPHY : GREY]]
+      : [["???", GREY], [q[6] ? "LEGENDARY" : "NOT CAUGHT YET", GREY]];
+    lines.forEach(([l, c], k) => text(l, px + pw / 2, 102 + k * 11, 1, c, "center", null));
+    text("TROPHIES " + BESTIARY.filter(r => !r[6] && (store.flip.log[r[0]] || {}).star).length + "/" + BESTIARY.filter(r => !r[6]).length, px + pw / 2, 162, 1, GOLD, "center", null);
+    text("WON " + store.flip.wins + "/" + store.flip.runs + " BEST " + store.flip.best, px + pw / 2, 173, 1, PINK, "center", null);
+  } else {
+    const r = FLIP_REWARDS[Math.min(S.bRew || 0, FLIP_REWARDS.length - 1)], ok = r[3](), on = ok && flipRewardWorn(r[4]);
+    text("MONSTERS " + store.flip.mons.length + "/" + DATA.chars.length, px + pw / 2, 26, 1, PINK, "center", null);
+    rect("#1e0a12", px, 36, pw, 70); outline(px, 36, pw, 70, PINK);
+    text(r[1], px + pw / 2, 46, 1, ok ? GOLD : GREY, "center", null);
+    wrap(r[2], 16).slice(0, 4).forEach((l, k) => text(l, px + pw / 2, 62 + k * 10, 1, "#f0d2dc", "center", null));
+    text(ok ? "EARNED" : "NOT YET", px + pw / 2, 120, 1, ok ? LIME : GREY, "center", null);
+    if (ok) { box(px, 150, pw, 16, on ? CYAN : GOLD); text(on ? "TAKE OFF" : "PUT ON", px + pw / 2, 158, 1, on ? CYAN : GOLD, "center", null); }
+    const pages = Math.ceil(FLIP_REWARDS.length / B_WIDE_PER);
+    if (pages > 1) text((Math.floor((S.bRew || 0) / B_WIDE_PER) + 1) + "/" + pages, x0 + 184, 171, 1, WHITE, "center", null);
+  }
+  closeLine();
+}
+function bestiaryTapWide(rx, ly) {
+  const hit = hitAt(bestiaryWideHits(), rx, ly);
+  if (!hit) { if (ly > 186) closeOverlay(); return; }
+  const [id, , , , , v] = hit, pages = Math.ceil(FLIP_REWARDS.length / B_WIDE_PER);
+  if (id === "zone") { if (v !== S.bPage) { S.bPage = v; S.bSel = 0; play("tick"); } }
+  else if (id === "fish") { S.bSel = v; play("tick"); }
+  else if (id === "rew") { if (v === (S.bRew || 0)) flipRewardToggle(FLIP_REWARDS[v]); else { S.bRew = v; play("tick"); } }
+  else if (id === "rpage") { S.bRew = ((Math.floor((S.bRew || 0) / B_WIDE_PER) + v + pages) % pages) * B_WIDE_PER; play("tick"); }
+  else if (id === "ract" && FLIP_REWARDS[S.bRew || 0][3]()) flipRewardToggle(FLIP_REWARDS[S.bRew || 0]);
+}
+
+// ---- secrets: a long list on the left, the selected one and its reward on the right
+const SEC_WIDE_PER = 11;
+function secretsWideHits() {
+  const x0 = WX(), n = store.sec.found.length, pages = Math.max(1, Math.ceil(n / SEC_WIDE_PER)), page = Math.floor(S.secSel / SEC_WIDE_PER), h = [];
+  store.sec.found.slice(page * SEC_WIDE_PER, page * SEC_WIDE_PER + SEC_WIDE_PER).forEach((id, k) => h.push(["sec", x0, 22 + k * 14, 226, 13, page * SEC_WIDE_PER + k]));
+  if (pages > 1) { h.push(["page", x0 + 150, 2, 16, 13, -1]); h.push(["page", x0 + 210, 2, 16, 13, 1]); }
+  h.push(["bottles", x0 + 232, 22, 116, 14, 0]);
+  const sc = SECRETS.find(q => q[0] === store.sec.found[S.secSel]);
+  if (sc && sc[3]) h.push(["act", x0 + 232, 150, 116, 16, 0]);
+  return h;
+}
+function drawSecretsWide() {
+  rect("#0c0820", 0, 0, LW, LH);
+  const x0 = WX(), P = "#c8a0ff", n = store.sec.found.length, pages = Math.max(1, Math.ceil(n / SEC_WIDE_PER)), nb = store.sec.bottles.length, px = x0 + 232, pw = 116;
+  text("SECRETS", x0, 8, 1, P, "left", null);
+  if (pages > 1) text((Math.floor(S.secSel / SEC_WIDE_PER) + 1) + "/" + pages, x0 + 188, 8, 1, WHITE, "center", null);
+  for (const [id, x, y, w, h, v] of secretsWideHits()) {
+    if (id === "sec") { const sc = SECRETS.find(q => q[0] === store.sec.found[v]), sel = v === S.secSel; rect(sel ? "#2a1e4a" : "#141030", x, y, w, h); if (sel) outline(x, y, w, h, P); text(sc[1], x + 4, y + 6, 1, sc[3] && rewardWorn(sc[3]) ? GOLD : WHITE, "left", null); if (sc[3]) text(rewardWorn(sc[3]) ? "ON" : "+", x + w - 4, y + 6, 1, rewardWorn(sc[3]) ? GOLD : LIME, "right", null); }
+    else if (id === "page") arrowBtn(x, y, w, h, v, P);
+    else if (id === "bottles") { box(x, y, w, h, nb ? "#b4f0dc" : "#3c4264"); text(nb ? "READ BOTTLES: " + nb : "NO BOTTLES YET", x + w / 2, y + 7, 1, nb ? "#b4f0dc" : GREY, "center", null); }
+  }
+  const sc = SECRETS.find(q => q[0] === store.sec.found[S.secSel]);
+  if (sc) {
+    rect("#141030", px, 42, pw, 76); outline(px, 42, pw, 76, P);
+    text(sc[1].slice(0, 18), px + pw / 2, 51, 1, P, "center", null);
+    wrap(sc[2], 18).slice(0, 5).forEach((l, k) => text(l, px + pw / 2, 66 + k * 10, 1, "#dcd2f0", "center", null));
+    if (sc[3]) {
+      text("REWARD", px + pw / 2, 128, 1, "#7a6ea0", "center", null);
+      text(rewardName(sc[3]), px + pw / 2, 139, 1, GOLD, "center", null);
+      const on = rewardWorn(sc[3]);
+      box(px, 150, pw, 16, on ? CYAN : GOLD); text(on ? "TAKE OFF" : "PUT ON", px + pw / 2, 158, 1, on ? CYAN : GOLD, "center", null);
+    }
+  }
+  closeLine();
+}
+function secretsTapWide(rx, ly) {
+  const hit = hitAt(secretsWideHits(), rx, ly), n = store.sec.found.length, pages = Math.max(1, Math.ceil(n / SEC_WIDE_PER));
+  if (!hit) { if (ly > 186) closeOverlay(); return; }
+  const [id, , , , , v] = hit;
+  if (id === "sec") { if (v === S.secSel) secretAct(); else { S.secSel = v; play("tick"); } }
+  else if (id === "page") { S.secSel = Math.min(n - 1, ((Math.floor(S.secSel / SEC_WIDE_PER) + v + pages) % pages) * SEC_WIDE_PER); play("tick"); }
+  else if (id === "bottles") { if (store.sec.bottles.length) { S.overlay = "note"; S.noteIdx = store.sec.bottles.length - 1; S.noteBack = "secrets"; play("select"); } }
+  else secretAct();
+}
+
+// ---- tasks: today and this week side by side, with progress bars
+function drawTasksWide() {
+  rect("#080e28", 0, 0, LW, LH);
+  const x0 = WX(), T_ = tasks();
+  text("TASKS", x0, 8, 1, LIME, "left", null);
+  text(store.coins + " COINS", x0 + 348, 8, 1, GOLD, "right", null);
+  const col = (lab, list, x) => {
+    text(lab, x + 85, 28, 1, GREY, "center", null);
+    list.forEach((q, i) => {
+      const y = 38 + i * 40, c = q.done ? LIME : "#5a6496";
+      box(x, y, 170, 34, c);
+      text(taskText(q), x + 6, y + 8, 1, q.done ? LIME : WHITE, "left", null);
+      rect("#1a2048", x + 6, y + 17, 110, 5); rect(q.done ? LIME : CYAN, x + 6, y + 17, Math.round(110 * Math.min(1, q.p / q.n)), 5);
+      text(q.done ? "DONE" : q.p + "/" + q.n, x + 122, y + 19, 1, q.done ? LIME : CYAN, "left", null);
+      text("+" + q.r + " COINS", x + 164, y + 28, 1, GOLD, "right", null);
+    });
+  };
+  col("TODAY", T_.d, x0); col("THIS WEEK", T_.w, x0 + 178);
+  closeLine();
+}
+
+// ---- scores: today and all time side by side, titles shown, and the selected catch along the bottom
+function scoresWideHits() {
+  const x0 = WX(), fb = S.board && store.sec.beat, h = [];
+  if (store.sec.beat) { h.push(["board", x0 + 110, 2, 14, 13, -1]); h.push(["board", x0 + 224, 2, 14, 13, 1]); }
+  [0, 1].forEach(tab => { const rows = (fb ? (tab === 0 ? LB.ftoday : LB.fall) : (tab === 0 ? LB.today : LB.all)) || []; rows.forEach((r, i) => h.push(["row", x0 + tab * 178, 37 + i * 11, 170, 11, tab * 100 + i])); });
+  return h;
+}
+function drawScoresWide() {
+  rect("#080e28", 0, 0, LW, LH);
+  const x0 = WX(), fb = S.board && store.sec.beat, PINK = "#ff8ca0";
+  text(fb ? "FLIPSIDE" : "HIGH SCORES", x0 + 174, 8, 1, fb ? PINK : GOLD, "center", null);
+  text("YOUR BEST " + (fb ? store.flip.best : store.best), x0 + 348, 8, 1, CYAN, "right", null);
+  if (!LB.url) { ["THE SHARED BOARD IS NOT SET UP YET.", "SEE README.MD"].forEach((l, i) => text(l, LW / 2, 90 + i * 12, 1, GREY, "center", null)); closeLine(); return; }
+  [0, 1].forEach(tab => {
+    const x = x0 + tab * 178, rows = (fb ? (tab === 0 ? LB.ftoday : LB.fall) : (tab === 0 ? LB.today : LB.all)) || [];
+    text(tab ? "ALL TIME" : "TODAY", x + 85, 26, 1, CYAN, "center", null); rect("#24305e", x, 31, 170, 1);
+    if (!rows.length && !LB.status) text(tab ? "NO SCORES YET" : "NO CATCHES YET TODAY", x + 85, 60, 1, GREY, "center", null);
+  });
+  for (const [id, x, y, w, h, v] of scoresWideHits()) {
+    if (id === "board") { arrowBtn(x, y, w, h, v, PINK); continue; }
+    const tab = Math.floor(v / 100), i = v % 100, rows = (fb ? (tab === 0 ? LB.ftoday : LB.fall) : (tab === 0 ? LB.today : LB.all)), r = rows[i];
+    const sel = S.tab === tab && S.scoreSel === i, col = sel ? WHITE : i === 0 ? GOLD : r.n === store.name ? CYAN : "#c8d2f0";
+    if (sel) rect("#1e285a", x, y, w, h);
+    text(i + 1, x + 14, y + 6, 1, i < 3 ? GOLD : GREY, "right", null);
+    text(r.n, x + 20, y + 6, 1, col, "left", null);
+    if (r.m) { const mx = x + 20 + textW(r.n, 1) + 2; rect(PINK, mx, y + 4, 3, 3); rect(INK, mx + 1, y + 5, 1, 1); }
+    if (r.ti) text(String(r.ti).slice(0, 14), x + 44, y + 6, 1, "#7a6ea0", "left", null);
+    text(r.s, x + w - 2, y + 6, 1, col, "right", null);
+  }
+  if (LB.status) text(LB.status, LW / 2, 60, 1, ORANGE, "center", null);
+  if (LB.note) text(LB.note, LW / 2, 18, 1, ORANGE, "center", null);
+  const rows = (fb ? (S.tab === 0 ? LB.ftoday : LB.fall) : (S.tab === 0 ? LB.today : LB.all)) || [], r = rows[S.scoreSel], hh = r && (fb ? unpackFlipHaul(r.h) : unpackHaul(r.h));
+  box(x0, 152, 348, 34, fb ? PINK : CYAN);
+  if (!r) text(rows.length ? "PICK A SCORE TO SEE THE CATCH" : "", LW / 2, 169, 1, GREY, "center", null);
+  else if (!hh) text("NO CATCH DETAILS", LW / 2, 169, 1, GREY, "center", null);
+  else {
+    hh.fish.forEach((f, i) => {
+      const sp = fb ? FSPEC[f[0]] : SPEC[f[0]], leg = fb ? sp[6] : sp[7], x = x0 + 6 + i * 114;
+      text((leg ? "!" : f[2] ? "*" : "") + sp[1].slice(0, 17), x, 159, 1, !fb && HIDDEN.includes(f[0]) ? "#c8a0ff" : leg ? LEGEND : f[2] ? TROPHY : WHITE, "left", null);
+      text(f[1] + " LB", x, 169, 1, GREY, "left", null);
+    });
+    text(r.n + "  " + r.s + "  X" + hh.mult + (!fb && hh.bottom ? " +FLOOR" : ""), x0 + 6, 179, 1, LIME, "left", null);
+    if (r.ti) text(String(r.ti), x0 + 342, 179, 1, "#c8a0ff", "right", null);
+  }
+  closeLine();
+}
+function scoresTapWide(rx, ly) {
+  const hit = hitAt(scoresWideHits(), rx, ly);
+  if (!hit) { if (ly > 186) closeOverlay(); return; }
+  if (hit[0] === "board") { S.board = S.board ? 0 : 1; S.scoreSel = -1; play("tick"); }
+  else { S.tab = Math.floor(hit[5] / 100); S.scoreSel = hit[5] % 100; play("tick"); }
+}
+
+// ---- how to play: the pages down the side, the page itself in a wide panel
+function helpWideHits() { const x0 = WX(); return HELP.map((p, i) => ["page", x0, 22 + i * 18, 112, 15, i]); }
+function drawHelpWide() {
+  rect("#080e28", 0, 0, LW, LH);
+  const x0 = WX(), [head, lines] = HELP[S.helpPage], cx = x0 + 120 + 114;
+  text("HOW TO PLAY", x0, 8, 1, GOLD, "left", null);
+  for (const [, x, y, w, h, v] of helpWideHits()) sideTab("blue", x, y, w, h, HELP[v][0], v === S.helpPage, CYAN);
+  rect("#10163a", x0 + 120, 22, 228, 160); outline(x0 + 120, 22, 228, 160, "#24305e");
+  text(head, cx, 38, 2, CYAN);
+  lines.forEach((l, i) => text(l, cx, 58 + i * 10, 1, l.includes("+") || l.includes("X3") ? GOLD : WHITE, "center", null));
+  closeLine(S.helpPage < HELP.length - 1 ? "TAP FOR NEXT PAGE" : "TAP HERE TO PLAY");
+}
+function helpTapWide(rx, ly) {
+  const hit = hitAt(helpWideHits(), rx, ly);
+  if (hit) { S.helpPage = hit[5]; play("tick"); }
+  else if (S.helpPage < HELP.length - 1) { S.helpPage++; play("tick"); }
+  else closeOverlay();
+}
+
+const WIDE = {
+  shop: { draw: drawShopWide, tap: shopTapWide, key: d => { S.shopCat = (S.shopCat + d + CATS.length) % CATS.length; S.shopSel = 0; play("tick"); } },
+  log: { draw: drawLogWide, tap: logTapWide, key: d => { S.logPage = (S.logPage + d + ZONES.length) % ZONES.length; S.logSel = 0; play("tick"); } },
+  bestiary: { draw: drawBestiaryWide, tap: bestiaryTapWide, key: d => { S.bPage = (Math.min(S.bPage, FLIP_Z.length) + d + FLIP_Z.length + 1) % (FLIP_Z.length + 1); S.bSel = 0; play("tick"); } },
+  secrets: { draw: drawSecretsWide, tap: secretsTapWide, key: d => { const n = store.sec.found.length; if (n) { S.secSel = (S.secSel + d + n) % n; play("tick"); } } },
+  tasks: { draw: drawTasksWide, tap: (rx, ly) => { if (ly > 186) closeOverlay(); }, key: () => {} },
+  scores: { draw: drawScoresWide, tap: scoresTapWide, key: d => { S.tab = (S.tab + 1) % 2; S.scoreSel = -1; play("tick"); } },
+  help: { draw: drawHelpWide, tap: helpTapWide, key: d => { S.helpPage = (S.helpPage + d + HELP.length) % HELP.length; play("tick"); } },
+};
+
 function drawShop() {
   rect("#080e28", 0, 0, LW, LH);
   g.save(); g.translate(OX, 0);
@@ -3512,6 +3840,7 @@ function closeOverlay() {
 function overlayTap(lx, ly) {
   if (S.overlay === "credits") { if (CRED.done) closeOverlay(); else CRED.fast = true; return; }
   if (tavernTap(lx, ly)) return;
+  if (wideMenus() && WIDE[S.overlay]) { WIDE[S.overlay].tap(lx + OX, ly); return; }   // the PC layouts
   const arrows = n => { if (ly < 17 && (lx < 24 || lx > 96)) { play("tick"); return (lx > 96 ? 1 : n - 1); } return 0; };
   if (S.overlay === "help") {
     const d = arrows(HELP.length);
@@ -3659,7 +3988,7 @@ window.addEventListener("keydown", e => {
     if (c === "Escape") closeOverlay();
     else if (S.overlay === "plinko") plinkoKey(c, keyDir(e));
     else if (c === "Space" || c === "Enter") { if (S.overlay === "shop") shopAct(); else overlayTap(60, S.overlay === "help" ? 100 : 190); }
-    else if (keyDir(e)) overlayTap(keyDir(e) > 0 ? 110 : 10, 8);
+    else if (keyDir(e)) { const W = wideMenus() && WIDE[S.overlay]; if (W) W.key(keyDir(e)); else overlayTap(keyDir(e) > 0 ? 110 : 10, 8); }
     return;
   }
   const dir = keyDir(e);
@@ -3706,7 +4035,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
