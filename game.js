@@ -318,7 +318,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"], ["otherside", "THE OTHER SIDE", "BEAT THE GAME"]])
   .concat(["GAP KEEPER", "TOOTH FAIRY", "MARROW MINER", "BLISTER POPPER", "EYE SPY", "LAMPLIGHTER", "GHOST DECKHAND", "SHADOW BOXER", "KNOT TIER", "MIRROR MIRROR"]
     .map((n, i) => ["fzone" + i, n, "FILL " + DATA.flip.zones[i][0]]))
-  .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY"], ["bestiary", "BESTIARY KEEPER", "FILL THE BESTIARY"], ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS"]]);
+  .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY"], ["bestiary", "BESTIARY KEEPER", "FILL THE BESTIARY"], ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS"]])
+  .concat([["pegleg", "PEG LEG", "HIT X25 IN PLINKO"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -502,7 +503,7 @@ function cast() {                                        // the lure is chosen: 
   if (magnet) { tav().magnet--; }
   if (tav().bet) tav().bet.cast = true;                    // the bet is on: leaving now loses it
   saveStore();
-  if (S.rng.random() < (magnet ? 0.5 : 0.125)) {          // about one dive in eight has a message in a bottle (half, with a magnet)
+  if (S.rng.random() < (magnet ? 0.5 : 0.2)) {            // about one dive in five has a message in a bottle (half, with a magnet)
     const id = pickBottle(S.rng);
     if (id >= 0) S.bottle = { id, x: S.rng.uniform(10, LW - 20), y: S.rng.uniform(30, C.MAX_M - 80) * M, got: false };
   }
@@ -1786,7 +1787,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = { credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = { plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2044,7 +2045,7 @@ const SHOP_ROWS = [
   ["jukebox", "JUKEBOX", 150, "MUSIC HERE AND ON THE TITLE"],
   ["dream", "DREAM SLEEPER", 20, "FIGHT A GHOST OF IT. PRACTICE ONLY"],
   ["drink", "A DRINK", 10, "BUY HIM ONE. HE TALKS"],
-  ["scratch", "SCRATCH CARD", 5, "THREE ALIKE WINS, UP TO X20"],
+  ["scratch", "SCRATCH CARD", 5, "THREE ALIKE WINS, UP TO X500"],
   ["show", "FIREWORKS", 30, "A SHOW OVER YOUR BOAT"],
   ["cap", "OLD MAN'S CAP", 300, "A HAT. HE HAS A SPARE"],
   ["cat", "BAR CAT", 600, "A PET. IT CAME WITH THE PLACE"],
@@ -2063,6 +2064,7 @@ const rumourPrice = () => Math.min(400, 150 + 50 * (tav().rumours || 0));
 function shopRowState(i) {                                  // -> [label shown, price or null, note]
   const q = tav(), [id, lab, price, note] = SHOP_ROWS[i], cm = TAV_COSM[id];
   if (cm) { const own = store.own[cm[0]].includes(cm[1]), on = store.eq[cm[0]] === cm[1]; return [lab, own ? null : price, own ? (on ? "WEARING IT" : "YOURS") : note]; }
+  if ((id === "rumour" || id === "magnet") && !bottleShopOpen()) return ["???", null, "FISH UP " + STARTERS.length + " BOTTLES FIRST: " + startersFound() + "/" + STARTERS.length];
   if (id === "rumour") return [lab, rumourPool().length ? rumourPrice() : null, rumourPool().length ? note : "NOTHING NEW TO TELL"];
   if (id === "magnet") return [lab, price, q.magnet ? "ON FOR " + q.magnet + " MORE DIVES" : note];
   if (id === "map") return [lab, q.map === weekString() ? null : price, q.map === weekString() ? "BOOT AROUND " + bootDepth() + " M" : note];
@@ -2073,6 +2075,11 @@ function shopRowState(i) {                                  // -> [label shown, 
   if (id === "carve") return [lab, price, q.carved ? "YOURS SAYS " + q.carved + ". CARVE AGAIN?" : note];
   return [lab, price, note];
 }
+// The bottle things in the chip shop stay locked until the 11 starting bottles have all been fished up (Nov 17, 2026):
+// betting made chips plentiful, and Kade wants the early bottles found at sea, not bought.
+const STARTERS = BOTTLES.map((b, i) => i).filter(i => BOTTLES[i][1] === "any");
+const startersFound = () => STARTERS.filter(i => store.sec.bottles.includes(i)).length;
+const bottleShopOpen = () => startersFound() >= STARTERS.length;
 function rumourPool() { return BOTTLES.map((b, i) => i).filter(i => bottleOpen(i) && !store.sec.bottles.includes(i)); }
 function bootDepth() { return Math.round(RNG(hashStr("boot" + weekString())).uniform(ZONES[3][1] + 6, ZONES[3][2] - 6)); }
 function shopBuy(i) {
@@ -2119,7 +2126,8 @@ function gossip() {
   return all[Math.floor(Math.random() * all.length)];
 }
 // ---- the scratch card: 9 squares, three alike wins. Prizes are set so it pays back about 95%.
-const SCRATCH = [["boot", 0, 0], ["minnow", 2, 0.2], ["clown", 5, 0.06], ["shark", 10, 0.015], ["megalodon", 20, 0.005]];   // [species, pays x, chance it's the winner]
+// Bigger prizes since Nov 17, 2026 (top was X20): wins are a bit rarer (20% of cards) but the golden boot pays X500.
+const SCRATCH = [["boot", 0, 0], ["minnow", 2, 0.15], ["clown", 5, 0.04], ["shark", 20, 0.0075], ["megalodon", 100, 0.002], ["gboot", 500, 0.0002]];   // [species, pays x, chance it's the winner]
 function scratchNew() {
   const syms = SCRATCH.filter(s => DATA.atlas[s[0]]), r = Math.random();
   let acc = 0, win = -1;
@@ -2141,7 +2149,7 @@ function scratchTap(lx, ly) {
   else if (ly >= 136 && ly < 152) { sc.open = sc.open.map(() => true); play("tick"); }
   if (sc.open.every(o => o)) {
     sc.paid = true;
-    if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); }
+    if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay, "win"); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); }
     else { sc.msg = "NO LUCK"; play("miss"); }
     saveStore();
   }
@@ -2169,6 +2177,143 @@ function drawScratch() {
   }
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
+}
+// ---- Plinko (Nov 17, 2026): drop a fish through 8 rows of pegs into one of 9 slots. Each peg is a fair 50/50 bounce,
+// so the slots are hit 1-8-28-56-70-56-28-8-1 times in 256. Multipliers are steps of 0.2 so every stake (a multiple of 5)
+// pays whole chips, and they pay back about 95% (242.8 / 256). Built for a wide PC screen; phones get a narrow board.
+const PLINKO = [25, 4, 1, 0.4, 0.4, 0.4, 1, 4, 25], PL_ROWS = 8, PL_HOP = 0.15, PL_MAX_BALLS = 12;
+const PL_FISH = ["minnow", "sardine", "lantern", "seapig", "crab", "isopod"];
+function plinkoOpen() { if (!TAV.plinko) TAV.plinko = { bet: 10, max: MAX_STAKE, balls: [], last: [], best: 0, drops: 0, flash: [], queue: 0, qT: 0 }; }
+function plLay() {                                             // board geometry for this screen width (screen coordinates)
+  const wide = LW >= 320, sx = wide ? 18 : 12, sy = wide ? 15 : 12, top = wide ? 36 : 38;
+  return { wide, sx, sy, top, cx: Math.floor(LW / 2), slotY: top + (PL_ROWS - 1) * sy + 7, slotH: wide ? 20 : 15 };
+}
+const plSlotLabel = m => m < 1 ? "." + Math.round(m * 10) : String(m);
+const plSlotCol = m => m >= 25 ? GOLD : m >= 4 ? ORANGE : m >= 1 ? CHIP : "#6a8a7a";
+function plinkoDrop() {                                        // -> true if a fish went in
+  const p = TAV.plinko;
+  if (p.balls.length >= PL_MAX_BALLS) return false;
+  if (tav().chips < p.bet) { play("miss"); p.say = "NOT ENOUGH CHIPS"; p.sayT = 1.5; p.queue = 0; return false; }
+  addChips(-p.bet);
+  const path = [];
+  for (let r = 0; r < PL_ROWS; r++) path.push(Math.random() < 0.5 ? -1 : 1);
+  p.balls.push({ path, r: -1, t: 0, x: 0, y: 0, dir: path[0], stake: p.bet, fish: PL_FISH[Math.floor(Math.random() * PL_FISH.length)] });
+  p.drops++; play("tick");
+  return true;
+}
+function plinkoTick(dt) {
+  const p = TAV.plinko;
+  if (!p) return;
+  if (p.sayT > 0) p.sayT -= dt;
+  p.flash = p.flash.filter(f => (f[1] -= dt) > 0);
+  if (S.overlay !== "plinko") p.queue = 0;                   // leaving stops a DROP 5; fish already falling still land
+  if (p.queue > 0 && (p.qT -= dt) <= 0) { if (plinkoDrop()) { p.queue--; p.qT = 0.22; } else p.queue = 0; }   // DROP 5 lets them go one after another
+  for (const b of p.balls) {
+    b.t += dt / PL_HOP;
+    while (b.t >= 1 && !b.done) {
+      b.t -= 1; b.r++;
+      if (b.r < PL_ROWS) { b.dir = b.path[b.r]; play("tick"); }
+      else {                                                   // into a slot
+        b.done = true;
+        const k = b.path.filter(d => d > 0).length, m = PLINKO[k], pay = Math.round(b.stake * m);
+        if (pay) addChips(pay, pay > b.stake ? "win" : undefined);
+        p.last.unshift([k, pay - b.stake]); p.last = p.last.slice(0, 8);
+        if (pay > p.best) p.best = pay;
+        p.flash.push([k, 0.8]);
+        if (m >= 25) { tavAward("pegleg"); play("fanfare"); p.say = "JACKPOT! " + pay + " CHIPS"; p.sayT = 2.5; }
+        else if (m >= 4) play("select");
+        saveStore();
+      }
+    }
+  }
+  p.balls = p.balls.filter(b => !b.done);
+}
+function plBallPos(b, L) {                                     // where a falling fish is: hopping peg to peg
+  const col = r => b.path.slice(0, r + 1).reduce((a, d) => a + d, 0);   // half-steps right of centre after row r's bounce
+  const at = r => r < 0 ? [L.cx, L.top - 18] : r >= PL_ROWS ? [L.cx + col(PL_ROWS - 1) * L.sx / 2, L.slotY + L.slotH - 7]
+    : [L.cx + (r === 0 ? 0 : col(r - 1)) * L.sx / 2, L.top + r * L.sy - 4];
+  const [x0, y0] = at(b.r), [x1, y1] = at(b.r + 1), e = Math.min(1, b.t);
+  return [x0 + (x1 - x0) * e, y0 + (y1 - y0) * e - Math.sin(e * Math.PI) * (b.r < 0 ? 0 : 5)];
+}
+// The buttons, in screen coordinates: [id, x, y, w, h, label]
+function plButtons() {
+  const L = plLay(), p = TAV.plinko;
+  if (L.wide) {
+    const rx = L.cx + 4.5 * L.sx + 10, w = Math.min(96, LW - rx - 6);
+    return [["minus", rx, 78, 18, 15, "-"], ["plus", rx + w - 18, 78, 18, 15, "+"], ["drop", rx, 100, w, 22, "DROP"], ["drop5", rx, 128, w, 15, "DROP 5"]];
+  }
+  return [["minus", OX + 2, 168, 16, 15, "-"], ["plus", OX + 48, 168, 16, 15, "+"], ["drop", OX + 68, 168, 50, 15, "DROP"]];
+}
+function plinkoTap(rx, ly) {
+  const p = TAV.plinko;
+  if (ly > 186) { closeOverlay(); return; }
+  const hit = plButtons().find(([, x, y, w, h]) => rx >= x && rx < x + w && ly >= y && ly < y + h);
+  if (!hit) return;
+  if (hit[0] === "minus" || hit[0] === "plus") { p.bet = stakeStep(p.bet, hit[0] === "plus" ? 1 : -1, p.max); play("tick"); }
+  else if (hit[0] === "drop") plinkoDrop();
+  else if (hit[0] === "drop5") { p.queue = 5; p.qT = 0; }
+}
+function plinkoKey(c, dir) {                                   // Space/Enter drops, left/right (or A/D) changes the stake, up drops 5
+  const p = TAV.plinko;
+  if (c === "Space" || c === "Enter" || c === "ArrowDown" || c === "KeyS") plinkoDrop();
+  else if (c === "ArrowUp" || c === "KeyW") { p.queue = 5; p.qT = 0; }
+  else if (dir) { p.bet = stakeStep(p.bet, dir, p.max); play("tick"); }
+}
+function drawPlinko() {
+  const p = TAV.plinko, L = plLay();
+  rect(FELT, 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
+  for (let x = 0; x < LW; x += 8) rect("#0b3f27", x, 3, 1, LH - 6);                          // felt grain
+  text("PLINKO", L.cx, 10, L.wide ? 2 : 1, GOLD, "center");
+  if (!L.wide) { g.save(); g.translate(OX, 0); chipsLine(23); g.restore(); }
+  const bw = 9 * L.sx;
+  rect("#0a3420", L.cx - bw / 2 - 4, L.top - 8, bw + 8, L.slotY + L.slotH - L.top + 11);     // the board
+  rect("#5a3a22", L.cx - bw / 2 - 6, L.top - 8, 2, L.slotY + L.slotH - L.top + 11); rect("#5a3a22", L.cx + bw / 2 + 4, L.top - 8, 2, L.slotY + L.slotH - L.top + 11);
+  if (L.wide) rect("#c8e6d2", L.cx - 1, L.top - 22, 3, 2);                                                 // the chute
+  for (let r = 0; r < PL_ROWS; r++) for (let i = 0; i < r + 3; i++) {
+    const x = Math.round(L.cx + (i - (r + 2) / 2) * L.sx), y = L.top + r * L.sy;
+    rect("#7aa08a", x - 1, y, 3, 2); rect("#e6fff0", x - 1, y - 1, 2, 1);
+  }
+  PLINKO.forEach((m, k) => {
+    const x = Math.round(L.cx + (k - 4.5) * L.sx), col = plSlotCol(m), lit = p.flash.some(f => f[0] === k);
+    rect(lit ? col : "#1a1628", x + 1, L.slotY, L.sx - 2, L.slotH);
+    g.fillStyle = col; g.fillRect(x + 1, L.slotY + L.slotH - 1, L.sx - 2, 1);
+    if (L.wide) { g.fillRect(x + 1, L.slotY, 1, L.slotH); g.fillRect(x + L.sx - 2, L.slotY, 1, L.slotH); }   // narrow slots have no room for side walls
+    text(plSlotLabel(m), x + L.sx / 2, L.slotY + (L.wide ? 6 : 5), 1, lit ? INK : col, "center", null);
+  });
+  for (const b of p.balls) {
+    const [x, y] = plBallPos(b, L), [w, h] = sprSize(b.fish, L.wide ? 1 : 0.75);
+    spr(b.fish, x - w / 2, y - h / 2, b.dir < 0, L.wide ? 1 : 0.75);
+  }
+  if (L.wide) {                                                 // side panels: results on the left, controls on the right
+    const lx = 6, lw = Math.max(60, L.cx - bw / 2 - 18);
+    text("LAST DROPS", lx + lw / 2, 30, 1, CHIP, "center", null);
+    p.last.forEach(([k, net], i) => {
+      const y = 42 + i * 11, m = PLINKO[k];
+      text("X" + plSlotLabel(m), lx + 2, y, 1, plSlotCol(m), "left", null);
+      text((net > 0 ? "+" : "") + net, lx + lw - 2, y, 1, net > 0 ? GOLD : net < 0 ? GREY : WHITE, "right", null);
+    });
+    if (!p.last.length) text("DROP A FISH", lx + lw / 2, 46, 1, GREY, "center", null);
+    text("BEST WIN " + p.best, lx + lw / 2, 140, 1, WHITE, "center", null);
+    text("DROPS " + p.drops, lx + lw / 2, 152, 1, GREY, "center", null);
+    const rx = L.cx + 4.5 * L.sx + 10, w = Math.min(96, LW - rx - 6), mid = rx + w / 2;
+    const s = tav().chips + " CHIPS"; chipIcon(mid - (textW(s, 1) >> 1) - 4, 34); text(s, mid + 3, 34, 1, CHIP, "center", null);
+    text("STAKE", mid, 66, 1, "#c8e6d2", "center", null);
+    text(p.bet, mid, 85, 1, WHITE, "center", null);
+    plButtons().forEach(([id, x, y, bw2, h, lab]) => {
+      const ok = id.startsWith("drop") ? tav().chips >= p.bet : true, col = id === "drop" ? GOLD : id === "drop5" ? ORANGE : CHIP;
+      box(x, y, bw2, h, ok ? col : "#3c6a54"); text(lab, x + bw2 / 2, y + (h >> 1), 1, ok ? col : "#5a8a74", "center", null);
+    });
+    text("SPACE: DROP", mid, 154, 1, GREY, "center", null);
+    text("UP: DROP 5", mid, 164, 1, GREY, "center", null);
+    text("< > STAKE", mid, 174, 1, GREY, "center", null);
+  } else {
+    plButtons().forEach(([id, x, y, bw2, h, lab]) => { const col = id === "drop" ? GOLD : CHIP; box(x, y, bw2, h, col); text(lab, x + bw2 / 2, y + 7, 1, col, "center", null); });
+    text(p.bet, OX + 33, 175, 1, WHITE, "center", null);
+    const l = p.last[0];
+    if (l && !(p.sayT > 0)) text("X" + plSlotLabel(PLINKO[l[0]]) + "  " + (l[1] > 0 ? "+" : "") + l[1], L.cx, 158, 1, l[1] > 0 ? GOLD : GREY, "center", null);
+  }
+  if (p.sayT > 0) text(p.say, L.cx, L.wide ? L.slotY + L.slotH + 9 : 158, 1, GOLD, "center", null);
+  text("TAP HERE TO GO BACK", L.cx, 194, 1, WHITE, "center", null);
 }
 const trainCost = lv => 30 + lv * 15;
 
@@ -2209,7 +2354,7 @@ let MUS = { song: -1, step: 0, next: 0 };
 function noteHz(n) { const m = /^([A-G])(\d)$/.exec(n); return m ? 440 * Math.pow(2, ({ C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 }[m[1]] + (m[2] - 4) * 12) / 12) : 0; }
 function tone(f, t0, dur, wave, vol) { const o = AC.createOscillator(), ga = AC.createGain(); o.type = wave; o.frequency.setValueAtTime(f, t0); ga.gain.setValueAtTime(vol, t0); ga.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(ga); ga.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 function musicTick() {
-  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
+  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch", "plinko"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
   if (want !== MUS.song) { MUS = { song: want, step: 0, next: AC ? AC.currentTime + 0.1 : 0 }; }
   if (want < 0 || AC.state !== "running") return;
   const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), dt = 30 / bpm;
@@ -2220,7 +2365,7 @@ function musicTick() {
     MUS.step++; MUS.next += dt;
   }
 }
-function tavTick(dt) { c21Tick(dt); derbyTick(dt); creditsTick(dt); musicTick(); }
+function tavTick(dt) { c21Tick(dt); derbyTick(dt); plinkoTick(dt); creditsTick(dt); musicTick(); }
 
 // ---- drawing
 function drawShack(wl, open) {                             // the tavern on the shore, left of the boat
@@ -2262,11 +2407,12 @@ function stakeRow(y, stake, go) {                            // [-] stake [+] an
 function stakeTap(lx, obj, key, go) { if (lx < 20) { obj[key] = stakeStep(obj[key], -1, obj.max); play("tick"); } else if (lx >= 46 && lx < 66) { obj[key] = stakeStep(obj[key], 1, obj.max); play("tick"); } else if (lx >= 68) go(); }
 function chipsLine(y) { const s = tav().chips + " CHIPS", x = 60 - (textW(s, 1) >> 1) + 3; chipIcon(x - 6, y); text(s, x, y, 1, CHIP, "left", null); }
 function bestCatches() { return LOGGED.filter(s => store.log[s[0]]).sort((a, b) => store.log[b[0]].rec - store.log[a[0]].rec).slice(0, 2); }
-function tavRows() {
-  const dr = dailyReady(), r = [["CATCH 21", CHIP], ["THE DERBY", CHIP], ["BUY THINGS", GOLD], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY]];
-  if (store.sec.sleeper) r.push(["THE BACK ROOM", "#ff6e6e"]);                    // opens once you've beaten the Sleeper
+function tavRows() {                                         // -> [label, colour, id]
+  const dr = dailyReady(), r = [["CATCH 21", CHIP, "c21"], ["THE DERBY", CHIP, "derby"], ["PLINKO", CHIP, "plinko"], ["BUY THINGS", GOLD, "shop"], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY, "daily"]];
+  if (store.sec.sleeper) r.push(["THE BACK ROOM", "#ff6e6e", "vip"]);              // opens once you've beaten the Sleeper
   return r;
 }
+const tavRowLay = n => n > 5 ? [94, 16, 14] : [94, 18, 15];   // [first y, step, box height]
 function drawTavern() {
   tavernBg();
   g.save(); g.translate(OX, 0);
@@ -2285,8 +2431,8 @@ function drawTavern() {
   const sayL = wrap(TAV.say, 19).slice(0, 2); sayL.forEach((l, i) => text(l, 60, (sayL.length > 1 ? 72 : 76) + i * 8, 1, WHITE, "center", null));
   if (tav().carved) text(tav().carved + " WAS HERE", 60, 65, 1, "#3c2414", "center", null);   // carved into the bar
   chipsLine(89);
-  const dr = dailyReady(), rows = tavRows(), [y0, st] = rows.length > 4 ? [94, 18] : [98, 19];
-  rows.forEach(([lab, col], i) => { const y = y0 + i * st; box(14, y, 92, 15, col); text(lab, 60, y + 7, 1, col, "center", null); });
+  const rows = tavRows(), [y0, st, bh] = tavRowLay(rows.length);
+  rows.forEach(([lab, col], i) => { const y = y0 + i * st; box(14, y, 92, bh, col); text(lab, 60, y + (bh >> 1), 1, col, "center", null); });
   text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -2509,12 +2655,14 @@ function tavernTap(lx, ly) {                                 // -> true if handl
   const o = S.overlay, back = () => { S.overlay = o === "tavern" ? null : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip" : "tavern"; play("back"); };
   if (o === "tavern") {
     if (ly < 15 && lx >= 94) { TAV.board = 0; BOARDS.forEach(([k]) => tavLoad(k)); openOverlay("tavboard"); return true; }
-    const nr = tavRows().length, [y0, st] = nr > 4 ? [94, 18] : [98, 19], i = Math.floor((ly - y0) / st);
-    if (ly >= y0 && i < nr && (ly - y0) % st < 15 && lx >= 14 && lx < 106) {
-      if (i === 4) { TAV.vipSay = "KEEP YOUR VOICE DOWN"; openOverlay("vip"); }
-      else if (i === 0) { if (!TAV.c21 || TAV.c21.vip) c21New(false); openOverlay("c21"); }
-      else if (i === 1) { if (!TAV.derby || TAV.derby.phase === "done" || TAV.derby.vip) derbyNew(false); openOverlay("derby"); }
-      else if (i === 2) { TAV.shopSel = 0; openOverlay("chipshop"); }
+    const rows = tavRows(), nr = rows.length, [y0, st, bh] = tavRowLay(nr), i = Math.floor((ly - y0) / st);
+    if (ly >= y0 && i < nr && (ly - y0) % st < bh && lx >= 14 && lx < 106) {
+      const id = rows[i][2];
+      if (id === "vip") { TAV.vipSay = "KEEP YOUR VOICE DOWN"; openOverlay("vip"); }
+      else if (id === "c21") { if (!TAV.c21 || TAV.c21.vip) c21New(false); openOverlay("c21"); }
+      else if (id === "derby") { if (!TAV.derby || TAV.derby.phase === "done" || TAV.derby.vip) derbyNew(false); openOverlay("derby"); }
+      else if (id === "plinko") { plinkoOpen(); openOverlay("plinko"); }
+      else if (id === "shop") { TAV.shopSel = 0; openOverlay("chipshop"); }
       else if (claimDaily()) { TAV.say = "DON'T SPEND IT ALL"; play("fanfare"); } else { TAV.say = "COME BACK TOMORROW"; play("miss"); }
     } else if (ly > 186) back();
     return true;
@@ -2556,6 +2704,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     return true;
   }
   if (o === "scratch") { scratchTap(lx, ly); return true; }
+  if (o === "plinko") { plinkoTap(lx + OX, ly); return true; }
   if (o === "chipshop") {
     const pages = Math.ceil(SHOP_ROWS.length / SHOP_PER), page = Math.floor(TAV.shopSel / SHOP_PER), i = page * SHOP_PER + Math.floor((ly - 27) / 15);
     if (ly < 17 && (lx < 24 || lx > 96)) { TAV.shopSel = ((page + (lx > 96 ? 1 : pages - 1)) % pages) * SHOP_PER; play("tick"); }
@@ -3242,7 +3391,7 @@ function closeOverlay() {
   if (S.overlay === "help") { store.seenHelp = true; saveStore(); }
   const o = S.overlay;
   S.overlay = o === "note" && S.noteBack ? S.noteBack : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip"
-    : ["c21", "derby", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
+    : ["c21", "derby", "plinko", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
   play("back");
 }
 function overlayTap(lx, ly) {
@@ -3393,6 +3542,7 @@ window.addEventListener("keydown", e => {
   if (S.state === "title" && konamiKey(c)) { S.overlay = null; return; }   // the Konami code, even with a menu open
   if (S.overlay) {
     if (c === "Escape") closeOverlay();
+    else if (S.overlay === "plinko") plinkoKey(c, keyDir(e));
     else if (c === "Space" || c === "Enter") { if (S.overlay === "shop") shopAct(); else overlayTap(60, S.overlay === "help" ? 100 : 190); }
     else if (keyDir(e)) overlayTap(keyDir(e) > 0 ? 110 : 10, 8);
     return;
@@ -3441,7 +3591,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
