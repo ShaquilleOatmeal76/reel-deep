@@ -1,12 +1,14 @@
 # FIN PRIX difficulty check: robots drive your fish for N full races each and report win and podium rates.
 # Serve the repo first:  python3 -m http.server 8000   then:  python3 tools/tests/test_finprix.py [races per bot]
-# Bots: sharp (perfect line, maxed fish), good (tiny wobble and lag), sloppy (no drifting, big wobble), rookie (barely
-# trained fish). Kade asked for "super hard": Nov 18, 2026 tuning (sharper track, slower, FP_TUNE.skill 0.995) gave sharp/good ~10-40% wins (noisy), podium ~50%, sloppy 0%.
+# Bots: sharp (perfect line, maxed fish), good (tiny wobble and lag), sloppy (big wobble and lag), rookie (barely
+# trained fish). Kade asked for "super hard". Nov 18, 2026 retune after drifting was removed and boost pads, APEX (CORNER KING),
+# EEL ZAP and SHELL SHIELD were added: FP_TUNE.skill 1.005 gives sharp/good ~10-40% wins (noisy at 14 races), sloppy ~10%,
+# rookie never wins; personalities finish 1.5-6 on average (ZIPPY and APEX strongest, BRUISER and WALL weakest).
 # Tune FP_TUNE in finprix.js (skill, spread, lead) and re-run after changing the AI or the physics.
 import asyncio, json, sys
 from playwright.async_api import async_playwright
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 20
-BOTS = {"sharp": {"noise": 0.0, "lag": 0, "lv": [10, 10, 10]}, "good": {"noise": 0.08, "lag": 0.08, "lv": [10, 10, 10]}, "sloppy": {"noise": 0.25, "lag": 0.25, "lv": [10, 10, 10], "noDrift": True}, "rookie": {"noise": 0.1, "lag": 0.1, "lv": [2, 2, 2]}}
+BOTS = {"sharp": {"noise": 0.0, "lag": 0, "lv": [10, 10, 10]}, "good": {"noise": 0.08, "lag": 0.08, "lv": [10, 10, 10]}, "sloppy": {"noise": 0.25, "lag": 0.25, "lv": [10, 10, 10]}, "rookie": {"noise": 0.1, "lag": 0.1, "lv": [2, 2, 2]}}
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(); page = await (await b.new_context(viewport={"width": 1440, "height": 810})).new_page()
