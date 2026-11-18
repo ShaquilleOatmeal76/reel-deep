@@ -9,8 +9,9 @@ from hopper import outlined, from_rows
 scr = ac.Screen("x"); pg = scr.pg
 art = fishing.Art(pg)
 OUT = os.path.dirname(HERE)                # the game folder this tools folder sits in
-LATE = ("gboot", "werewolf", "lucky")         # added later: packed at the end so older sprites keep their places
-items = [(s[0], art.spr[s[0]][0]) for s in fishing.SPECIES if s[0] not in LATE]
+LATE = ("gboot", "werewolf", "lucky")
+LATE2 = ("blacktip", "leopard", "mako", "hammer", "goblin", "lshark")   # sharks, Nov 18, 2026: packed after everything else         # added later: packed at the end so older sprites keep their places
+items = [(s[0], art.spr[s[0]][0]) for s in fishing.SPECIES if s[0] not in LATE + LATE2]
 items += [("jelly0", art.jelly[0]), ("jelly1", art.jelly[1]), ("whale", art.whale[0])]
 # ---- cosmetics -----------------------------------------------------------------------------------
 INK = fishing.INK
@@ -124,6 +125,15 @@ items += [("hat%d" % (len(HATS) - 1), outlined(pg, from_rows(pg, HATS[-1][1], P)
 _named = dict(items)
 items += [("mhat%d" % (len(HATS) - 1), FS.monsterify(_named["hat%d" % (len(HATS) - 1)], 300 + len(HATS) - 1, eyes=0, teeth=False)),
           ("mpet%d" % (len(PETS) - 1), FS.monsterify(_named["pet%d" % (len(PETS) - 1)], 500 + len(PETS) - 1, eyes=2, teeth=False))]
+# ---- Nov 18, 2026: six sharks. Appended so nothing above moves.
+items += [(fid, art.spr[fid][0]) for fid in LATE2]
+# ---- Nov 18, 2026: more Rusty Hook cosmetics (chips only): a Chip Hook, and the Jackpot and High Stakes sets. Appended so nothing above moves.
+HOOKS += [("CHIP HOOK", ["kwk.", ".k..", ".k..", ".k.k", ".k.k", "..k."], {"k": (240, 80, 80), "w": (250, 250, 255)}),
+          ("LUCKY 7 HOOK", ["kkk.", "..k.", ".k..", ".k.k", ".k.k", "..k."], {"k": (255, 210, 70)}),
+          ("DICE HOOK", ["www.", "wkw.", "www.", ".w.w", ".w.w", "..w."], {"w": (250, 250, 255), "k": INK})]
+FLAIR += [("777", ["yyy.yyy", "..y...y", ".y...y."]), ("CARD SUITS", ["r.r..k.", "rrr.kkk", ".r...k."])]; FLAIR_POS += ["top", "top"]
+items += [("hook%d" % i, from_rows(pg, HOOKS[i][1], HOOKS[i][2])) for i in range(len(HOOKS) - 3, len(HOOKS))]
+items += [("flair%d" % i, from_rows(pg, FLAIR[i][1], P)) for i in range(len(FLAIR) - 2, len(FLAIR))]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()
@@ -240,7 +250,7 @@ wide, wide_vents, wide_h, wide_glows = build_wide()
 pg.image.save(wide, OUT + "/assets/water.png")
 F = fishing
 data = dict(atlas=pos, glyphs=ac._GLYPHS, species=[list(s[:3]) + [list(s[3])] + list(s[4:]) for s in F.SPECIES], zones=[list(z) for z in F.ZONES], zoneCol=F.ZONE_COL,
-            lures=[["standard", "STANDARD", "BALANCED. 1 PULSE", 1.0, 1.0, 1, 1.0, 1.0, 0], ["sinker", "HEAVY SINKER", "FAST DROP. 1 PULSE", 1.35, 0.78, 1, 1.0, 1.0, 0],
+            lures=[["standard", "STANDARD", "BALANCED. 1 PULSE", 1.0, 1.0, 1, 1.0, 1.0, 0], ["angler", "ANGLER'S HOOK", "LET 2 FISH GO", 1.0, 1.0, 2, 1.0, 1.0, 0],
                    ["glow", "GLOW LURE", "PULLS FISH+JELLIES", 1.0, 1.0, 1, 1.5, 1.2, 26], ["sonar", "SONAR", "3 PULSES. SLOW DROP", 0.85, 1.0, 3, 1.0, 1.0, 0]], vents=wide_vents, glows=wide_glows, waterH=wide_h, waterW=WW, water=[[a, list(c)] for a, c in F.WATER],
             chars=CHARS, boats=[b[0] for b in BOATS] + [MAW_BOAT] + TAV_BOATS, pets=[p[0] for p in PETS], flags=[f[0] for f in FLAGS], flairPos=FLAIR_POS, hooks=[h[0] for h in HOOKS], hats=[h[0] for h in HATS], flair=[f[0] for f in FLAIR],
             flip=dict(zones=[list(z) for z in FS.ZONES], crossing=FS.CROSSING_M, junk=list(FS.JUNK), mythic=FS.MYTHIC, hunters=FS.HUNTERS, crossingN=FS.CROSSING_N,

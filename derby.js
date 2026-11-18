@@ -20,7 +20,7 @@ const STABLE = [
   ["puffball", "PUFFBALL", "puffer", 0.95, 0.85, 0.45, "dodger"], ["slipperypete", "SLIPPERY PETE", "eel", 1.00, 0.68, 0.70, "current"],
   ["pancake", "PANCAKE", "ray", 0.99, 0.76, 0.52, "kelp"], ["oldgrouper", "OLD GROUPER", "grouper", 0.96, 0.88, 0.30, "steady"],
   ["halo", "HALO", "angel", 0.98, 0.70, 0.62, "storm"], ["inky", "INKY", "octo", 0.97, 0.74, 0.68, "dodger"],
-  ["shelldon", "SHELLDON", "turtle", 0.94, 0.90, 0.40, "closer"], ["chompers", "CHOMPERS", "shark", 1.04, 0.66, 0.50, "sprinter"],
+  ["shelldon", "SHELLDON", "turtle", 0.94, 0.90, 0.40, "closer"], ["chompers", "CHOMPERS", "blacktip", 1.04, 0.66, 0.50, "sprinter"],
   ["glowworm", "GLOWWORM", "lantern", 0.97, 0.72, 0.66, "dodger"], ["tinytim", "TINY TIM", "minnow", 0.95, 0.70, 0.85, "moody"],
 ];
 const TRAITS = { steady: "STEADY", closer: "STRONG FINISH", moody: "MOODY", sprinter: "FAST STARTER", kelp: "LOVES KELP", storm: "STORM CHASER", current: "RIDES CURRENTS", dodger: "DODGES JELLIES" };
@@ -183,6 +183,7 @@ function derbyFinish(d) {
     const pay = Math.floor(d.bet * d.pays); addChips(pay, "win"); tav().stats.derbies++;
     if (d.pays >= 8) tavAward("longshot");
     if (d.type === 4) tavAward("calledit");
+    if (c) tavAward("photo");                                // won on a photo finish
     tavTitles(); d.won = pay; play("fanfare");
   } else { d.won = 0; play("miss"); }
   stableResult(d.racers, o, true);
