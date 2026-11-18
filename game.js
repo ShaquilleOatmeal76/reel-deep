@@ -170,7 +170,7 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   dives: 0,                                              // dives finished, for things that open up with experience
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
-  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "",
+  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "", bhw: { d: "", line: 0 }, blife: [],
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {},
     fp: { cups: {}, best: {}, own: [], eq: {}, races: 0, wins: 0 } },   // the Rusty Hook; fp: FIN PRIX (finprix.js, fpData())
   ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" },
@@ -941,6 +941,7 @@ function beginHaul() {
   if (S.bottom) extra.push(["SEA FLOOR +" + C.BOTTOM_BONUS, CYAN]);
   const dive = { total, mult, base, emptyFloor: !!S.emptyFloor, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty, newN, recN,
     stung: !!S.stung, pulsed: !!S.pulsed, riseN: S.riseN || 0, last: tav().hist.length ? tav().hist[tav().hist.length - 1][0] : null,
+    lastLow: tav().hist.length ? tav().hist[tav().hist.length - 1][0] < 0.5 * betLine() : false,
     best: store.best, board: LB.url && LB.today ? LB.today.map(e => e.s).sort((a, b) => b - a) : null };
   let coins = total > 0 ? Math.floor(total / 20) + 1 : 0;   // /20 since Nov 18, 2026 (was /25)
   if (ids.includes("poop")) coins += 500;
@@ -949,8 +950,10 @@ function beginHaul() {
   const news = progressTasks(dive).map(([, c]) => ["TASK DONE! +" + c + " COINS", 4, LIME]).concat(checkTitles(dive).map(n => ["NEW TITLE: " + n, 5, GOLD]));
   ["baiter", "mythic"].forEach(id => { if (store.titles.includes(id)) findSecret(id); });
   const q = tav(), chips = 2 + (S.reached >= 600 ? 3 : 0) + (S.bottom ? 5 : 0);       // a few chips per dive, more for deep ones
-  q.hist.push([total, S.bottom ? 1 : 0, S.catch.some(c => c[2]) ? 1 : 0, S.catch.some(c => SPEC[c[0]][7]) ? 1 : 0, betMask(dive, betLine())]);
+  const lineNow = betLine();
+  q.hist.push([total, S.bottom ? 1 : 0, S.catch.some(c => c[2]) ? 1 : 0, S.catch.some(c => SPEC[c[0]][7]) ? 1 : 0, betMask(dive, lineNow), total < JUNK_K * lineNow ? 1 : 0]);
   if (q.hist.length > 20) q.hist.shift();
+  betRecord(q.hist[q.hist.length - 1]);
   addChips(chips);
   const betNews = settleBet(dive);
   if (betNews) news.push(betNews);
@@ -1942,10 +1945,37 @@ function claimDaily() {                                     // the free daily st
 function stakeStep(st, d, max) { const big = (max || MAX_STAKE) > 100 ? 10 : 5; return clamp(st + d * big, 5, Math.max(5, Math.min(max || MAX_STAKE, Math.floor(tav().chips / 5) * 5))); }   // the back room allows bigger bets
 
 // ---- betting on your own dive
-function betLine() {                                        // over / under line: the middle of your recent hauls, to the nearest 10
-  const h = tav().hist.map(r => r[0]).sort((a, b) => a - b);
-  if (h.length < 5) return 150;
-  return Math.max(30, Math.round(h[h.length >> 1] / 10) * 10);
+// Anti-tanking (Nov 18, 2026): players found that bets were priced from their last 20 dives, so they threw dives on purpose
+// until an easy bet showed a long-shot price (or the line dropped), then dived properly. Now playing badly can't make a bet
+// pay better: each bet is priced from your whole record (`tav.blife`, every real dive since this update, pulled toward the
+// starting odds), never below 90% of its starting odds. Twenty dodged dives barely move a long record, and junk dives don't
+// count at all. (The last 20 dives alone were too jumpy: pricing from the best of several noisy guesses paid honest players
+// only ~75%.) The line never drops below 80% of its
+// high-water mark, which fades about 2% a real day (tanking can't speed that up). A junk dive (under a quarter of the line)
+// is left out of all of it, and a bet riding on a junk dive is void: no bet pays for a bad dive.
+const BET_CAP = 25, HW_FADE = 0.98, JUNK_K = 0.25;
+const junkRow = r => r[5] === 1;                            // 6th field of a history row: a junk dive (rows from before have none)
+function betHW() { const q = tav(); if (!q.bhw || typeof q.bhw !== "object") q.bhw = { d: "", line: 0 }; return q.bhw; }
+function betLife() { const q = tav(); if (!Array.isArray(q.blife)) q.blife = []; return q.blife; }   // [[real dives it could be judged on, wins]] per bet
+function hwFade() { const h = betHW(); if (!h.d) return 1; const n = Math.round((new Date(dayString()) - new Date(h.d)) / 864e5); return n > 0 ? Math.pow(HW_FADE, n) : 1; }
+function lineRaw() {                                        // the middle of your recent real dives, or null with fewer than 5
+  const h = tav().hist.filter(r => !junkRow(r)).map(r => r[0]).sort((a, b) => a - b);
+  return h.length < 5 ? null : h[h.length >> 1];
+}
+function betLine() {                                        // over / under line, to the nearest 10
+  const raw = lineRaw(), hw = betHW().line * hwFade();
+  if (raw === null && !hw) return 150;
+  return Math.max(30, Math.round(Math.max(raw === null ? 150 : raw, 0.8 * hw) / 10) * 10);
+}
+function betRecord(row) {                                   // after every dive: the lifetime record and the line's high-water mark
+  const h = betHW(), f = hwFade(), L = betLife();
+  if (!junkRow(row) && typeof row[4] === "string") {
+    const [w, sk] = row[4].split("|");
+    BETS.forEach((b, i) => { if ((sk || "").includes(MASK_CH[i])) return; const e = L[i] || (L[i] = [0, 0]); e[0]++; if (w.includes(MASK_CH[i])) e[1]++; });
+  }
+  const raw = lineRaw();
+  h.line = Math.round(Math.max(h.line * f, raw === null ? 0 : raw));
+  h.d = dayString();
 }
 // ---- Bet on your dive (rotating since Nov 17, 2026): a pool of 50 bets, five on the board at a time (two safer, two
 // medium, one long shot), a fresh board after every dive. The board is seeded by the dive count, so reopening the panel
@@ -1969,7 +1999,7 @@ const BETS = [
   ["fish50", "50 LB FISH", "ONE FISH 50 LB+", 0.3, d => d.catch.some(c => c[1] >= 50)],
   ["fish200", "200 LB FISH", "ONE FISH 200 LB+", 0.06, d => d.catch.some(c => c[1] >= 200)],
   ["all10", "ALL OVER 10", "3 FISH, EACH 10 LB+", 0.3, d => FULL(d) && d.catch.every(c => c[1] >= 10)],
-  ["beatlast", "BEAT LAST", "BEAT YOUR LAST DIVE", 0.45, d => d.last === null ? null : d.total > d.last],
+  ["beatlast", "BEAT LAST", "BEAT YOUR LAST DIVE", 0.45, d => d.last === null || d.lastLow ? null : d.total > d.last],   // void after a thrown dive
   ["odd", "ODD TOTAL", "AN ODD SCORE", 0.5, d => d.total > 0 && d.total % 2 === 1],
   ["seven", "ENDS IN 7", "SCORE ENDS IN 7", 0.1, d => d.total % 10 === 7],
   ["heavylast", "HEAVY LAST", "BIGGEST FISH LAST", 0.33, d => FULL(d) && d.catch[2][1] >= Math.max(...d.catch.map(c => c[1]))],
@@ -2016,17 +2046,23 @@ function betMask(dive, line) {                              // -> "w..|v.." bets
   BETS.forEach((b, i) => { const r = b[4](dive, line); if (r === null) skip += MASK_CH[i]; else if (r) won += MASK_CH[i]; });
   return won + "|" + skip;
 }
-function betChance(i) {                                     // your chance of winning bet i, from your recent dives
+function windowChance(i) {                                  // your record on bet i over your recent real dives, pulled lightly toward the prior
   const id = BETS[i][0], old = { over: r => r[0] > betLine(), floor: r => !!r[1], trophy: r => !!r[2], legend: r => !!r[3] }[id];
   let n = 0, hit = 0;
   for (const r of tav().hist) {
+    if (junkRow(r)) continue;                                // thrown dives don't count
     if (typeof r[4] === "string") { const [w, sk] = r[4].split("|"); if ((sk || "").includes(MASK_CH[i])) continue; n++; if (w.includes(MASK_CH[i])) hit++; }
     else if (old) { n++; if (old(r)) hit++; }                // rows from before the rotating bets
   }
-  const k = 3;                                              // a light pull toward the starting odds
-  return clamp((hit + k * BETS[i][3]) / (n + k), 0.01, 0.97);
+  const k = 3;
+  return (hit + k * BETS[i][3]) / (n + k);
 }
-const betPays = q => { const x = EDGE / q; return Math.min(50, Math.max(1.1, x >= 10 ? Math.floor(x) : Math.floor(x * 10) / 10)); };
+const LIFE_K = 10, PRIOR_FLOOR = 0.9;
+function lifeChance(i) { const e = betLife()[i] || [0, 0]; return (e[1] + LIFE_K * BETS[i][3]) / (e[0] + LIFE_K); }
+function betChance(i) {                                     // the chance a bet is priced at
+  return clamp(Math.max(PRIOR_FLOOR * BETS[i][3], lifeChance(i)), 0.01, 0.97);
+}
+const betPays = q => { const x = EDGE / q; return Math.min(BET_CAP, Math.max(1.1, x >= 10 ? Math.floor(x) : Math.floor(x * 10) / 10)); };
 function betAvail(i) {
   const id = BETS[i][0];
   if ((id === "top10" || id === "beat1") && !LB.url) return false;             // no shared board here
@@ -2074,7 +2110,7 @@ function settleBet(dive) {                                  // -> a popup line f
   const b = tav().bet;
   if (!b) return null;
   tav().bet = null;
-  const i = BET_I[b.k], won = i === undefined ? null : BETS[i][4](dive, b.line);
+  const i = BET_I[b.k], won = i === undefined || dive.total < JUNK_K * b.line ? null : BETS[i][4](dive, b.line);   // a thrown dive: void
   if (won === null) { addChips(b.stake); return ["BET VOID: STAKE BACK", 4, CHIP]; }    // e.g. UNDER without a real dive
   if (!won) { saveStore(); return ["BET LOST", 3, ORANGE]; }
   const pay = Math.floor(b.stake * b.pays);
@@ -4556,7 +4592,7 @@ function start() {
   else if (TEST_FLIP) startFlip(TEST_FLIP, false);
   else if (TEST_END) startFlip(TEST_END, true);
   LB.load();
-  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits, tavern: tavernWideHits, chipshop: chipShopWideHits, jukebox: jukeWideHits, myfish: myFishWideHits, bet: betWideHits, c21: c21WideHits, derby: derbyWideHits, scratch: scratchWideHits, vip: vipWideHits, rename: renameWideHits, title: titleWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
+  window.REEL = { wideHits: o => ({ shop: shopWideHits, log: logWideHits, bestiary: bestiaryWideHits, secrets: secretsWideHits, scores: scoresWideHits, help: helpWideHits, tavern: tavernWideHits, chipshop: chipShopWideHits, jukebox: jukeWideHits, myfish: myFishWideHits, bet: betWideHits, c21: c21WideHits, derby: derbyWideHits, scratch: scratchWideHits, vip: vipWideHits, rename: renameWideHits, title: titleWideHits })[o](), WIDE, wideMenus, BETS, betMask, betChance, betBoard, betPays, windowChance, lifeChance, betHW, betLife, betRecord, lineRaw, BET_CAP, PLINKO, plinkoDrop, plinkoOpen, plinkoTap, plinkoTick, get FLIP() { return FLIP; }, get T() { return T; }, SHOP_ROWS, shopRowState, scratchNew, scratchTap, tav, startFlip, FL_TUNE, flipVisible, flipJellies, flipRect, flipPulse, flipFightTap, flipScore, FLIP_REWARDS, BESTIARY, endgameDone, flipSY, flipUpdate, endFlip, knockCrack, get CRED() { return CRED; }, nameOf, renameFish, get TAVs() { return TAV; }, simTick(dt) { T += dt; S.stT += dt; update(dt); }, get BOSS() { return BOSS; }, set BOSS(v) { BOSS = v; }, startBoss, bossPulse, bossUpdate, endBoss, SL_TUNE, slY, c21Sum, c21Tick, raceStep, get TAV() { return TAV; }, set TAV(v) { TAV = v; }, c21New, c21Deal, c21Hit, c21Stand, derbyNew, derbyGo, openBet, placeBet, betOdds, betLine, claimDaily, shopBuy, tavOpen, settleBet, get KON() { return KON; }, set KON(v) { KON = v; }, get EV() { return EV; }, set EV(v) { EV = v; }, findSecret, packSave, unpackSave, events, moonPhase, newDive, finishDive, titleTap, get S() { return S; }, get width() { return LW; }, get store() { return store; }, shopAct, CATS, tasks, land, startFight, beginHaul, step, store, LB, visible, fishRect, pulse, cast, tapAction };   // handy in the console
   requestAnimationFrame(frame);
 }
 let loaded = 0;
