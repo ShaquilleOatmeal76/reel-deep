@@ -258,5 +258,8 @@ data = dict(atlas=pos, glyphs=ac._GLYPHS, species=[list(s[:3]) + [list(s[3])] + 
             dark=[[300, 0], [480, 0.34], [570, 0.38], [600, 0.28], [690, 0.28], [720, 0.34], [830, 0.38], [960, 0.46], [1110, 0.46], [1160, 0.38]],
             consts=dict(MAX_M=F.MAX_M, BOTTOM_M=F.BOTTOM_M, BLEND=F.BLEND, BOTTOM_BONUS=F.BOTTOM_BONUS, BOUNTY_X=F.BOUNTY_X, JELLY_CHANCE=F.JELLY_CHANCE, PER_CHUNK=[list(p) for p in F.PER_CHUNK],
                         CHUNK=F.CHUNK, TROPHY_CHANCE=0.022, LEGEND_BASE=0.05, LEGEND_CHANCE={"chest": 0.1, "pearl": 0.1, "ancient": 0.06}, MYTHIC_CHANCE=0.006, JUNK=list(F.JUNK), FIXED=list(F.FIXED), GLOWS=list(F.GLOWS), CAPACITY=F.CAPACITY))
+# ---- Driftwood Isle (island.js): every character's walking views as row art, so the island draws your own character
+_hex = lambda c: "#%02x%02x%02x" % tuple(c[:3])
+data["isle"] = dict(chars=[dict(pal={k: _hex(v) for k, v in c["pal"].items()}, blink=c["blink"], views={v: [list(c[v][0]), c[v][1], c[v][2]] for v in ("front", "back", "side")}) for c in hopper.CRITTERS])
 open(OUT + "/data.js", "w").write("// Generated from the arcade version of Reel Deep. Sprites live in assets/atlas.png.\nconst DATA = " + json.dumps(data, separators=(",", ":")) + ";\n")
 print(atlas.get_size(), art.water.get_size(), os.path.getsize(OUT + "/assets/water.png"), os.path.getsize(OUT + "/assets/atlas.png"), os.path.getsize(OUT + "/data.js"))

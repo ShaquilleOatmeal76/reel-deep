@@ -25,6 +25,7 @@ g.imageSmoothingEnabled = false;
 const dark = document.createElement("canvas");
 dark.height = LH;
 function resize() {                                    // the ocean fills whatever shape the window is, from phone portrait to widescreen
+  if (S && S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleResize(); return; }   // Driftwood Isle has its own screen (island.js)
   const a = window.innerWidth / window.innerHeight;
   LW = a >= UW / LH ? clamp(Math.round(LH * a), UW, WW) : UW;
   OX = Math.floor((LW - UW) / 2);
@@ -749,6 +750,7 @@ function darknessAt(m) {
 function update(dt) {
   if (S.state === "flip" && FLIP) { flipUpdate(dt); S.shake = Math.max(0, (S.shake || 0) - dt); return; }
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartUpdate(dt); return; }   // FIN PRIX (finprix.js)
+  if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleUpdate(dt); return; }   // Driftwood Isle (island.js)
   if (S.state === "boss" && BOSS) { bossUpdate(dt); S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt); return; }
   S.immune = Math.max(0, S.immune - dt); S.flash = Math.max(0, S.flash - dt);
   if (S.ring !== null) { S.ring += dt; if (S.ring > 0.5) S.ring = null; }
@@ -1766,6 +1768,7 @@ function drawGiant() {                                   // something very large
 
 function draw() {
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { drawKart(); return; }
+  if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { drawIsle(); return; }
   if (S.state === "boss" && BOSS) { drawBoss(); return; }
   if (S.state === "flip" && FLIP) { drawFlip(); return; }
   const t = T, cam = S.cam, wl = Math.round(-cam), srcY = Math.max(0, Math.round(cam));
@@ -4446,6 +4449,7 @@ canvas.addEventListener("pointerdown", e => {
   if (AC && AC.state === "suspended") AC.resume();
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartTouch(rx, ly, true); return; }
+  if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleTouch(e); return; }
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
   if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) { if (LURES[S.lure][0] !== "angler") flipPulse(); } else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
@@ -4489,6 +4493,7 @@ window.addEventListener("keydown", e => {
   if (DIR_KEYS[c] && !HELD.includes(c)) { HELD.push(c); syncKeys(); }
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
+  if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleKey(e, true); return; }   // Driftwood Isle
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartKey(e, true); if (["Space", "ShiftLeft", "ShiftRight"].includes(c)) e.preventDefault(); return; }   // FIN PRIX
   if (S.state === "flip" && FLIP && FLIP.test && c === "Escape") { flipDrone(false); FLIP = null; newDive(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
