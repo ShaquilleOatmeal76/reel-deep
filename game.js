@@ -172,10 +172,11 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "",
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {},
     fp: { cups: {}, best: {}, own: [], eq: {}, races: 0, wins: 0 } },   // the Rusty Hook; fp: FIN PRIX (finprix.js, fpData())
-  ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" } };   // counters for titles (Nov 18, 2026): sharks caught, fish lost to sharks, fish released, stings, ghosts caught, bounty days
+  ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" },
+  isle: { planks: 0, rope: 0, sail: 0, compass: 0, built: 0, met: 0 } };   // Driftwood Isle (island.js): the raft so far   // counters for titles (Nov 18, 2026): sharks caught, fish lost to sharks, fish released, stings, ghosts caught, bounty days
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
-  store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}), flip: Object.assign(store.flip, old.flip || {}), ach: Object.assign(store.ach, old.ach || {}) });
+  store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}), flip: Object.assign(store.flip, old.flip || {}), ach: Object.assign(store.ach, old.ach || {}), isle: Object.assign(store.isle, old.isle || {}) });
   store.tav.stats = Object.assign({ stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, store.tav.stats);
   if (!old.dives) store.dives = Math.max(store.dives || 0, Math.floor(Object.values(store.log).reduce((a, e) => a + (e.n || 0), 0) / 3));   // dives from before they were counted, roughly
 } catch (e) { /* private window: play without saving */ }
@@ -332,7 +333,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     ["jellylegs", "JELLY LEGS", "GET STUNG 25 TIMES"], ["lifer", "LIFER", "FINISH 500 DIVES"], ["nightowl", "NIGHT OWL", "CATCH 10 GHOST FISH"],
     ["topdog", "TOP DOG", "#1 ON THE DAILY BOARD"], ["jackpot", "JACKPOT", "X100 ON A SCRATCH CARD"], ["photo", "PHOTO FINISH", "WIN ON A PHOTO FINISH"]])
   .concat([["minnowcup", "MINNOW CHAMP", "FIN PRIX: MINNOW CUP GOLD"], ["reefcup", "REEF CHAMP", "FIN PRIX: REEF CUP GOLD"], ["deepcup", "DEEP CHAMP", "FIN PRIX: DEEP CUP GOLD"],   // FIN PRIX, Nov 18, 2026
-    ["abysscup", "ABYSS CHAMP", null], ["finlegend", "FIN PRIX LEGEND", "GOLD IN EVERY CUP"]]);
+    ["abysscup", "ABYSS CHAMP", null], ["finlegend", "FIN PRIX LEGEND", "GOLD IN EVERY CUP"]])
+  .concat([["castaway", "CASTAWAY", "BUILD THE RAFT"]]);                // Driftwood Isle (island.js)
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -539,6 +541,7 @@ function cast() {                                        // the lure is chosen: 
     const id = pickBottle(S.rng);
     if (id >= 0) S.bottle = { id, x: S.rng.uniform(10, LW - 20), y: S.rng.uniform(30, C.MAX_M - 80) * M, got: false };
   }
+  if (typeof raftCast === "function") raftCast();          // raft planks, rope and sail (island.js)
   noteEvents();
   S.prepared = true;
   setState("down");
@@ -688,6 +691,7 @@ function hookCheck() {                                   // whatever the hook is
     S.popups.push(["A MESSAGE IN A BOTTLE!", 2.6, "#b4f0dc"]);
     findSecret("bottle");
   }
+  if (typeof raftHook === "function") raftHook();          // raft parts come along like bottles (island.js)
   if (S.hy <= 10 * M || S.immune > 0) return;
   for (const [i, f] of visible()) {
     const touch = overlap(hook, fishRect(f));
@@ -1831,6 +1835,7 @@ function draw() {
       spr("bottle", bx, by);
     }
   }
+  if (typeof raftDraw === "function") raftDraw(cam, t);
   const diving = ["down", "turn", "up", "fight", "rise"].includes(S.state);
   if (diving) {                                          // the line, the hook and whatever is on it
     const pts = wl > -20 ? [[OX + 63, wl - 13]] : [];
@@ -1868,6 +1873,7 @@ function draw() {
     }
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
     if (bt && !bt.got && S.prepared) { const [bx, by] = bottleXY(bt, cam, t); lights.push([Math.floor(bx + 3), Math.floor(by + 4), Math.round(20 + 4 * Math.sin(t * 4))]); }   // a bottle glows
+    if (typeof raftLights === "function") raftLights(lights, cam, t);
     if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), 10]);       // the crack glows, faintly
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
     for (const gl of DATA.glows) if (gl[1] > cam - 20 && gl[1] < cam + LH + 20) lights.push([gl[0] - BG_O + OX, Math.floor(gl[1] - cam), gl[2]]);   // crystals and vent mouths
@@ -1881,6 +1887,7 @@ function draw() {
     for (let x = 0; x < LW; x += 4) rect(WHITE, x + Math.floor(t * 3) % 4, wl + Math.floor(Math.sin(t * 2 + x * 0.3) * (S.storm ? 2.4 : 1.2)), 2, 1);
     const bob = Math.floor(Math.sin(t * (S.storm ? 3.4 : 2)) * (S.storm ? 3 : 1.5));
     drawShack(wl, tavOpen());
+    if (typeof raftScene === "function") raftScene(wl);       // the shipwright's pier and the raft (island.js)
     angler(OX + 30, wl - 9 + bob, store.eq, wl);
     line("#785432", OX + 50, wl - 12 + bob, OX + 63, wl - 22 + bob);
     if (["title", "haul"].includes(S.state)) line(lineCol(0), OX + 63, wl - 22 + bob, OX + 63, wl + 2);
@@ -1892,7 +1899,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { derbytable: drawDerbyTable, plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, pit: drawPit, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { derbytable: drawDerbyTable, plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, pit: drawPit, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay] || (EXTRA_OV[S.overlay] && EXTRA_OV[S.overlay].draw);
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2177,6 +2184,7 @@ const SHOP_ROWS = [
   ["drink", "A DRINK", 10, "BUY HIM ONE. HE TALKS"],
   ["scratch", "SCRATCH CARD", 5, "THREE ALIKE WINS, UP TO X500"],
   ["show", "FIREWORKS", 30, "A SHOW OVER YOUR BOAT"],
+  ["compass", "A COMPASS", 300, "THE SHIPWRIGHT NEEDS ONE"],   // for the raft (island.js)
   ["cap", "OLD MAN'S CAP", 300, "A HAT. HE HAS A SPARE"],
   ["cat", "BAR CAT", 600, "A PET. IT CAME WITH THE PLACE"],
   ["tub", "RUSTY TUB", 900, "A BOAT. FLOATS, MOSTLY"],
@@ -2207,6 +2215,7 @@ function shopRowState(i) {                                  // -> [label shown, 
   if (id === "story") return [q.stories ? "STORIES (" + q.stories + ")" : lab, q.stories < STORIES.length ? price : null, q.stories < STORIES.length ? (q.stories ? "TIP HIM FOR THE NEXT ONE" : note) : "THAT'S ALL HE KNOWS"];
   if (id === "fish") return [q.fish ? "YOUR RACER" : lab, q.fish ? null : price, q.fish ? q.fish.name + ": TRAIN IT" : note];
   if (id === "finprix") return [lab, null, q.fish ? "IN THE PIT: THE GARAGE" : "GET A DERBY FISH FIRST"];
+  if (id === "compass") return store.isle.compass ? [lab, null, "THE SHIPWRIGHT HAS IT"] : store.dives >= 50 || store.isle.built ? [lab, price, note] : ["???", null, "AFTER 50 DIVES"];
   if (id === "dream") return store.sec.woke ? [lab, price, note] : ["???", null, "WAKE SOMETHING UP FIRST"];
   if (id === "jukebox") return [lab, q.jukebox ? null : price, q.jukebox ? "PICK A SONG" : note];
   if (id === "carve") return [lab, price, q.carved ? "YOURS SAYS " + q.carved + ". CARVE AGAIN?" : note];
@@ -2234,6 +2243,7 @@ function shopBuy(i) {
   if (cm) { store.own[cm[0]].push(cm[1]); store.eq[cm[0]] = cm[1]; }
   else if (id === "rumour") { q.rumours = (q.rumours || 0) + 1; const pool = rumourPool(), b = pool[Math.floor(Math.random() * pool.length)]; store.sec.bottles.push(b); findSecret("bottle"); S.overlay = "note"; S.noteIdx = store.sec.bottles.length - 1; S.noteBack = "chipshop"; }
   else if (id === "magnet") q.magnet += 3;
+  else if (id === "compass") { store.isle.compass = 1; TAV.say = "TAKE IT TO THE PIER"; }
   else if (id === "map") { q.map = weekString(); TAV.say = "TRY AROUND " + bootDepth() + " M"; }
   else if (id === "story") { q.stories++; TAV.story = q.stories - 1; openOverlay("story"); }
   else if (id === "fish") {
@@ -3646,6 +3656,7 @@ function helpTapWide(rx, ly) {
   else closeOverlay();
 }
 
+const EXTRA_OV = {};                                         // overlays from later files: { draw(), tap(rx, ly) }, laid out for both widths themselves
 const WIDE = {
   shop: { draw: drawShopWide, tap: shopTapWide, key: d => { S.shopCat = (S.shopCat + d + CATS.length) % CATS.length; S.shopSel = 0; play("tick"); } },
   log: { draw: drawLogWide, tap: logTapWide, key: d => { S.logPage = (S.logPage + d + ZONES.length) % ZONES.length; S.logSel = 0; play("tick"); } },
@@ -4215,6 +4226,7 @@ const HELP = [
   ["BIG FISH", ["TROPHY: A HUGE FISH", "WITH RED SPARKLES.", "", "LEGENDARY: A GOLD", "AURA AND STARS.", "", "BOTH FIGHT. TAP", "(SPACE) ON GREEN", "BEFORE TIME RUNS", "OUT.", "ONE LEGENDARY", "PER HOOK."]],
   ["THE SEA FLOOR", ["REACH THE FLOOR", "FOR +40 LB.", "", "IF YOUR HOOK ISN'T", "FULL, YOU RISE", "SLOWLY AND CAN", "KEEP FISHING", "UNTIL IT IS."]],
   ["TIME FISH", ["SOME FISH ONLY", "COME OUT AT ONE", "TIME OF DAY:", ""].concat(...["MORNING", "DAY", "DUSK", "NIGHT"].map(td => [td + ":", (SPECIES.find(q => q[6] === td) || ["", "-"])[1]]))],
+  ["THE RAFT", ["AFTER 50 DIVES A", "SHIPWRIGHT WAITS", "ON THE PIER.", "", "PLANKS DRIFT IN", "THE SEA. TOUCH", "ONE TO TAKE IT.", "", "60 PLANKS, A ROPE,", "A SAIL AND A", "COMPASS BUILD A", "RAFT. TAP HIM."]],
   ["SCORING", ["POUNDS, TIMES YOUR", "SET BONUSES. THEY", "ADD TOGETHER:", "", "A PAIR        +0.5", "3 ZONES         +1", "3 TROPHIES      +1", "3 FROM THE DEEP +1", "3 OF A KIND     +2", "", "BOUNTY FISH: X3", "COINS BUY LOOKS."]],
 ];
 function drawHelp() {
@@ -4330,6 +4342,7 @@ function closeOverlay() {
 }
 function overlayTap(lx, ly) {
   if (S.overlay === "credits") { if (CRED.done) closeOverlay(); else CRED.fast = true; return; }
+  if (EXTRA_OV[S.overlay]) { EXTRA_OV[S.overlay].tap(lx + OX, ly); return; }       // menus from the other files, both widths (island.js)
   if (wideMenus() && WIDE[S.overlay]) { WIDE[S.overlay].tap(lx + OX, ly); return; }   // the PC layouts
   if (tavernTap(lx, ly)) return;
   const arrows = n => { if (ly < 17 && (lx < 24 || lx > 96)) { play("tick"); return (lx > 96 ? 1 : n - 1); } return 0; };
@@ -4403,6 +4416,7 @@ function titleTap(rx, lx, ly) {                            // -> true if the tap
     else play(P.n > 3 ? "hit" : "tick");
     return true;
   }
+  if (typeof raftTap === "function" && raftTap(rx, ly, wl)) return true;   // the shipwright, the raft, the island (island.js)
   if (rx >= OX - 8 && rx < OX + 22 && ly >= wl - 38 && ly < wl) {      // the Rusty Hook
     if (tavOpen()) { TAV.say = dailyReady() ? "FREE CHIPS ON THE BAR" : "WHAT'LL IT BE?"; openOverlay("tavern"); }
     else { S.popups.push(["CLOSED. " + (TAV_OPEN_AT - store.dives) + " DIVES TO GO", 2.4, ORANGE]); play("miss"); }
