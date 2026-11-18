@@ -38,6 +38,10 @@ compass (the old fisherman sells one for chips), and he builds you a raft. Tap h
 Once it's built, tap the raft (or the island on the horizon) to sail to **Driftwood Isle**: walk with WASD or the arrows
 (or tap where to go), E or Space to look at things and talk, Escape for the menu. A day there lasts about 12 minutes and
 ends when you go to bed; the raft at the end of the dock takes you back to your boat.
+The shipwright gives you a hoe, a watering can and some seeds. The old garden is on the **Tide Flats**, east along the
+coast road: till, plant, water every day (rain does it for you), and harvest. Sell crops and beach finds in the bin by
+your shack (it pays overnight in sand dollars) and buy more seeds at the stand by the store. **1-9** pick a toolbar slot,
+**Tab** opens your bag. Island money never turns into coins or chips, and nothing on the island changes your score.
 
 ## Save codes
 
