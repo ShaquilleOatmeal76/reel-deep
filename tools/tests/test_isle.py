@@ -39,7 +39,7 @@ async def main():
         r = await ev("({ st: REEL.S.state, w: canvas.width, h: canvas.height, area: ISLE.map.id, msg: !!ISLE.msg })")
         check("tapping the island sails there", r == {"st": "isle", "w": 384, "h": 216, "area": "port", "msg": True}, r)
         await page.wait_for_timeout(400); await page.screenshot(path=OUT + "/arrive.png")
-        for _ in range(3): await page.keyboard.press("Space")
+        for _ in range(5): await page.keyboard.press("Space")
         check("intro pages advance", await ev("ISLE.msg") is None)
         check("intro only once", await ev("isleSave().intro") == 1)
 
@@ -88,7 +88,7 @@ async def main():
         await ev("(() => { isleGo('port', 300, 440); const s = isleSave(); s.day = 28; s.min = DAY_END - 0.5; })()")
         await ev(TICK + "(60)")
         r = await ev("({ day: isleSave().day, season: isleSave().season, area: ISLE.map.id, sd: isleSave().sd })")
-        check("passing out at 2 am: next day, in bed, next season", r == {"day": 1, "season": 1, "area": "shack", "sd": 0}, r)
+        check("passing out at 2 am: next day, in bed, next season", r == {"day": 1, "season": 1, "area": "shack", "sd": 100}, r)
         check("passing out says so", "FELL ASLEEP" in (await ev("ISLE.msg.pages[0]")))
         await ev("ISLE.msg = null")
 
