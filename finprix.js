@@ -282,6 +282,7 @@ function kartKey(e, down) {
   const c = e.code;
   if (down) KART.keys.add(c); else KART.keys.delete(c);
   if (!down) return;
+  if (KART.gym) { gymKey(c); return; }
   if (c === "Escape") { if (KART.test) { KART = null; newDive(); } else fpExit(); return; }
   if ((KART.phase === "done" || KART.phase === "cupdone") && ["Space", "Enter"].includes(c)) { fpNext(); return; }
   if (c === "KeyH" && KART.phase === "race") { fpHorn(); return; }
@@ -292,12 +293,14 @@ function kartKey(e, down) {
 }
 function kartTouch(rx, ly, down) {           // touch: hold the left / right side to steer; the bottom-right corner uses your item
   if (!KART) return;
+  if (KART.gym) { gymTouch(rx, ly, down); return; }
   if (KART.phase === "done" || KART.phase === "cupdone") { if (down) fpNext(); return; }
   if (down && ly > 160 && rx > LW - 44) { fpUseItem(KART.me); return; }
   KART.touch = down ? [rx, ly] : null;
 }
 function kartUpdate(dt) {
   const K = KART;
+  if (K.gym) { gymUpdate(dt); return; }
   K.t += dt; K.flash = Math.max(0, K.flash - dt); K.shake = Math.max(0, K.shake - dt); K.msgT -= dt; K.zapFx = Math.max(0, (K.zapFx || 0) - dt);
   if (K.phase === "count") { const was = Math.ceil(K.ct); K.ct -= dt; if (Math.ceil(K.ct) !== was && K.ct > 0) play(K.ct < 1 ? "chime" : "tick"); if (K.ct <= 0) { K.phase = "race"; play("select"); } }
   const key = c => K.keys.has(c);
@@ -518,6 +521,7 @@ const fpMix = (c, f, k) => "rgb(" + c.map((v, i) => Math.round(v + (f[i] - v) * 
 const fpHex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 function fpQuad(col, x1, y1, w1, x2, y2, w2) { g.fillStyle = col; g.beginPath(); g.moveTo(x1 - w1, y1 + 1); g.lineTo(x2 - w2, y2); g.lineTo(x2 + w2, y2); g.lineTo(x1 + w1, y1 + 1); g.fill(); }
 function drawKart() {
+  if (KART.gym) { drawGym(); return; }
   const K = KART, me = K.me, t = K.t, len = K.len;
   K.ghostR = null;
   if (K.ghost && me.lapStart !== undefined && K.phase === "race") {     // your best lap, replayed
@@ -950,7 +954,7 @@ function pitHits() {                         // [id, x, y, w, h, value] in scree
     else { h.push(["catp", X, 31, 20, 12, -1]); h.push(["catp", X + W - 20, 31, 20, 12, 1]); }
     FP_LOOKS[FP_CATS[PIT.cat][0]].forEach((it, i) => h.push(["look", X, 48 + i * (wide ? 14 : 11), wide ? 170 : W, wide ? 13 : 10, i]));
     h.push(["act", wide ? X + 214 : X + 20, wide ? 152 : 170, wide ? 134 : 80, 15, 0]);
-  } else h.push(["gym", wide ? X + 214 : X + 20, wide ? 150 : 166, wide ? 134 : 80, 15, 0]);
+  } else ["speed", "stamina", "burst"].forEach((k, i) => h.push(["drill", wide ? X + 214 : X + 72, wide ? 88 + i * 24 : 84 + i * 26, wide ? 134 : 46, wide ? 18 : 14, k]));
   return h;
 }
 function pitLookState(cat, i) {              // -> [button label, colour, note]
@@ -976,7 +980,7 @@ function pitAct(id, v) {
     else if (it[2] && tav().chips >= it[2]) { addChips(-it[2]); d.own.push(key); d.eq[cat] = it[0]; play("fanfare"); }
     else play("miss");
     saveStore();
-  } else if (id === "gym") { TAV.fishBack = "pit"; openOverlay("myfish"); }
+  } else if (id === "drill") startGym(v);
 }
 function pitTap(rx, ly) {
   if (ly > 186) { closeOverlay(); return; }
@@ -1051,11 +1055,16 @@ function drawPit() {
     else { pitKartPreview(X + 100, 160, 28, look, cat === "pose" ? it[0] : ""); text(note.slice(0, 13), X + 2, 156, 1, col, "left", null); }
     const [, bx, by, bw, bh] = hits.find(q => q[0] === "act"); btn(bx, by, bw, bh, lab, col);
   } else {
-    fitDraw(atlas, f.id, cx, 52, wide ? 80 : 50, 30, wide ? 2 : 1);
-    text(f.name, cx, 74, 1, GOLD, "center", null);
-    (wide ? ["SPEED: TOP SPEED", "STAMINA: PICK-UP, HITS", "BURST: BOOST POWER"] : ["SPEED", "STAMINA", "BURST"]).forEach((l, i) => { text(l, wide ? cx - 80 : X + 2, 92 + i * 16, 1, WHITE, "left", null); for (let k = 0; k < 10; k++) rect(k < f.lv[i] ? CHIP : "#3c2a1e", (wide ? cx - 80 : X + 2) + k * 7, 100 + i * 16, 6, 3); });
-    text(d.races + " RACES  " + d.wins + " WINS", cx, 144, 1, "#8c96c8", "center", null);
-    const [, bx, by, bw, bh] = hits.find(q => q[0] === "gym"); btn(bx, by, bw, bh, "TRAIN", ORANGE);
+    fitDraw(atlas, f.id, cx, 48, wide ? 80 : 50, 26, wide ? 2 : 1);
+    text(wide ? f.name + "  " + d.races + " RACES " + d.wins + " WINS" : f.name, cx, 68, 1, GOLD, "center", null);
+    const lab = wide ? ["SPEED: TOP SPEED", "STAMINA: PICK-UP, HITS", "BURST: BOOST POWER"] : ["SPEED", "STAMINA", "BURST"];
+    for (const [id, x, y, w, h, k] of hits) if (id === "drill") {
+      const i = FP_DRILLS[k].stat, lx = wide ? X + 20 : X + 2, lv = f.lv[i];
+      text(lab[i], lx, y + 4, 1, WHITE, "left", null); for (let q = 0; q < 10; q++) rect(q < lv ? CHIP : "#3c2a1e", lx + q * (wide ? 9 : 6), y + 11, wide ? 7 : 5, 3);
+      if (wide) text(lv >= 10 ? "MAX" : "LV " + lv, X + 200, y + 9, 1, lv >= 10 ? GOLD : CHIP, "right", null);
+      btn(x, y, w, h, wide ? FP_DRILLS[k].name : "GO", lv >= 10 ? GREY : ORANGE);
+    }
+    text(wide ? "PASS A DRILL TO LEVEL UP. FREE, ANY TIME" : "PASS A DRILL: +1", cx, wide ? 168 : 166, 1, "#8c96c8", "center", null);
   }
   if (!wide) chipsLine ? (g.save(), g.translate(OX, 0), chipsLine(185), g.restore()) : 0;
   closeLine("TAP HERE TO GO BACK");
@@ -1075,7 +1084,156 @@ function fpPose(kind, r, x, y, w, t, stand) {
   r.tilt = 0; r.hop = 0;
 }
 
-window.FPX = { fpData, PIT, pitOpen, pitHits, pitAct, fpStartCup, fpNext, fpExit, FP_LOOKS, get KART() { return KART; }, FP_TUNE, FP_CREW, FP_TRACKS, FP_CUPS, FP_ORDER, get K() { return KART; }, startKart, FP, fpDist, fpTrack, kartUpdate,
+// ---- the gym: three training drills, one per stat (Nov 18, 2026; they replace paying chips to train). Pass the drill
+// at your current level and that stat goes up one (to 10). Each drill gets harder with the level it's training for.
+// Runs inside the kart hand-over: KART = { gym: kind, ... }, so game.js needs nothing new.
+const FP_DRILLS = {
+  speed: { name: "DODGE DRILL", stat: 0, how: ["DODGE THE ROCKS FOR 30 SECONDS", "3 HITS AND YOU'RE OUT"], short: ["DODGE THE ROCKS", "FOR 30 SECONDS", "3 HITS: YOU'RE OUT"], keys: "A D: STEER", touch: "HOLD A SIDE TO STEER" },
+  stamina: { name: "ENDURANCE SWIM", stat: 1, how: ["ALTERNATE LEFT AND RIGHT TO SWIM", "TOO FAST AND YOU CRAMP"], short: ["LEFT, RIGHT, LEFT", "TO SWIM. TOO FAST", "AND YOU CRAMP"], keys: "A D, A D, A D...", touch: "TAP LEFT, RIGHT, LEFT..." },
+  burst: { name: "REACTION SPRINT", stat: 2, how: ["GO THE MOMENT THE LIGHTS GO OUT", "5 STARTS. DON'T JUMP EARLY"], short: ["GO WHEN THE", "LIGHTS GO OUT", "DON'T JUMP EARLY"], keys: "SPACE: GO", touch: "TAP: GO" },
+};
+const GYM = {                                  // the numbers each drill uses, by level (lv = the level you're training from)
+  dodge: lv => ({ fall: 60 + lv * 9, every: Math.max(0.24, 0.9 - lv * 0.07), hearts: 3, time: 30 }),
+  swim: lv => ({ goal: 1200 + lv * 85, current: 15 + lv * 3, time: 30, kick: 20, drag: 1, fast: 0.15 }),
+  sprint: lv => ({ target: 0.5 - lv * 0.025 }),   // average of your best 4 of 5 starts, seconds
+};
+function startGym(kind) {
+  const f = tav().fish, d = FP_DRILLS[kind], lv = f.lv[d.stat];
+  KART = { gym: kind, lv, maxed: lv >= 10, t: 0, phase: "count", ct: 3.6, keys: new Set(), touch: null, msg: "", msgT: 0, flash: 0 };
+  if (kind === "speed") Object.assign(KART, GYM.dodge(Math.min(lv, 9)), { x: 0, rocks: [], next: 1, hit: 0, left: 30 });
+  if (kind === "stamina") Object.assign(KART, GYM.swim(Math.min(lv, 9)), { dist: 0, v: 0, last: 0, lastT: -1, tired: 0, cramp: 0, left: 30 });
+  if (kind === "burst") Object.assign(KART, GYM.sprint(Math.min(lv, 9)), { round: 0, times: [], lights: 0, wait: 0, goT: 0, state: "ready" });
+  S.state = "kart"; S.overlay = null;
+}
+function gymEnd(pass, score) {
+  const K = KART, f = tav().fish, d = FP_DRILLS[K.gym];
+  K.phase = "done"; K.pass = pass; K.score = score;
+  if (pass && !K.maxed) { f.lv[d.stat]++; saveStore(); play("fanfare"); } else play(pass ? "chime" : "miss");
+}
+function gymExit() { KART = null; newDive(); PIT.tab = "train"; S.overlay = "pit"; play("back"); }
+function gymKey(c) {
+  const K = KART;
+  if (c === "Escape") { gymExit(); return; }
+  if (K.phase === "done") { if (["Space", "Enter"].includes(c)) startGym(K.gym); return; }
+  if (K.phase !== "play") return;
+  if (K.gym === "stamina") { const s = ["KeyA", "ArrowLeft"].includes(c) ? -1 : ["KeyD", "ArrowRight"].includes(c) ? 1 : 0; if (s) gymStroke(s); }
+  if (K.gym === "burst" && ["Space", "Enter", "KeyW", "ArrowUp"].includes(c)) gymGo();
+}
+function gymTouch(rx, ly, down) {
+  const K = KART;
+  if (!down) { K.touch = null; return; }
+  if (K.phase === "done") { if (ly > 170) gymExit(); else startGym(K.gym); return; }
+  K.touch = [rx, ly];
+  if (K.phase !== "play") return;
+  if (K.gym === "stamina") gymStroke(rx < LW / 2 ? -1 : 1);
+  if (K.gym === "burst") gymGo();
+}
+function gymStroke(side) {                   // endurance swim: a fin stroke (it only counts if it's the other fin)
+  const K = KART;
+  if (K.cramp > 0 || side === K.last) { if (side === K.last) K.v *= 0.9; return; }
+  if (K.lastT >= 0 && K.t - K.lastT < K.fast) { K.tired += 0.2; if (K.tired >= 1) { K.cramp = 1.2; K.tired = 0.5; K.msg = "CRAMP!"; K.msgT = 1; play("miss"); } }
+  K.last = side; K.lastT = K.t; K.v += K.kick; play("tick", 0.4);
+}
+function gymGo() {                           // reaction sprint: GO
+  const K = KART;
+  if (K.state === "lights") { K.times.push(9.99); K.msg = "JUMP START!"; K.msgT = 1.2; K.state = "after"; K.wait = 1.4; play("miss"); }
+  else if (K.state === "go") { const rt = K.t - K.goT; K.times.push(rt); K.msg = rt.toFixed(3) + " S"; K.msgT = 1.2; K.state = "after"; K.wait = 1.4; play(rt < K.target ? "chime" : "tick"); }
+}
+function gymUpdate(dt) {
+  const K = KART;
+  K.t += dt; K.msgT -= dt; K.flash = Math.max(0, K.flash - dt);
+  if (K.phase === "count") { const was = Math.ceil(K.ct); K.ct -= dt; if (Math.ceil(K.ct) !== was && K.ct > 0) play("tick"); if (K.ct <= 0) { K.phase = "play"; play("select"); } return; }
+  if (K.phase !== "play") return;
+  if (K.gym === "speed") {
+    K.left -= dt;
+    let steer = heldDir("L", "R"); if (K.touch) steer = K.touch[0] < LW / 2 ? -1 : 1; if (K.bot) steer = K.bot(K);
+    K.x = clamp(K.x + steer * dt * 1.8, -1, 1);
+    K.next -= dt; const t = 30 - K.left;
+    if (K.next <= 0) { K.next = K.every * (0.7 + Math.random() * 0.6) * Math.max(0.6, 1 - t * 0.01); K.rocks.push({ x: Math.random() * 2 - 1, y: -0.1, r: 0.09 + Math.random() * 0.07, k: Math.random() < 0.25 ? "urchin" : "rock" }); }
+    for (const r of K.rocks) { r.y += dt * K.fall * (1 + t * 0.012) / 160; if (!r.hit && K.hit <= 0 && Math.abs(r.y - 0.82) < r.r * 0.9 && Math.abs(r.x - K.x) < r.r + 0.07) { r.hit = true; K.hearts--; K.hit = 1; K.flash = 0.3; play("hit"); K.msg = K.hearts > 0 ? "OUCH!" : "OUT!"; K.msgT = 0.8; } }
+    K.rocks = K.rocks.filter(r => r.y < 1.2); K.hit = Math.max(0, K.hit - dt);
+    if (K.hearts <= 0) gymEnd(false, 30 - Math.max(0, K.left));
+    else if (K.left <= 0) gymEnd(true, 30);
+  } else if (K.gym === "stamina") {
+    K.left -= dt; K.cramp = Math.max(0, K.cramp - dt); K.tired = Math.max(0, K.tired - dt * 0.25);
+    if (K.bot) K.bot(K, dt);
+    K.v = Math.max(0, K.v - K.v * K.drag * dt); K.dist = Math.max(0, K.dist + (K.v - K.current) * dt);
+    if (K.dist >= K.goal) gymEnd(true, 30 - K.left);
+    else if (K.left <= 0) gymEnd(false, K.dist);
+  } else {
+    if (K.bot) K.bot(K, dt);
+    if (K.state === "ready") { K.lights = 0; K.wait = 0.6; K.state = "lights"; K.hold = 0.6 + Math.random() * 2; }
+    else if (K.state === "lights") { K.wait -= dt; if (K.wait <= 0) { if (K.lights < 5) { K.lights++; K.wait = K.lights < 5 ? 0.6 : K.hold; play("tick"); } else { K.lights = 0; K.state = "go"; K.goT = K.t; play("select"); } } }
+    else if (K.state === "go") { if (K.t - K.goT > 1.5) { K.times.push(1.5); K.msg = "TOO SLOW"; K.msgT = 1; K.state = "after"; K.wait = 1; } }
+    else if (K.state === "after") { K.wait -= dt; if (K.wait <= 0) { if (K.times.length >= 5) { const best = K.times.slice().sort((a, b) => a - b).slice(0, 4), avg = best.reduce((a, b) => a + b, 0) / 4; gymEnd(avg <= K.target, avg); } else K.state = "ready"; } }
+  }
+}
+function drawGym() {
+  const K = KART, d = FP_DRILLS[K.gym], f = tav().fish, t = K.t, cx = LW / 2, a = DATA.atlas[f.id];
+  const fish = (x, y, w, rot, flip) => { const k = w / a[2], h = a[3] * k; g.save(); g.translate(x, y); g.rotate(rot || 0); g.scale(flip ? -1 : 1, 1); g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(-w / 2), Math.round(-h / 2), Math.round(w), Math.round(h)); g.restore(); };
+  if (K.gym === "speed") {                   // looking down on a lane, rocks coming at you
+    const W = Math.min(LW - 8, 220), x0 = cx - W / 2, X = v => x0 + (v + 1) / 2 * W;
+    rect("#0c2a4a", -4, 0, LW + 8, LH); rect("#123a62", x0, 0, W, LH);
+    for (let k = 0; k < 12; k++) { const y = ((k * 31 + t * K.fall * 0.9) % 220) - 10; rect("#1a4a78", x0 + ((k * 53) % W), y, 1, 6); }
+    rect("#e6c850", x0 - 2, 0, 2, LH); rect("#e6c850", x0 + W, 0, 2, LH);
+    for (const r of K.rocks) { const px = X(r.x), py = r.y * LH, rr = r.r * W / 2; if (r.k === "urchin") { disc("#b45adc", px, py, rr * 0.7); for (let q = 0; q < 8; q++) rect("#e6b4ff", px + Math.cos(q * 0.8 + t) * rr, py + Math.sin(q * 0.8 + t) * rr, 1, 1); } else { disc("#5a6478", px, py, rr); disc("#7a8496", px - rr * 0.3, py - rr * 0.3, rr * 0.4); } }
+    if (!(K.hit > 0 && Math.floor(t * 12) % 2)) fish(X(K.x), LH * 0.82, 22, -Math.PI / 2);
+    for (let q = 0; q < 3; q++) disc(q < K.hearts ? "#ff5a6e" : "#3c3c4a", 9 + q * 10, LW < 200 ? 34 : 24, 3);
+    text(Math.max(0, Math.ceil(K.left)) + "S", LW - 6, 10, 1, WHITE, "right", null);
+  } else if (K.gym === "stamina") {          // side view: swim against the current to the flag
+    rect("#0e3a5e", -4, 0, LW + 8, LH);
+    for (let k = 0; k < 20; k++) { const x = LW - ((k * 41 + t * K.current * 0.8) % (LW + 40)); rect("#1e5a86", x, 30 + (k * 23) % 140, 8, 1); }   // the current
+    rect("#c8b480", -4, 168, LW + 8, 32); for (let k = 0; k < LW; k += 24) rect("#b4a06c", k - (K.dist * 0.5) % 24, 170, 12, 2);
+    const px = 30 + (K.dist / K.goal) * (LW - 70);
+    rect("#fafaff", LW - 34, 120, 2, 48); rect("#ff5050", LW - 32, 120, 12, 8);   // the finish flag
+    fish(px, 140 + Math.sin(t * 9) * 2 * (K.v > 30 ? 1 : 0.3), 26, Math.sin(t * 12) * 0.08 * (K.cramp > 0 ? 3 : 1));
+    const bw = LW < 200 ? 100 : 120, by = LW < 200 ? 34 : 26, gm = Math.round(K.goal / 10);
+    rect("#1a1a28", cx - bw / 2, by, bw, 6); rect(K.tired > 0.7 ? "#ff5a3c" : K.tired > 0.4 ? ORANGE : LIME, cx - bw / 2, by, bw * Math.min(1, K.tired), 6);
+    rect("#1a1a28", cx - bw / 2, by + 12, bw, 4); rect(GOLD, cx - bw / 2, by + 12, bw * Math.min(1, K.dist / K.goal), 4);
+    if (LW >= 200) { text("TIRED", cx - bw / 2 - 4, by + 3, 1, GREY, "right", null); text(Math.floor(K.dist / 10) + "/" + gm + " M", cx + bw / 2 + 4, by + 14, 1, GOLD, "left", null); }
+    else text("TIRED      " + Math.floor(K.dist / 10) + "/" + gm + " M", cx, by + 24, 1, GOLD, "center", null);
+    text(Math.max(0, Math.ceil(K.left)) + "S", LW - 6, 10, 1, WHITE, "right", null);
+    if (K.phase === "play") { const on = K.last === 1 ? -1 : 1; text(on < 0 ? "<" : ">", on < 0 ? cx - 30 : cx + 30, 100, 2, Math.floor(t * 6) % 2 ? WHITE : GREY, "center"); }
+  } else {                                   // the start line: five lights
+    rect("#141826", -4, 0, LW + 8, LH); rect("#3c3c46", -4, 130, LW + 8, 70); for (let k = 0; k < 10; k++) rect(k % 2 ? "#fafaff" : "#1a1628", cx - 50 + k * 10, 150, 10, 6);
+    rect("#22222c", cx - 56, 36, 112, 26);
+    for (let q = 0; q < 5; q++) { disc("#0e0e14", cx - 44 + q * 22, 49, 8); if (q < K.lights) { disc("#ff3c3c", cx - 44 + q * 22, 49, 7); disc("#ff9a9a", cx - 46 + q * 22, 47, 2); } }
+    const go = K.state === "go" || K.state === "after";
+    fish(cx + (go && K.times.length && K.state === "after" ? 40 : 0), 140, 34, 0);
+    if (K.state === "go") text("GO!", cx, 90, 3, LIME, "center");
+    const nw = LW < 200;
+    K.times.forEach((rt, i) => text((rt > 9 ? "JUMP" : rt.toFixed(3)), 8, (nw ? 84 : 76) + i * 10, 1, rt <= K.target ? LIME : rt > 9 ? "#ff5a6e" : WHITE, "left", null));
+    text("TARGET " + K.target.toFixed(3), nw ? cx : LW - 6, nw ? 72 : 76, 1, GOLD, nw ? "center" : "right", null);
+    text("START " + Math.min(5, K.times.length + 1) + "/5", LW - 6, 10, 1, WHITE, "right", null);
+  }
+  text(d.name, 6, LW < 200 ? 22 : 10, 1, GOLD, "left", null);
+  if (K.flash > 0) { g.globalAlpha = K.flash; rect("#ff3c3c", -4, 0, LW + 8, LH); g.globalAlpha = 1; }
+  if (K.msgT > 0 && K.phase === "play") text(K.msg, cx, 72, 2, GOLD, "center");
+  if (K.phase === "count") {
+    const lvN = K.maxed ? "MAXED: PRACTICE" : "LEVEL " + K.lv + " TO " + (K.lv + 1);
+    const bw = Math.min(200, LW - 4);
+    g.globalAlpha = 0.85; rect(INK, cx - bw / 2, 50, bw, 96); g.globalAlpha = 1; outline(cx - bw / 2, 50, bw, 96, GOLD);
+    text(d.name, cx, 60, 1, GOLD, "center", null); text(lvN, cx, 72, 1, K.maxed ? GREY : CHIP, "center", null);
+    (LW < 200 ? d.short : d.how).forEach((l, i) => text(l, cx, 84 + i * 9, 1, WHITE, "center", null));
+    if (K.gym === "stamina") text("REACH " + Math.round(K.goal / 10) + " M IN 30 S", cx, 112, 1, "#8c96c8", "center", null);
+    if (K.gym === "burst") text((LW < 200 ? "UNDER " : "AVERAGE UNDER ") + K.target.toFixed(3) + " S", cx, 112, 1, "#8c96c8", "center", null);
+    text(KEYS ? d.keys : d.touch, cx, 124, 1, CYAN, "center", null);
+    const n = Math.ceil(K.ct - 0.6); text(n > 0 ? String(n) : "GO!", cx, 136, 1, n > 0 ? WHITE : LIME, "center", null);
+  }
+  if (K.phase === "done") {
+    const st = ["SPEED", "STAMINA", "BURST"][d.stat], score = K.gym === "burst" ? "AVERAGE " + K.score.toFixed(3) + " S" : K.gym === "stamina" ? (K.pass ? "MADE IT IN " + K.score.toFixed(1) + " S" : Math.floor(K.score / 10) + " OF " + Math.round(K.goal / 10) + " M") : (K.pass ? "SURVIVED!" : "LASTED " + K.score.toFixed(1) + " S");
+    const bw = Math.min(180, LW - 4);
+    g.globalAlpha = 0.88; rect(INK, cx - bw / 2, 56, bw, 84); g.globalAlpha = 1; outline(cx - bw / 2, 56, bw, 84, K.pass ? GOLD : "#5a6496");
+    text(K.pass ? (K.maxed ? "NICE!" : st + " UP!") : "NOT QUITE", cx, 68, 2, K.pass ? GOLD : WHITE, "center");
+    text(score, cx, 88, 1, WHITE, "center", null);
+    if (K.pass && !K.maxed) text(st + " IS NOW LEVEL " + f.lv[d.stat], cx, 100, 1, CHIP, "center", null);
+    else if (!K.pass) text(LW < 200 ? "TRY AGAIN" : "TRY AGAIN: IT'S FREE", cx, 100, 1, "#8c96c8", "center", null);
+    if (Math.floor(t * 2) % 2) text(KEYS ? "SPACE: AGAIN" : "TAP: AGAIN", cx, 118, 1, WHITE, "center", null);
+    if (KEYS) text("ESC: BACK TO THE PIT", cx, 130, 1, GREY, "center", null); else text("TAP HERE TO GO BACK", cx, 188, 1, WHITE, "center", null);
+  }
+}
+
+window.FPX = { startGym, GYM, FP_DRILLS, gymStroke, gymGo, fpData, PIT, pitOpen, pitHits, pitAct, fpStartCup, fpNext, fpExit, FP_LOOKS, get KART() { return KART; }, FP_TUNE, FP_CREW, FP_TRACKS, FP_CUPS, FP_ORDER, get K() { return KART; }, startKart, FP, fpDist, fpTrack, kartUpdate,
   race(bot, track) {                        // simulate one whole race with a robot driving: -> stats
     startKart(true, bot, track); const K = KART; let off = 0, n = 0;
     while (!K.me.done && K.t < 400) { kartUpdate(1 / 60); K.racers.forEach(r => { if (!r.me) { n++; if (Math.abs(r.x) > 1) off++; } }); }

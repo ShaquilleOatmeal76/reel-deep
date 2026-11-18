@@ -2691,7 +2691,7 @@ function drawMyFish() {
     const y = 88 + i * 24, lv = f.lv[i];
     text(lab, 6, y, 1, WHITE, "left", null);
     for (let k = 0; k < 10; k++) rect(k < lv ? CHIP : "#3c2a1e", 6 + k * 7, y + 6, 6, 4);
-    if (lv < 10) { box(78, y - 4, 38, 15, GOLD); text("+" + trainCost(lv), 97, y + 3, 1, tav().chips >= trainCost(lv) ? GOLD : GREY, "center", null); }
+    if (lv < 10) { box(78, y - 4, 38, 15, ORANGE); text("GYM", 97, y + 3, 1, ORANGE, "center", null); }   // training is free now, in the Pit's gym
     else text("MAX", 97, y + 3, 1, CHIP, "center", null);
   });
   text(tav().stats.fast ? "KELP LAP " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN THE PIT", 60, 166, 1, GREY, "center", null);
@@ -2838,8 +2838,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
   if (o === "myfish") {
     const i = Math.floor((ly - 84) / 24), f = tav().fish;
     if (ly >= 84 && i < 3 && lx >= 78 && f.lv[i] < 10) {
-      const cost = trainCost(f.lv[i]);
-      if (tav().chips >= cost) { addChips(-cost); f.lv[i]++; saveStore(); play("chime"); } else play("miss");
+      pitOpen("train");
     } else if (ly > 186) { S.overlay = TAV.fishBack || "chipshop"; play("back"); }
     return true;
   }
@@ -3798,12 +3797,12 @@ function drawMyFishWide() {
     for (let k = 0; k < 10; k++) rect(k < lv ? CHIP : "#3c2a1e", x0 + 172 + k * 11, y + 10, 9, 5);
     if (lv >= 10) text("MAX", x0 + 319, y + 9, 1, CHIP, "center", null);
   });
-  for (const [, x, y, w, h, i] of myFishWideHits()) { const c = trainCost(f.lv[i]); btn(x, y, w, h, "+" + c, tav().chips >= c ? GOLD : GREY); }
-  text("TRAINING COSTS CHIPS", x0 + 260, 150, 1, "#a08c70", "center", null);
+  for (const [, x, y, w, h] of myFishWideHits()) btn(x, y, w, h, "GYM", ORANGE);
+  text("TRAIN FREE IN THE PIT", x0 + 260, 150, 1, "#a08c70", "center", null);
   closeLine("TAP HERE TO GO BACK");
 }
 function myFishTapWide(rx, ly) {
-  tapWide(myFishWideHits(), rx, ly, (id, i) => { const f = tav().fish, cost = trainCost(f.lv[i]); if (tav().chips >= cost) { addChips(-cost); f.lv[i]++; saveStore(); play("chime"); } else play("miss"); });
+  tapWide(myFishWideHits(), rx, ly, () => pitOpen("train"));
 }
 
 // the tavern board: all three boards side by side
