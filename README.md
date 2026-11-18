@@ -35,7 +35,9 @@ Some things also happen on their own, going by your device's clock: certain hour
 After 50 dives a shipwright waits on a little pier next to your boat. Planks drift in the sea: touch one and it's yours,
 without using a hook slot. Bring him 60 planks, a rope (somewhere in the Kelp Forest), a sail (around the Wreck) and a
 compass (the old fisherman sells one for chips), and he builds you a raft. Tap him to see how far along you are.
-Where the raft goes is a story for later.
+Once it's built, tap the raft (or the island on the horizon) to sail to **Driftwood Isle**: walk with WASD or the arrows
+(or tap where to go), E or Space to look at things and talk, Escape for the menu. A day there lasts about 12 minutes and
+ends when you go to bed; the raft at the end of the dock takes you back to your boat.
 
 ## Save codes
 
@@ -97,7 +99,7 @@ made-up score. For a game between friends that is usually fine, and you can dele
 ## Files
 
 - `index.html`, `game.js` - the game
-- `derby.js`, `finprix.js`, `island.js` - the derby, FIN PRIX, and Driftwood Isle (the raft so far)
+- `derby.js`, `finprix.js`, `island.js` - the derby, FIN PRIX, and Driftwood Isle
 - `data.js`, `assets/` - fish, zones and sprites
 - `config.js` - the leaderboard address
 - `database.rules.json` - the database rules to paste into Firebase
