@@ -957,6 +957,7 @@ function beginHaul() {
   if (LOGGED.some(s => s[7] && store.log[s[0]])) earnSong(6);
   if (store.titles.includes("baiter")) earnSong(7);
   if (store.titles.includes("all")) earnSong(8);
+  if (typeof crateAdd === "function") { const cr = crateAdd(S.catch); if (cr) extra.push([("CRATE: " + cr).slice(0, 19), "#d29c64"]); }   // Driftwood Isle: one fish to the island
   store.dives++;
   if (store.sec.sleeper && !store.sec.crack) store.sec.afterSleeper++;
   const record = total > store.best;

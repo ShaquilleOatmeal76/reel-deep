@@ -120,10 +120,10 @@ async def main():
 
         # forage: things wash up each morning, 10 a day, and you can pick them up
         r = await ev("isleSave().forage.items.length")
-        check("ten things wash up", r == 10, r)
+        check("sixteen things wash up (10 on the beaches, 6 in the woods)", r == 16, r)
         r = await ev("""(() => { const f = isleSave().forage.items.find(q => q[0] === 'flats'); isleGo('flats', f[1], f[2] + 6, 'up'); ISLE.msg = null; return f[3]; })()""")
         await page.keyboard.press("KeyE")
-        check("picking one up", await ev("isleSave().inv.some(q => q && q[0] === '%s')" % r) and await ev("isleSave().forage.items.length") == 9)
+        check("picking one up", await ev("isleSave().inv.some(q => q && q[0] === '%s')" % r) and await ev("isleSave().forage.items.length") == 15)
 
         # the can runs dry and fills at the garden barrel
         await ev("(() => { const s = isleSave(); s.water = 0; s.sel = 1; ISLE.px = 416; ISLE.py = 348; ISLE.dir = 'up'; })()")

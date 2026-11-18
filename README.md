@@ -46,6 +46,12 @@ Fishing on the island is its own calm game: hold **E** with the rod to swing the
 bobber goes under, press E, then hold to reel and ease off when the line glows. Nothing snaps; a fish that gets away just
 swims off. The **Lagoon** (north of the Port) has freshwater fish, the net searches tide pools on the flats at low tide,
 and crab pots from the stand fill overnight. **L** opens the island log: 175 entries, each with a note from the lost angler.
+North of the Lagoon are the **Woods**: chop trees with the axe and break rocks with the pick (they grow back in a week),
+cut tall grass for fiber. **C** opens crafting: chests, sprinklers, pickle jars, fish smokers, bait, mulch, paths, fences
+and furniture (40 recipes) that you place on the ground. Cook at the stove in your shack (40 dishes). Fix up the Port with
+wood, stone and sand dollars: the general store, the smokehouse, the aquarium (donate island fish for rewards), the
+shipyard (tool and bag upgrades) and the inn. Each one is ready the next morning. After every dive topside, one fish from
+your haul, picked at random, goes into the crate on the Port dock.
 
 ## Save codes
 
