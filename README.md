@@ -42,6 +42,10 @@ The shipwright gives you a hoe, a watering can and some seeds. The old garden is
 coast road: till, plant, water every day (rain does it for you), and harvest. Sell crops and beach finds in the bin by
 your shack (it pays overnight in sand dollars) and buy more seeds at the stand by the store. **1-9** pick a toolbar slot,
 **Tab** opens your bag. Island money never turns into coins or chips, and nothing on the island changes your score.
+Fishing on the island is its own calm game: hold **E** with the rod to swing the power bar, let go to cast. When the
+bobber goes under, press E, then hold to reel and ease off when the line glows. Nothing snaps; a fish that gets away just
+swims off. The **Lagoon** (north of the Port) has freshwater fish, the net searches tide pools on the flats at low tide,
+and crab pots from the stand fill overnight. **L** opens the island log: 175 entries, each with a note from the lost angler.
 
 ## Save codes
 
@@ -103,7 +107,7 @@ made-up score. For a game between friends that is usually fine, and you can dele
 ## Files
 
 - `index.html`, `game.js` - the game
-- `derby.js`, `finprix.js`, `island.js` - the derby, FIN PRIX, and Driftwood Isle
+- `derby.js`, `finprix.js`, `island.js` - the derby, FIN PRIX, and Driftwood Isle (`isle_fish.js`: the island log)
 - `data.js`, `assets/` - fish, zones and sprites
 - `config.js` - the leaderboard address
 - `database.rules.json` - the database rules to paste into Firebase

@@ -4465,6 +4465,7 @@ window.addEventListener("pointerup", e => {
   S.touchX = null;
   if (BOSS) BOSS.touch = null;
   if (typeof KART !== "undefined" && KART) kartTouch(0, 0, false);
+  if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) isleTouchUp(e);   // Driftwood Isle: letting go casts / stops reeling
   if (swipeAt && S.state === "title" && !S.overlay) {      // a swipe in the sky is an arrow key; a tap is a tap
     const [x, y] = pointerPos(e), dx = x - swipeAt[0], dy = y - swipeAt[1];
     konamiKey(Math.max(Math.abs(dx), Math.abs(dy)) < 8 ? "TAP" : Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "ArrowRight" : "ArrowLeft") : (dy > 0 ? "ArrowDown" : "ArrowUp"));
@@ -4515,7 +4516,7 @@ window.addEventListener("keydown", e => {
   else if (c === "ShiftLeft" || c === "ShiftRight" || c === "ArrowDown") pulse();
   else if (c === "Space" || c === "Enter" || (c === "ArrowUp" && S.state !== "title")) { tapAction(); }   // Up doesn't cast: it starts a certain code
 });
-window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } if (typeof KART !== "undefined" && KART) kartKey(e, false); });
+window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } if (typeof KART !== "undefined" && KART) kartKey(e, false); if (S && S.state === "isle" && typeof ISLE !== "undefined" && ISLE) isleKeyUp(e); });
 window.addEventListener("blur", () => { HELD = []; syncKeys(); });
 
 // --------------------------------------------------------------------- loop
