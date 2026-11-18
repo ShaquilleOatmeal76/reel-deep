@@ -26,7 +26,7 @@ const STABLE = [
 const TRAITS = { steady: "STEADY", closer: "STRONG FINISH", moody: "MOODY", sprinter: "FAST STARTER", kelp: "LOVES KELP", storm: "STORM CHASER", current: "RIDES CURRENTS", dodger: "DODGES JELLIES" };
 const CONDS = [["calm", "CALM WATER"], ["current", "STRONG CURRENT"], ["kelp", "KELP BEDS"], ["jelly", "JELLYFISH"], ["storm", "STORM SURGE"]];
 const BET_TYPES = [["WIN", 1, 100], ["PLACE", 1, 50], ["SHOW", 1, 25], ["EXACTA", 2, 1000], ["TRIFECTA", 3, 5000]];   // [name, picks, top multiplier]
-const derbyMaxWin = d => d.vip ? 20000 : 5000;             // the house pays at most this on one bet (so one wild trifecta can't buy the whole shop)
+const derbyMaxWin = d => d.vip ? 10000 : 5000;             // the house pays at most this on one bet (so one wild trifecta can't buy the whole shop; VIP was 20,000 until Nov 18, 2026)
 const DERBY_SIMS = 2000, PTS = [10, 6, 4, 3, 2, 1];
 const ORDN = n => n + (n === 1 ? "ST" : n === 2 ? "ND" : n === 3 ? "RD" : "TH");
 
