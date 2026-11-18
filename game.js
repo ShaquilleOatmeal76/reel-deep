@@ -170,7 +170,8 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
   tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "",
-    stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} },   // the Rusty Hook
+    stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {},
+    fp: { cups: {}, best: {}, own: [], eq: {}, races: 0, wins: 0 } },   // the Rusty Hook; fp: FIN PRIX (finprix.js, fpData())
   ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" } };   // counters for titles (Nov 18, 2026): sharks caught, fish lost to sharks, fish released, stings, ghosts caught, bounty days
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
@@ -329,7 +330,9 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     ["release", "CATCH AND RELEASE", "LET 50 FISH GO"], ["hattrick", "HAT TRICK", "3 TROPHIES ON ONE HOOK"], ["maxed", "MAXED OUT", "HIT THE X5 BONUS CAP"],
     ["heavy", "HEAVYWEIGHT", "A 1,000 LB HAUL"], ["emptyhand", "EMPTY HANDED", "TOUCH FLOOR, EMPTY HOOK"], ["bountyhunter", "BOUNTY HUNTER", "BOUNTY FISH ON 7 DAYS"],
     ["jellylegs", "JELLY LEGS", "GET STUNG 25 TIMES"], ["lifer", "LIFER", "FINISH 500 DIVES"], ["nightowl", "NIGHT OWL", "CATCH 10 GHOST FISH"],
-    ["topdog", "TOP DOG", "#1 ON THE DAILY BOARD"], ["jackpot", "JACKPOT", "X100 ON A SCRATCH CARD"], ["photo", "PHOTO FINISH", "WIN ON A PHOTO FINISH"]]);
+    ["topdog", "TOP DOG", "#1 ON THE DAILY BOARD"], ["jackpot", "JACKPOT", "X100 ON A SCRATCH CARD"], ["photo", "PHOTO FINISH", "WIN ON A PHOTO FINISH"]])
+  .concat([["minnowcup", "MINNOW CHAMP", "FIN PRIX: MINNOW CUP GOLD"], ["reefcup", "REEF CHAMP", "FIN PRIX: REEF CUP GOLD"], ["deepcup", "DEEP CHAMP", "FIN PRIX: DEEP CUP GOLD"],   // FIN PRIX, Nov 18, 2026
+    ["abysscup", "ABYSS CHAMP", null], ["finlegend", "FIN PRIX LEGEND", "GOLD IN EVERY CUP"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -1889,7 +1892,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { derbytable: drawDerbyTable, plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { derbytable: drawDerbyTable, plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, pit: drawPit, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2168,6 +2171,7 @@ const SHOP_PER = 7;
 const SHOP_ROWS = [
   ["story", "A STORY", 50, "TIP THE OLD MAN"],
   ["fish", "A DERBY FISH", 200, "YOUR OWN RACER"],
+  ["finprix", "FIN PRIX LOOKS", 0, "KARTS, PAINT, TRAILS, POSES"],
   ["jukebox", "JUKEBOX", 150, "MUSIC HERE AND ON THE TITLE"],
   ["dream", "DREAM SLEEPER", 20, "FIGHT A GHOST OF IT. PRACTICE ONLY"],
   ["drink", "A DRINK", 10, "BUY HIM ONE. HE TALKS"],
@@ -2202,6 +2206,7 @@ function shopRowState(i) {                                  // -> [label shown, 
   if (id === "map") return [lab, q.map === weekString() ? null : price, q.map === weekString() ? "BOOT AROUND " + bootDepth() + " M" : note];
   if (id === "story") return [q.stories ? "STORIES (" + q.stories + ")" : lab, q.stories < STORIES.length ? price : null, q.stories < STORIES.length ? (q.stories ? "TIP HIM FOR THE NEXT ONE" : note) : "THAT'S ALL HE KNOWS"];
   if (id === "fish") return [q.fish ? "YOUR RACER" : lab, q.fish ? null : price, q.fish ? q.fish.name + ": TRAIN IT" : note];
+  if (id === "finprix") return [lab, null, q.fish ? "IN THE PIT: THE GARAGE" : "GET A DERBY FISH FIRST"];
   if (id === "dream") return store.sec.woke ? [lab, price, note] : ["???", null, "WAKE SOMETHING UP FIRST"];
   if (id === "jukebox") return [lab, q.jukebox ? null : price, q.jukebox ? "PICK A SONG" : note];
   if (id === "carve") return [lab, price, q.carved ? "YOURS SAYS " + q.carved + ". CARVE AGAIN?" : note];
@@ -2217,7 +2222,8 @@ function bootDepth() { return Math.round(RNG(hashStr("boot" + weekString())).uni
 function shopBuy(i) {
   const q = tav(), id = SHOP_ROWS[i][0], [, price] = shopRowState(i), cm = TAV_COSM[id];
   if (id === "story" && q.stories) { if (price && q.chips >= price) { addChips(-price); q.stories++; play("fanfare"); } TAV.story = q.stories - 1; openOverlay("story"); return; }
-  if (id === "fish" && q.fish) { openOverlay("myfish"); return; }
+  if (id === "fish" && q.fish) { TAV.fishBack = null; openOverlay("myfish"); return; }
+  if (id === "finprix") { if (q.fish) pitOpen("garage"); else play("miss"); return; }
   if (id === "jukebox" && q.jukebox) { openOverlay("jukebox"); return; }
   if (cm && store.own[cm[0]].includes(cm[1])) { store.eq[cm[0]] = store.eq[cm[0]] === cm[1] ? 0 : cm[1]; saveStore(); play("select"); return; }   // put it on, or take it off
   if (price === null) { play("miss"); return; }
@@ -2458,13 +2464,15 @@ function tavTitles() {
   if (st.derbies >= 10) tavAward("derbyking");
   if (tav().claims >= 14) tavAward("regular");
 }
-const BOARDS = [["stack", "BIGGEST STACK"], ["win", "BIGGEST WIN"], ["fast", "FASTEST FISH"]];
+// FASTEST LAP (Nov 18, 2026; was FASTEST FISH, a derby time): your best FIN PRIX time-trial lap on Kelp Circuit, in centiseconds
+// in stats.fast, posted as 100000 - cs so a faster lap ranks higher. Old derby entries (at most 10000) are left out when read.
+const BOARDS = [["stack", "BIGGEST STACK"], ["win", "BIGGEST WIN"], ["fast", "FASTEST LAP"]], FAST_BASE = 100000, fastS = s => ((FAST_BASE - s) / 100).toFixed(2) + "S";
 function tavPost() {                                         // post a new personal best to the shared board, now and then
   if (!LB.url || !store.name) return;
   const q = tav(), now = Date.now();
   if (now - (q.postedAt || 0) < 20000) return;
   for (const [k] of BOARDS) {
-    const v = k === "fast" ? (q.stats.fast ? Math.max(1, 10000 - q.stats.fast) : 0) : q.stats[k];
+    const v = k === "fast" ? (q.stats.fast ? Math.max(1, FAST_BASE - q.stats.fast) : 0) : q.stats[k];
     if (v <= (q.posted[k] || 0) || (k !== "fast" && v < 100)) continue;
     q.posted[k] = v; q.postedAt = now; saveStore();
     fetch(LB.url + "/tavern/" + k + ".json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, s: v, t: now }) }).catch(() => {});
@@ -2477,7 +2485,7 @@ async function tavLoad(k) {
     const r = await fetch(LB.url + "/tavern/" + k + '.json?orderBy="s"&limitToLast=10');
     if (!r.ok) { TAV.boards[k].msg = "UPDATE THE DATABASE RULES"; return; }
     const d = await r.json() || {};
-    TAV.boards[k] = { rows: Object.values(d).filter(e => e && e.n && e.s > 0).sort((a, b) => b.s - a.s).slice(0, 10), msg: "" };
+    TAV.boards[k] = { rows: Object.values(d).filter(e => e && e.n && e.s > (k === "fast" ? FAST_BASE / 2 : 0)).sort((a, b) => b.s - a.s).slice(0, 10), msg: "" };
   } catch (e) { TAV.boards[k].msg = "CAN'T REACH THE BOARD"; }
 }
 
@@ -2486,7 +2494,7 @@ let MUS = { song: -1, step: 0, next: 0 };
 function noteHz(n) { const m = /^([A-G])(\d)$/.exec(n); return m ? 440 * Math.pow(2, ({ C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 }[m[1]] + (m[2] - 4) * 12) / 12) : 0; }
 function tone(f, t0, dur, wave, vol) { const o = AC.createOscillator(), ga = AC.createGain(); o.type = wave; o.frequency.setValueAtTime(f, t0); ga.gain.setValueAtTime(vol, t0); ga.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(ga); ga.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 function musicTick() {
-  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "derbytable", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch", "plinko"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
+  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "derbytable", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch", "plinko", "pit"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
   if (want !== MUS.song) { MUS = { song: want, step: 0, next: AC ? AC.currentTime + 0.1 : 0 }; }
   if (want < 0 || AC.state !== "running") return;
   const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), dt = 30 / bpm;
@@ -2540,11 +2548,11 @@ function stakeTap(lx, obj, key, go) { if (lx < 20) { obj[key] = stakeStep(obj[ke
 function chipsLine(y) { const s = tav().chips + " CHIPS", x = 60 - (textW(s, 1) >> 1) + 3; chipIcon(x - 6, y); text(s, x, y, 1, CHIP, "left", null); }
 function bestCatches() { return LOGGED.filter(s => store.log[s[0]]).sort((a, b) => store.log[b[0]].rec - store.log[a[0]].rec).slice(0, 2); }
 function tavRows() {                                         // -> [label, colour, id]
-  const dr = dailyReady(), r = [["CATCH 21", CHIP, "c21"], ["THE DERBY", CHIP, "derby"], ["PLINKO", CHIP, "plinko"], ["BUY THINGS", GOLD, "shop"], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY, "daily"]];
+  const dr = dailyReady(), r = [["CATCH 21", CHIP, "c21"], ["THE DERBY", CHIP, "derby"], ["PLINKO", CHIP, "plinko"], ["FIN PRIX PIT", ORANGE, "pit"], ["BUY THINGS", GOLD, "shop"], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY, "daily"]];
   if (store.sec.sleeper) r.push(["THE BACK ROOM", "#ff6e6e", "vip"]);              // opens once you've beaten the Sleeper
   return r;
 }
-const tavRowLay = n => n > 5 ? [94, 16, 14] : [94, 18, 15];   // [first y, step, box height]
+const tavRowLay = n => n > 6 ? [92, 14, 12] : n > 5 ? [94, 16, 14] : [94, 18, 15];   // [first y, step, box height]
 function drawTavern() {
   tavernBg();
   g.save(); g.translate(OX, 0);
@@ -2686,7 +2694,7 @@ function drawMyFish() {
     if (lv < 10) { box(78, y - 4, 38, 15, GOLD); text("+" + trainCost(lv), 97, y + 3, 1, tav().chips >= trainCost(lv) ? GOLD : GREY, "center", null); }
     else text("MAX", 97, y + 3, 1, CHIP, "center", null);
   });
-  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN FIN PRIX, SOON", 60, 166, 1, GREY, "center", null);
+  text(tav().stats.fast ? "KELP LAP " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN THE PIT", 60, 166, 1, GREY, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -2700,7 +2708,7 @@ function drawTavBoard() {
   (b.rows || []).forEach((r, i) => {
     const y = 28 + i * 12, col = i === 0 ? GOLD : r.n === store.name ? CYAN : "#d8c8b0";
     text(i + 1, 16, y, 1, i < 3 ? GOLD : GREY, "right", null); text(r.n, 24, y, 1, col, "left", null);
-    text(k === "fast" ? ((10000 - r.s) / 100).toFixed(2) + "S" : r.s, 112, y, 1, col, "right", null);
+    text(k === "fast" ? fastS(r.s) : r.s, 112, y, 1, col, "right", null);
   });
   if (b.rows && !b.rows.length) text("NOBODY YET", 60, 50, 1, GREY, "center", null);
   const st = tav().stats, mine = k === "fast" ? (st.fast ? (st.fast / 100).toFixed(2) + "S" : "-") : st[k];
@@ -2765,6 +2773,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
       else if (id === "c21") { if (!TAV.c21 || TAV.c21.vip) c21New(false); openOverlay("c21"); }
       else if (id === "derby") { if (!TAV.derby || TAV.derby.phase === "done" || TAV.derby.vip) derbyNew(false); openOverlay("derby"); }
       else if (id === "plinko") { plinkoOpen(); openOverlay("plinko"); }
+      else if (id === "pit") pitOpen();
       else if (id === "shop") { TAV.shopSel = 0; openOverlay("chipshop"); }
       else if (claimDaily()) { TAV.say = "DON'T SPEND IT ALL"; play("fanfare"); } else { TAV.say = "COME BACK TOMORROW"; play("miss"); }
     } else if (ly > 186) back();
@@ -2796,6 +2805,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     return true;
   }
   if (o === "derby") return derbyTap(lx, ly);              // derby.js
+  if (o === "pit") { pitTap(lx + OX, ly); return true; }   // finprix.js
   if (o === "derbytable") { if (ly > 186) { S.overlay = "derby"; play("back"); } return true; }
   if (o === "scratch") { scratchTap(lx, ly); return true; }
   if (o === "plinko") { plinkoTap(lx + OX, ly); return true; }
@@ -2830,7 +2840,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     if (ly >= 84 && i < 3 && lx >= 78 && f.lv[i] < 10) {
       const cost = trainCost(f.lv[i]);
       if (tav().chips >= cost) { addChips(-cost); f.lv[i]++; saveStore(); play("chime"); } else play("miss");
-    } else if (ly > 186) { S.overlay = "chipshop"; play("back"); }
+    } else if (ly > 186) { S.overlay = TAV.fishBack || "chipshop"; play("back"); }
     return true;
   }
   if (o === "tavboard") {
@@ -3654,8 +3664,8 @@ const btn = (x, y, w, h, lab, col, sub, subCol) => { box(x, y, w, h, col); text(
 
 // the bar: the old man and his shelf on the left, everything you can do on the right
 function tavernWideHits() {
-  const x0 = WX(), h = tavRows().map(([lab, col, id], i) => [id, x0 + 186, 26 + i * 22, 162, 18, i]);
-  h.push(["board", x0 + 186, 26 + h.length * 22, 162, 18, 0]);
+  const rows = tavRows(), st = rows.length > 6 ? 20 : 22, x0 = WX(), h = rows.map(([lab, col, id], i) => [id, x0 + 186, 26 + i * st, 162, 18, i]);
+  h.push(["board", x0 + 186, 26 + h.length * st, 162, 18, 0]);
   return h;
 }
 function drawTavernWide() {
@@ -3689,6 +3699,7 @@ function tavernTapWide(rx, ly) {
     else if (id === "c21") { if (!TAV.c21 || TAV.c21.vip) c21New(false); openOverlay("c21"); }
     else if (id === "derby") { if (!TAV.derby || TAV.derby.phase === "done" || TAV.derby.vip) derbyNew(false); openOverlay("derby"); }
     else if (id === "plinko") { plinkoOpen(); openOverlay("plinko"); }
+    else if (id === "pit") pitOpen();
     else if (id === "shop") { TAV.shopSel = 0; openOverlay("chipshop"); }
     else if (claimDaily()) { TAV.say = "DON'T SPEND IT ALL"; play("fanfare"); } else { TAV.say = "COME BACK TOMORROW"; play("miss"); }
   });
@@ -3780,7 +3791,7 @@ function drawMyFishWide() {
   fitDraw(atlas, f.id, cx, 66 + Math.round(Math.sin(T * 3) * 2), 120, 50, 3);
   text(f.name, cx, 118, 1, GOLD, "center", null);
   text(f.races + " RACES, " + f.wins + " WINS", cx, 130, 1, "#d8c8b0", "center", null);
-  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN FIN PRIX, SOON", cx, 142, 1, GREY, "center", null);
+  text(tav().stats.fast ? "KELP LAP " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN THE PIT", cx, 142, 1, GREY, "center", null);
   ["SPEED", "STAMINA", "BURST"].forEach((lab, i) => {
     const y = 40 + i * 34, lv = f.lv[i];
     text(lab, x0 + 172, y + 2, 1, WHITE, "left", null);
@@ -3808,7 +3819,7 @@ function drawTavBoardWide() {
     (b.rows || []).forEach((r, i) => {
       const y = 40 + i * 11, col = i === 0 ? GOLD : r.n === store.name ? CYAN : "#d8c8b0";
       text(i + 1, x + 14, y, 1, i < 3 ? GOLD : GREY, "right", null); text(r.n, x + 20, y, 1, col, "left", null);
-      text(k === "fast" ? ((10000 - r.s) / 100).toFixed(2) + "S" : r.s, x + 108, y, 1, col, "right", null);
+      text(k === "fast" ? fastS(r.s) : r.s, x + 108, y, 1, col, "right", null);
     });
     if (b.rows && !b.rows.length) text("NOBODY YET", x + 56, 60, 1, GREY, "center", null);
     text("YOURS: " + (k === "fast" ? (st.fast ? (st.fast / 100).toFixed(2) + "S" : "-") : st[k]), x + 56, 166, 1, CHIP, "center", null);
@@ -4315,7 +4326,7 @@ function closeOverlay() {
   if (S.overlay === "help") { store.seenHelp = true; saveStore(); }
   const o = S.overlay;
   S.overlay = o === "note" && S.noteBack ? S.noteBack : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip"
-    : o === "derbytable" ? "derby" : ["c21", "derby", "plinko", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
+    : o === "myfish" && TAV.fishBack ? TAV.fishBack : o === "derbytable" ? "derby" : ["c21", "derby", "plinko", "chipshop", "tavboard", "vip", "pit"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
   play("back");
 }
 function overlayTap(lx, ly) {
