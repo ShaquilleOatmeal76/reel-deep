@@ -8,23 +8,23 @@
 "use strict";
 const FP = {
   SEG: 200, ROAD: 1300, CAM_H: 900, DEPTH: 0.84, DRAW: 160, LAPS: 3, RACERS: 8,
-  MAX: 12000, ACCEL: 5200, BRAKE: -14000, DECEL: -2600, OFF_DECEL: -9000, OFF_MAX: 0.45,
+  MAX: 8500, ACCEL: 3800, BRAKE: -11000, DECEL: -2600, OFF_DECEL: -7000, OFF_MAX: 0.45,   // slower since Nov 18, 2026: racing, not raw speed
   CENTRIFUGAL: 0.32, STEER: 2.6, DRIFT_STEER: 3.4,
 };
 const FP_COL = { water: [12, 40, 86], fogNear: [26, 70, 120], sand: ["#c8b480", "#bca874"], off: ["#1e5a50", "#1a5048"], rumble: ["#f05050", "#fafaff"], lane: "#e6dcb4" };
 const TEST_FP = (() => { try { return new URLSearchParams(location.search).has("finprix"); } catch (e) { return false; } })();
 let KART = null;
-const FP_TUNE = { skill: 1.01, spread: 0.02, lead: 0.035 };   // AI difficulty; tuned with tools/tests/test_finprix.py
+const FP_TUNE = { skill: 0.995, spread: 0.02, lead: 0.035 };   // AI difficulty; tuned with tools/tests/test_finprix.py
 const FP_DRIFT = { hop: 0.22, grip: 0.4, scrub: 0.15, levels: [0.6, 1.3, 2.2], boost: [0, 0.45, 0.8, 1.2] };   // blue, orange, purple
 // The other seven racers, each with a way of driving (Kade: they all did the same thing). top: top speed; corner: speed
 // kept through a sharp bend when not drifting; line: how far onto the inside line they go; noise: how much they wander.
 const FP_CREW = [
-  { name: "ZIPPY", id: "marlin", style: "SPEEDSTER", top: 1.06, corner: 0.93, line: 0.4, noise: 0.06, drift: "never", alt: "sword" },
+  { name: "ZIPPY", id: "marlin", style: "SPEEDSTER", top: 1.06, corner: 0.95, line: 0.4, noise: 0.06, drift: "hairpins", alt: "sword" },
   { name: "DRIFTY", id: "parrot", style: "DRIFTER", top: 0.965, corner: 0.95, line: 1.1, noise: 0.05, drift: "always", alt: "bass" },
-  { name: "BRUISER", id: "shark", style: "BULLY", top: 1.0, corner: 0.93, line: 0.9, noise: 0.05, drift: "big", aggro: 1, alt: "grouper" },
+  { name: "BRUISER", id: "shark", style: "BULLY", top: 0.985, corner: 0.93, line: 0.9, noise: 0.05, drift: "big", aggro: 1, alt: "grouper" },
   { name: "TRICKY", id: "octo", style: "TRICKSTER", top: 0.99, corner: 0.93, line: 0.9, noise: 0.05, drift: "big", trick: 1, alt: "puffer" },
-  { name: "STEADY", id: "turtle", style: "STEADY", top: 0.995, corner: 0.97, line: 1, noise: 0, drift: "big", alt: "trout" },
-  { name: "WILDFIN", id: "ember", style: "WILDCARD", top: 1.02, corner: 0.9, line: 0.8, noise: 0.3, drift: "random", wild: 1, alt: "perch" },
+  { name: "STEADY", id: "turtle", style: "STEADY", top: 0.985, corner: 0.97, line: 1, noise: 0, drift: "big", alt: "trout" },
+  { name: "WILDFIN", id: "ember", style: "WILDCARD", top: 1.025, corner: 0.95, line: 0.8, noise: 0.2, drift: "big", wild: 1, alt: "perch" },
   { name: "WALL", id: "ray", style: "BLOCKER", top: 0.995, corner: 0.93, line: 0.9, noise: 0.04, drift: "big", block: 1, alt: "tuna" },
 ];
 // How your fish (and theirs) are drawn: "kart" a little shell kart with the fish riding in it, "turn" the real fish turned
@@ -43,18 +43,22 @@ function fpTrack() {
     }
   };
   const ease = u => u * u, easeIO = u => -Math.cos(u * Math.PI) / 2 + 0.5;
-  add(10, 40, 10, 0, 0);                // the start straight
-  add(20, 40, 20, -3, 10);              // a long left, climbing
-  add(10, 20, 10, 0, -10);
-  add(15, 25, 15, 5, 0);                // a hard right
-  add(10, 10, 10, -4, 15);              // the kelp esses
-  add(10, 10, 10, 4, -15);
-  add(10, 10, 10, -4, 0);
-  add(10, 60, 10, 0, 20);               // the long straight over the ridge (item boxes)
-  add(20, 30, 20, 6, -20);              // the big sweeper
-  add(10, 20, 10, -2, 0);
-  add(15, 30, 15, 4, 5);
-  add(10, 40, 10, 0, -5);               // back to the line
+  // Sharper since Nov 18, 2026 (Kade: turns should be sharper, skill should come from how you race): two hairpins you
+  // have to drift or brake for, chicanes, an S-bend, a sweeper and a hill.
+  const mark = [];
+  add(10, 30, 10, 0, 0); mark.push(segs.length - 30);           // the start straight (item boxes near its end)
+  add(8, 10, 8, -9, 5);                // hairpin left
+  add(6, 12, 6, 0, 0);
+  add(6, 6, 6, 7, 0);                  // chicane right
+  add(6, 6, 6, -7, 0);                 // chicane left
+  add(10, 40, 10, 0, 15); mark.push(segs.length - 60);          // the straight over the hill (item boxes)
+  add(15, 25, 15, 5, -15);             // the long sweeper
+  add(6, 8, 6, -10, 0);                // the tightest hairpin, left
+  add(8, 20, 8, 0, 10); mark.push(segs.length - 25);            // a short straight (item boxes)
+  add(6, 6, 6, 8, -5);                 // the S: right
+  add(6, 6, 6, -8, -5);                //        left
+  add(10, 25, 10, 3, 0);               // an easy right
+  add(8, 30, 8, 0, 0);                 // back to the line
   const total = segs[segs.length - 1].p2.y;    // (pieces below are scaled x2.5 in add())    // close the loop: ease the last height back to zero
   if (Math.abs(total) > 1) segs.forEach((s, k) => { const u = k / segs.length; s.p1.y -= total * u; s.p2.y -= total * (k + 1) / segs.length; });
   const rng = RNG(77);
@@ -63,7 +67,7 @@ function fpTrack() {
     if (k % 11 === 3) s.deco.push(["rock", rng.choice([-1, 1]) * rng.uniform(1.25, 2)]);
     if (k % 17 === 8) s.deco.push(["coral", rng.choice([-1, 1]) * rng.uniform(1.2, 1.8)]);
   });
-  [300, 760, 1180].forEach(k => [-0.6, -0.2, 0.2, 0.6].forEach(x => segs[k].boxes.push({ x, gone: 0 })));   // item box rows
+  mark.forEach(k => [-0.6, -0.2, 0.2, 0.6].forEach(x => segs[k].boxes.push({ x, gone: 0 })));   // item box rows
   return segs;
 }
 
@@ -140,12 +144,13 @@ function kartUpdate(dt) {
   lead.forEach((r, i) => { if (!r.done) r.place = i + 1; });
   for (const r of K.racers) {
     if (K.phase === "count") continue;
-    const seg = fpSeg(r.z), max = FP.MAX * (r.me ? 0.94 + r.lv[0] * 0.008 : r.skill * r.p.top * fpRubber(r, me) * (r.surge > 0 ? 1.12 : 1)), spdPct = r.speed / FP.MAX;
-    let steer = 0, gas = true, brake = false, driftKey = false;
+    const seg = fpSeg(r.z), max = FP.MAX * (r.me ? 0.97 + r.lv[0] * 0.004 : r.skill * r.p.top * fpRubber(r, me) * (r.surge > 0 ? 1.12 : 1)), spdPct = r.speed / FP.MAX;
+    let steer = 0, gas = true, brake = false, driftKey = false;   // the AI always has its foot down; you press W / Up
     if (r.me && r.bot && !r.done) { [steer, driftKey] = fpAI(r, seg, dt); }
     else if (r.me && !r.done) {
       steer = heldDir("L", "R"); brake = key("ArrowDown") || key("KeyS"); driftKey = key("ShiftLeft") || key("ShiftRight");
-      if (K.touch) steer = K.touch[0] < LW / 2 ? -1 : 1;
+      gas = key("KeyW") || key("ArrowUp");
+      if (K.touch) { steer = K.touch[0] < LW * 0.4 ? -1 : K.touch[0] > LW * 0.6 ? 1 : 0; gas = true; }   // touch: holding anywhere is gas
     } else { [steer, driftKey] = fpAI(r, seg, dt); }
     r.dir = lerp(r.dir, steer, Math.min(1, dt * 10));
     if (r.spin > 0) { r.spin -= dt; r.speed = Math.max(0, r.speed + FP.BRAKE * 0.35 * dt); continue_(r, seg, dt); continue; }
@@ -171,9 +176,15 @@ function kartUpdate(dt) {
     r.x -= dt * spdPct * spdPct * seg.curve * FP.CENTRIFUGAL * (r.drift ? FP_DRIFT.grip : 1);   // curves push you outward (less in a drift)
     r.yaw = lerp(r.yaw || 0, r.drift ? r.drift * 0.85 + steer * 0.15 : r.dir * 0.35, Math.min(1, dt * 8));
     const off = Math.abs(r.x) > 1, top = (off ? max * FP.OFF_MAX : max) * (r.boost > 0 ? 1.35 : 1) * (r.ink > 0 && !r.me ? 0.88 : 1) * (r.p && !r.drift && Math.abs(seg.curve) > 3 ? r.p.corner : 1);
+    let cap = top;
+    if ((!r.me || r.bot) && !r.drift) {                         // the AI lifts for a bend it can't hold flat out
+      const bend = Math.max(Math.abs(seg.curve), Math.abs(fpSeg(r.z + FP.SEG * 5).curve)), need = bend * FP.CENTRIFUGAL / FP.STEER;
+      if (need > 0.9) cap = Math.min(cap, FP.MAX * 0.9 / need);
+    }
     if (brake) r.speed += FP.BRAKE * dt;
-    else if (r.speed > top) r.speed += (off ? FP.OFF_DECEL : FP.DECEL * 1.5) * dt;
-    else if (gas) r.speed += FP.ACCEL * (0.8 + (r.me ? r.lv[1] : 6) * 0.04) * dt * (1 - r.speed / (top * 1.05));
+    else if (r.speed > cap) r.speed += (off ? FP.OFF_DECEL : FP.DECEL * 1.5) * dt;
+    else if (gas) r.speed += FP.ACCEL * (0.85 + (r.me ? r.lv[1] : 6) * 0.03) * dt * (1 - r.speed / (cap * 1.05));
+    else r.speed += FP.DECEL * dt;                                // off the gas: coast
     if (!r.drift && spdPct > 0.7) r.speed -= Math.abs(steer) * (0.25 + Math.abs(seg.curve) * 0.06) * FP.MAX * FP_DRIFT.scrub * dt;   // turning hard without drifting costs speed
     if (r.boost > 0) { r.boost -= dt; r.speed = Math.max(r.speed, top * 0.98); }
     r.turboFx = Math.max(0, (r.turboFx || 0) - dt);
@@ -229,6 +240,7 @@ function fpAI(r, seg, dt) {                  // -> [steer, drift]: drive the way
   else if (p.drift === "never") want = false;
   else if (p.drift === "always") want = r.drift ? here > 0.8 || bend > 1 : bend > 1.5 && fast;     // DRIFTY: every bend, long drifts
   else if (p.drift === "random") want = r.drift ? here > 1.5 : bend > 2.5 && fast && Math.random() < 0.02;
+  else if (p.drift === "hairpins") want = r.drift ? here > 3 : bend > 6.5 && fast;          // ZIPPY only drifts the hairpins
   else want = r.drift ? here > 1.5 || bend > 2 : bend > 3 && fast;
   if (!r.drift && want) steer = Math.sign(ahead.curve) * Math.max(0.5, Math.abs(steer));   // turn in as it hops
   return [steer, want];
@@ -412,7 +424,7 @@ function fpHud() {
   if (K.phase === "count") { const n = Math.ceil(K.ct - 0.6); text(n > 0 ? String(n) : "GO!", LW / 2, 80, 4, n > 0 ? WHITE : LIME, "center"); }
   else if (K.msgT > 0 && K.phase === "race") text(K.msg, LW / 2, 70, 2, GOLD, "center");
   if (K.test && K.phase !== "done") text(KEYS ? "TEST  ESC: QUIT  M: " + FP_MODEL.toUpperCase() : "TEST", 4, 18, 1, GREY, "left", null);
-  if (K.phase === "race" && K.t < 8) (KEYS ? ["A D: STEER   S: BRAKE", "HOLD SHIFT IN A TURN: DRIFT", "SPACE: USE ITEM"] : ["HOLD A SIDE TO STEER"]).forEach((l, i) => text(l, LW / 2, 104 + i * 10, 1, WHITE, "center", null));
+  if (K.phase !== "done" && K.t < 12) (KEYS ? ["W: GAS   S: BRAKE   A D: STEER", "SHIFT: HOP, HOLD IN A TURN TO DRIFT", "SPACE: USE ITEM"] : ["HOLD A SIDE TO STEER"]).forEach((l, i) => text(l, LW / 2, 104 + i * 10, 1, WHITE, "center", null));
   if (K.phase === "done") fpResults();
 }
 function fpItemIcon(k, x, y) {
