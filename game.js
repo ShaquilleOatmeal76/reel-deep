@@ -319,7 +319,7 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat(["GAP KEEPER", "TOOTH FAIRY", "MARROW MINER", "BLISTER POPPER", "EYE SPY", "LAMPLIGHTER", "GHOST DECKHAND", "SHADOW BOXER", "KNOT TIER", "MIRROR MIRROR"]
     .map((n, i) => ["fzone" + i, n, "FILL " + DATA.flip.zones[i][0]]))
   .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY"], ["bestiary", "BESTIARY KEEPER", "FILL THE BESTIARY"], ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS"]])
-  .concat([["pegleg", "PEG LEG", "HIT X25 IN PLINKO"]]);
+  .concat([["pegleg", "PEG LEG", "HIT X25 IN PLINKO"], ["calledit", "CALLED IT", "HIT A DERBY TRIFECTA"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -1814,7 +1814,7 @@ function draw() {
   }
   if (S.flash > 0) { g.globalAlpha = 0.6 * Math.min(1, S.flash / 0.2); rect("#ffffc8", 0, 0, LW, LH); g.globalAlpha = 1; }
   g.restore();
-  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
+  const ov = (wideMenus() && WIDE[S.overlay] && WIDE[S.overlay].draw) || { derbytable: drawDerbyTable, plinko: drawPlinko, credits: drawCredits, vip: drawVip, scratch: drawScratch, rename: drawRename, tavern: drawTavern, c21: drawC21, derby: drawDerby, bet: drawBet, chipshop: drawChipShop, story: drawStory, jukebox: drawJukebox, myfish: drawMyFish, tavboard: drawTavBoard, more: drawMore, fhaul: drawFHaul, bestiary: drawBestiary, secrets: drawSecrets, note: drawNote, log: drawLog, scores: drawScores, shop: drawShop, tasks: drawTasks, help: drawHelp }[S.overlay];
   (ov || drawHud)();
   if (KON === "gameboy") {                                 // four shades of green, like an old handheld
     try {                                                  // (a page opened straight from disk can't read its own pixels; just skip it there)
@@ -2052,72 +2052,7 @@ function c21End(mult, msg) {                                 // mult: what comes
 }
 
 // ---- the Derby: five fish race with bursts and stalls; each has hidden speed, stamina and burst, and odds to match
-function racerStats(rng, vip) { if (vip) return { spd: rng.uniform(0.97, 1.03), sta: rng.uniform(0.65, 0.82), bur: rng.uniform(0.3, 0.7) };   // the VIP field is closer still
-  return { spd: rng.uniform(0.94, 1.06), sta: rng.uniform(0.6, 0.85), bur: rng.uniform(0.2, 0.8) }; }   // close enough that every fish has a chance
-function myRacer() { const f = tav().fish; return f && { id: f.id, name: f.name, spd: 0.78 + f.lv[0] * 0.045, sta: 0.5 + f.lv[1] * 0.045, bur: f.lv[2] * 0.1, mine: true }; }
-function raceStep(r, dt, rng) {                              // move one racer along; -> an event for the commentator, or null
-  let ev = null;
-  if (r.burst > 0) r.burst -= dt; else if (r.stall > 0) r.stall -= dt;
-  else if (rng.random() < r.bur * 0.45 * dt) { r.burst = 0.8; ev = "burst"; }
-  else if (rng.random() < (1 - r.sta) * 0.35 * dt) { r.stall = 0.6; ev = "stall"; }
-  const tired = 1 - r.pos * (1 - r.sta) * 0.55;
-  r.pos += dt / (8.5 * (r.len || 1)) * r.spd * tired * (r.burst > 0 ? 1.7 : r.stall > 0 ? 0.25 : 1);
-  return ev;
-}
-function derbyNew(withMine, vip) {                           // VIP (the back room): seven racers, a longer course, bets to 200
-  const rng = RNG((Math.random() * 4294967296) >>> 0), ids = [], racers = [], N = vip ? 7 : 5, len = vip ? 1.5 : 1;
-  const mine = withMine && myRacer();
-  if (mine) racers.push(mine);
-  while (racers.length < N) {
-    const id = rng.choice(C21_POOL);
-    if (ids.includes(id)) continue;
-    ids.push(id); racers.push(Object.assign({ id, name: SPEC[id][1] }, racerStats(rng, vip)));
-  }
-  racers.forEach(r => { r.len = len; });
-  const wins = racers.map(() => 0), sim = RNG(rng.randint(1, 1e9));        // odds from practice races
-  for (let n = 0; n < 1500; n++) {
-    const rs = racers.map(r => ({ spd: r.spd, sta: r.sta, bur: r.bur, len, pos: 0, burst: 0, stall: 0 }));
-    let done = -1;
-    while (done < 0) for (let i = 0; i < N && done < 0; i++) { raceStep(rs[i], 0.05, sim); if (rs[i].pos >= 1) done = i; }
-    wins[done]++;
-  }
-  racers.forEach((r, i) => { r.pays = Math.min(50, Math.max(1.1, Math.floor(EDGE / ((wins[i] + 0.5) / 1502.5) * 10) / 10)); r.pos = 0; r.burst = 0; r.stall = 0; });
-  const max = vip ? 200 : MAX_STAKE;
-  TAV.derby = { vip: !!vip, max, phase: "pick", racers, mine: mine ? 0 : -1, pick: 0, bet: stakeStep(TAV.derby && !!TAV.derby.vip === !!vip ? TAV.derby.bet : vip ? 50 : 10, 0, max), call: "PICK A FISH AND PLACE YOUR BET", t: 0, lead: -1, rng, withMine: !!mine };
-}
-function derbyGo() {
-  const d = TAV.derby;
-  if (tav().chips < d.bet || d.bet < 5) { play("miss"); d.call = "NOT ENOUGH CHIPS"; return; }
-  addChips(-d.bet); d.phase = "race"; d.t = 0; d.call = "AND THEY'RE OFF!"; play("select");
-}
-function derbyTick(dt) {
-  const d = TAV.derby;
-  if (!d || d.phase !== "race") return;
-  d.t += dt;
-  const say = (txt, k) => { if (!d.lastSay || d.t - d.lastSay > 1.1 || k) { d.call = txt; d.lastSay = d.t; } };
-  for (const r of d.racers) {
-    const ev = raceStep(r, dt, d.rng);
-    if (ev === "burst") say(r.name + " TURNS ON THE JETS!");
-    else if (ev === "stall") say(r.name + " STOPS TO LOOK AT A ROCK");
-  }
-  const order = d.racers.map((r, i) => i).sort((a, b) => d.racers[b].pos - d.racers[a].pos);
-  if (order[0] !== d.lead && d.t > 0.8) { d.lead = order[0]; say(d.racers[order[0]].name + " TAKES THE LEAD!"); }
-  if (d.racers[order[0]].pos > 0.8 && !d.stretch) { d.stretch = true; say("HERE COMES THE FINISH!", true); }
-  const w = order[0];
-  if (d.racers[w].pos < 1) return;
-  d.phase = "done"; d.winner = w;
-  const close = d.racers[order[1]].pos > 0.97;
-  d.call = (close ? "PHOTO FINISH! " : "") + d.racers[w].name + " WINS" + (close ? " BY A FIN!" : "!");
-  if (d.mine >= 0) {                                        // your own racer's times count toward the tavern board
-    const f = tav().fish, mineTime = d.t / Math.max(0.01, d.racers[d.mine].pos);
-    f.races++; if (w === d.mine) f.wins++;
-    const cs = Math.round(mineTime * 100);
-    if (!tav().stats.fast || cs < tav().stats.fast) tav().stats.fast = cs;
-  }
-  if (w === d.pick) { const pay = Math.floor(d.bet * d.racers[w].pays); addChips(pay, "win"); tav().stats.derbies++; tavTitles(); d.won = pay; play("fanfare"); }
-  else { d.won = 0; play("miss"); }
-  saveStore(); tavPost();
-}
+// The derby (racers, prices, the race) lives in derby.js since Nov 18, 2026.
 
 // ---- what chips buy
 const STORIES = [
@@ -2470,7 +2405,7 @@ let MUS = { song: -1, step: 0, next: 0 };
 function noteHz(n) { const m = /^([A-G])(\d)$/.exec(n); return m ? 440 * Math.pow(2, ({ C: -9, D: -7, E: -5, F: -4, G: -2, A: 0, B: 2 }[m[1]] + (m[2] - 4) * 12) / 12) : 0; }
 function tone(f, t0, dur, wave, vol) { const o = AC.createOscillator(), ga = AC.createGain(); o.type = wave; o.frequency.setValueAtTime(f, t0); ga.gain.setValueAtTime(vol, t0); ga.gain.exponentialRampToValueAtTime(0.001, t0 + dur); o.connect(ga); ga.connect(AC.destination); o.start(t0); o.stop(t0 + dur + 0.02); }
 function musicTick() {
-  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch", "plinko"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
+  const want = AC && S.overlay === "credits" ? 10 : AC && tav().jukebox && tav().song >= 0 && songOwned(tav().song) && (S.overlay ? ["tavern", "c21", "derby", "derbytable", "chipshop", "story", "jukebox", "myfish", "tavboard", "vip", "rename", "scratch", "plinko"].includes(S.overlay) : S.state === "title") ? tav().song : -1;
   if (want !== MUS.song) { MUS = { song: want, step: 0, next: AC ? AC.currentTime + 0.1 : 0 }; }
   if (want < 0 || AC.state !== "running") return;
   const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), dt = 30 / bpm;
@@ -2578,42 +2513,6 @@ function drawC21() {
   text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
-const derbyLane = d => d.racers.length > 5 ? 15 : 20;
-function drawDerby() {
-  const d = TAV.derby, by = derbyLanes(d);
-  g.save(); g.translate(OX, 0); drawDerbyNarrowPanel(d, by); g.restore();
-}
-function derbyLanes(d) {                                     // the water, lanes, finish line and racers -> y below the lanes
-  const t = T;
-  for (let i = 0; i < 14; i++) rect(lerpCol([40, 120, 200], [20, 70, 150], i / 13), 0, i * 15, LW, 15);
-  const x0 = 16, x1 = LW - 14, n = d.racers.length, LH_ = derbyLane(d), y1 = 22 + n * LH_, by = y1 + 4;
-  text(d.vip ? "VIP DERBY" : "THE DERBY", LW / 2, 9, 1, GOLD, "center");
-  for (let i = 0; i <= n; i++) for (let x = 0; x < LW; x += 6) rect("#8cc8f0", x, 22 + i * LH_, 3, 1);
-  for (let y = 22; y < y1; y += 3) { const o = Math.floor(y / 3) % 2; rect(o ? WHITE : INK, x1, y, 3, 3); rect(o ? INK : WHITE, x1 + 3, y, 3, 3); }   // the finish line
-  d.racers.forEach((r, i) => {
-    const y = 22 + (LH_ >> 1) + i * LH_, [w, h] = sprSize(r.id), moving = d.phase === "race";
-    const x = Math.floor(lerp(x0, x1 - w, Math.min(1, r.pos))) + (moving ? Math.round(Math.sin(t * 8 + i)) : 0);
-    if (i === d.pick) rect("#2a5a9a", 0, y - (LH_ >> 1) + 1, LW, LH_ - 1);
-    text(String(i + 1), 6, y, 1, i === d.pick ? GOLD : r.mine ? CHIP : WHITE, "center");
-    spr(r.id, x, y - (h >> 1) + (moving ? Math.round(Math.sin(t * 6 + i * 2)) : 0), false);
-    if (moving) for (let k = 1; k < 4; k++) rect(r.burst > 0 ? WHITE : "#c8ecff", x - k * (r.burst > 0 ? 6 : 4), y + ((k + i) % 2), r.burst > 0 ? 2 : 1, 1);   // its wake
-    if (d.phase === "pick") text((r.mine ? r.name.slice(0, 7) + " " : "") + "X" + r.pays, x1 - 4, y, 1, r.mine ? CHIP : GOLD, "right");
-    if (d.phase === "done" && i === d.winner) text("WINNER", x - 3, y, 1, GOLD, "right");
-  });
-  return by;
-}
-function drawDerbyNarrowPanel(d, by) {
-  box(2, by, 116, 24, WHITE);
-  wrap(d.call, 18).slice(0, 2).forEach((l, i) => text(l, 60, by + 6 + i * 10, 1, WHITE, "center", null));
-  if (d.phase === "pick") stakeRow(by + 27, d.bet, "RACE");
-  else {
-    const r = d.racers[d.pick];
-    text("YOU: " + (d.pick + 1) + " " + r.name.slice(0, 13), 60, by + 35, 1, GOLD, "center", null);
-    text(d.phase === "done" ? (d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME") : "BET " + d.bet + " PAYS X" + r.pays, 60, by + 46, 1, CHIP, "center", null);
-  }
-  if (tav().fish && d.phase === "pick" && !d.vip) { box(8, 172, 104, 11, d.withMine ? CHIP : "#2a4a6a"); text(d.withMine ? "YOUR RACER IS IN" : "RACE YOUR FISH", 60, 177, 1, d.withMine ? CHIP : "#8cb4dc", "center", null); }
-  text(d.phase === "race" ? "" : d.phase === "done" ? "TAP FOR ANOTHER RACE" : "TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
-}
 function drawBet() {                                         // betting on the next dive, from the cast screen
   rect("#08140f", 0, 0, LW, LH);
   g.save(); g.translate(OX, 0);
@@ -2705,7 +2604,7 @@ function drawMyFish() {
     if (lv < 10) { box(78, y - 4, 38, 15, GOLD); text("+" + trainCost(lv), 97, y + 3, 1, tav().chips >= trainCost(lv) ? GOLD : GREY, "center", null); }
     else text("MAX", 97, y + 3, 1, CHIP, "center", null);
   });
-  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACE IT IN THE DERBY", 60, 166, 1, GREY, "center", null);
+  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN FIN PRIX, SOON", 60, 166, 1, GREY, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
@@ -2814,17 +2713,8 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     } else if (ly > 186 && c.phase !== "play" && c.phase !== "dealer") back();
     return true;
   }
-  if (o === "derby") {
-    const d = TAV.derby;
-    if (d.phase === "race") return true;
-    const L_ = derbyLane(d), n = d.racers.length, by = 22 + n * L_ + 4;
-    if (d.phase === "done") { derbyNew(d.withMine, d.vip); return true; }
-    if (ly >= 22 && ly < 22 + n * L_) { d.pick = clamp(Math.floor((ly - 22) / L_), 0, n - 1); play("tick"); }
-    else if (ly >= by + 25 && ly < by + 44) stakeTap(lx, d, "bet", derbyGo);
-    else if (ly >= 170 && ly < 186 && tav().fish && !d.vip) { derbyNew(!d.withMine); play("tick"); }
-    else if (ly > 189) back();
-    return true;
-  }
+  if (o === "derby") return derbyTap(lx, ly);              // derby.js
+  if (o === "derbytable") { if (ly > 186) { S.overlay = "derby"; play("back"); } return true; }
   if (o === "scratch") { scratchTap(lx, ly); return true; }
   if (o === "plinko") { plinkoTap(lx + OX, ly); return true; }
   if (o === "chipshop") {
@@ -3803,7 +3693,7 @@ function drawMyFishWide() {
   fitDraw(atlas, f.id, cx, 66 + Math.round(Math.sin(T * 3) * 2), 120, 50, 3);
   text(f.name, cx, 118, 1, GOLD, "center", null);
   text(f.races + " RACES, " + f.wins + " WINS", cx, 130, 1, "#d8c8b0", "center", null);
-  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACE IT IN THE DERBY", cx, 142, 1, GREY, "center", null);
+  text(tav().stats.fast ? "BEST TIME " + (tav().stats.fast / 100).toFixed(2) + "S" : "RACES IN FIN PRIX, SOON", cx, 142, 1, GREY, "center", null);
   ["SPEED", "STAMINA", "BURST"].forEach((lab, i) => {
     const y = 40 + i * 34, lv = f.lv[i];
     text(lab, x0 + 172, y + 2, 1, WHITE, "left", null);
@@ -3913,38 +3803,6 @@ function c21TapWide(rx, ly) {
   }, () => { if (c.phase !== "play" && c.phase !== "dealer") closeOverlay(); });
 }
 
-// the derby: the lanes already use the whole width; the controls move beside the race call
-function derbyWideHits() {
-  const x0 = WX(), d = TAV.derby, by = 22 + d.racers.length * derbyLane(d) + 4, h = [];
-  if (d.phase === "pick") {
-    h.push(["minus", x0 + 216, by, 20, 18, -1], ["plus", x0 + 280, by, 20, 18, 1], ["race", x0 + 304, by, 44, 18, 0]);
-    if (tav().fish && !d.vip) h.push(["mine", x0 + 216, by + 24, 132, 14, 0]);
-  }
-  return h;
-}
-function drawDerbyWide() {
-  const d = TAV.derby, by = derbyLanes(d), x0 = WX();
-  box(x0, by, 208, 26, WHITE);
-  wrap(d.call, 32).slice(0, 2).forEach((l, i, a) => text(l, x0 + 104, by + 13 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
-  if (d.phase !== "pick") { const r = d.racers[d.pick]; text("YOU: " + (d.pick + 1) + " " + r.name.slice(0, 13), x0 + 104, by + 34, 1, GOLD, "center", null); text(d.phase === "done" ? (d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME") : "BET " + d.bet + " PAYS X" + r.pays, x0 + 104, by + 45, 1, CHIP, "center", null); }
-  chipsAt(x0 + 348, 9, "right");
-  for (const [id, x, y, w, h] of derbyWideHits()) {
-    if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
-    else if (id === "race") btn(x, y, w, h, "RACE", GOLD);
-    else btn(x, y, w, h, d.withMine ? "YOUR RACER IS IN" : "RACE YOUR FISH", d.withMine ? CHIP : "#8cb4dc");
-  }
-  if (d.phase === "pick") text(d.bet, x0 + 258, by + 9, 1, WHITE, "center", null);
-  closeLine(d.phase === "race" ? "" : d.phase === "done" ? "TAP FOR ANOTHER RACE" : "TAP HERE TO LEAVE");
-}
-function derbyTapWide(rx, ly) {
-  const d = TAV.derby, L_ = derbyLane(d), n = d.racers.length;
-  if (d.phase === "race") return;
-  if (d.phase === "done") { derbyNew(d.withMine, d.vip); return; }
-  const h = hitAt(derbyWideHits(), rx, ly);
-  if (h) { if (h[0] === "race") derbyGo(); else if (h[0] === "mine") { derbyNew(!d.withMine); play("tick"); } else { d.bet = stakeStep(d.bet, h[5], d.max); play("tick"); } }
-  else if (ly >= 22 && ly < 22 + n * L_) { d.pick = clamp(Math.floor((ly - 22) / L_), 0, n - 1); play("tick"); }
-  else if (ly > 186) closeOverlay();
-}
 
 // the scratch card, bigger, with the prize list beside it
 function scratchWideHits() {
@@ -4186,7 +4044,6 @@ Object.assign(WIDE, {
   tavboard: { draw: drawTavBoardWide, tap: (rx, ly) => { if (ly > 186) closeOverlay(); }, key: () => {} },
   bet: { draw: drawBetWide, tap: betTapWide, key: d => { TAV.bet.stake = stakeStep(TAV.bet.stake, d); play("tick"); } },
   c21: { draw: drawC21Wide, tap: c21TapWide, key: d => { const c = TAV.c21; if (c.phase === "stake") { c.bet = stakeStep(c.bet, d, c.max); play("tick"); } } },
-  derby: { draw: drawDerbyWide, tap: derbyTapWide, key: d => { const r = TAV.derby; if (r.phase === "pick") { r.pick = (r.pick + d + r.racers.length) % r.racers.length; play("tick"); } } },
   scratch: { draw: drawScratchWide, tap: scratchTapWide, key: () => {} },
   vip: { draw: drawVipWide, tap: vipTapWide, key: () => {} },
   rename: { draw: drawRenameWide, tap: renameTapWide, key: d => { const n = renameList().length; if (n) { TAV.renSel = ((TAV.renSel || 0) + d + n) % n; play("tick"); } } },
@@ -4369,7 +4226,7 @@ function closeOverlay() {
   if (S.overlay === "help") { store.seenHelp = true; saveStore(); }
   const o = S.overlay;
   S.overlay = o === "note" && S.noteBack ? S.noteBack : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip"
-    : ["c21", "derby", "plinko", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
+    : o === "derbytable" ? "derby" : ["c21", "derby", "plinko", "chipshop", "tavboard", "vip"].includes(o) ? "tavern" : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
   play("back");
 }
 function overlayTap(lx, ly) {
