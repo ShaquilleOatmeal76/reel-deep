@@ -232,7 +232,7 @@ function isleSave() {                                        // the island's par
   if (!q.g) q.g = { year: 1, season: 0, day: 1, min: DAY_START, sd: 0, intro: 0, area: "port", x: 0, y: 0 };
   const g_ = q.g;
   if (!g_.inv) {                                              // the starting kit (part 3): a hoe, a watering can, some seeds, 100 sand dollars
-    g_.inv = Array(INV_N).fill(null); g_.inv[0] = ["hoe", 1]; g_.inv[1] = ["can", 1]; g_.inv[2] = ["s_lettuce", 15]; g_.inv[3] = ["rod", 1]; g_.inv[4] = ["net", 1]; g_.fish0 = 1;
+    g_.inv = Array(INV_N).fill(null); g_.inv[0] = ["hoe", 1]; g_.inv[1] = ["can", 1]; g_.inv[2] = ["s_lettuce", 15]; g_.inv[3] = ["rod", 1]; g_.inv[4] = ["net", 1]; g_.inv[5] = ["axe", 1]; g_.inv[6] = ["pick", 1]; g_.fish0 = 1; g_.p5 = 1;
     g_.sel = 0; g_.water = WATER_MAX; g_.sd = (g_.sd || 0) + 100; g_.farm = {}; g_.bin = []; g_.forage = null; g_.earned = 0; g_.kit = 0;
   }
   if (!g_.fish0) {                                            // part 4: a fishing rod and a net for saves from before it
@@ -240,6 +240,11 @@ function isleSave() {                                        // the island's par
     for (const id of ["rod", "net"]) { const i = g_.inv.indexOf(null); if (i >= 0) g_.inv[i] = [id, 1]; else g_.rodLater = 1; }
   }
   if (!g_.log) { g_.log = {}; g_.pots = []; g_.pools = null; }
+  if (!g_.p5) {                                               // part 5: an axe and a pick for saves from before it
+    g_.p5 = 1; g_.woodsMsg = 1;
+    for (const id of ["axe", "pick"]) { const i = g_.inv.indexOf(null); if (i >= 0) g_.inv[i] = [id, 1]; }
+  }
+  for (const [k, v] of [["crate", []], ["cut", {}], ["placed", []], ["chests", {}], ["rest", {}], ["donated", {}], ["up", {}], ["mach", {}], ["news", []]]) if (!g_[k]) g_[k] = v;
   return g_;
 }
 
@@ -387,7 +392,7 @@ const AREAS = {
       [[170, 244], [604, 236]], [[604, 236], [1010, 244]],                          // the back lane past the cottages
       [[860, 444], [900, 520]]],
     dock: [[560, 596, 32, 204], [592, 716, 64, 40]],
-    exits: [{ side: "e", a: 410, b: 490, to: "flats", x: 14, y: 300 }, { side: "n", a: 560, b: 640, to: "lagoon", x: 560, y: 862 }],
+    exits: [{ side: "e", a: 410, b: 490, to: "flats", x: 14, y: 300 }, { side: "n", a: 560, b: 640, to: "lagoon", x: 560, y: 862 }, { side: "w", a: 410, b: 490, to: "woods", x: 1266, y: 560 }],
   },
   flats: {                                                    // the Tide Flats: the old garden, tide pools, the long beach
     name: "TIDE FLATS", w: 80, h: 60, outdoor: true,
@@ -405,6 +410,13 @@ const AREAS = {
     dock: [[460, 556, 24, 76], [988, 506, 30, 76]],           // a little pier into the lake, and a footbridge over the river
     exits: [{ side: "s", a: 520, b: 600, to: "port", x: 602, y: 24 }],
   },
+  woods: {                                                    // Driftwood Woods: trees to chop, rocks to break, a pond
+    name: "DRIFTWOOD WOODS", w: 80, h: 70, outdoor: true, fresh: true, forest: true,
+    lakes: [[660, 780, 90, 56]], river: [], riverW: 0,
+    paths: [[[1290, 560], [900, 560], [640, 480], [300, 420], [-10, 420]], [[640, 480], [640, 240], [600, -10]], [[900, 560], [760, 700]]],
+    exits: [{ side: "e", a: 520, b: 600, to: "port", x: 14, y: 452 }],
+  },
+  aqua: { name: "THE AQUARIUM", w: 20, h: 12, outdoor: false, door: [9, 10], wall: [[40, 62, 90], [30, 48, 72]], floor: [[150, 170, 190], [128, 148, 170]] },
   shack: { name: "YOUR SHACK", w: 12, h: 10, outdoor: false },
 };
 function portObjects() {                                   // everything standing in the Port: [art key, x, y (top-left), solid rect (relative), act]
@@ -412,20 +424,19 @@ function portObjects() {                                   // everything standin
   const add = (k, x, y, solid, act) => o.push({ k, x, y, solid, act });
   const say = (...text) => ({ kind: "say", text });
   add("shack", 112, 334, [6, 50, 66, 24], { kind: "door", to: "shack", rect: [30, 74, 18, 6] });
-  add("store", 370, 356, [4, 32, 56, 22], say("THE OLD GENERAL STORE. THE ROOF CAVED IN YEARS AGO.", "IT COULD BE FIXED UP ONE DAY."));
-  add("aquarium", 562, 340, [4, 32, 68, 28], say("AN AQUARIUM, OF ALL THINGS. THE GLASS DOME IS CRACKED AND THE TANKS ARE EMPTY.", "IT WOULD TAKE A LOT OF FISH TO FILL IT."));
-  add("inn", 760, 352, [4, 32, 56, 22], say("THE INN. THE SIGN STILL SWINGS. NOBODY HAS SLEPT HERE IN A LONG TIME."));
-  add("smoke", 940, 350, [4, 32, 56, 22], say("A SMOKEHOUSE. IT STILL SMELLS FAINTLY OF FISH."));
+  add("store", 370, 356, [4, 32, 56, 22], { kind: "restore", b: "store" });
+  add("aquarium", 562, 340, [4, 32, 68, 28], { kind: "restore", b: "aquarium" });
+  add("inn", 760, 352, [4, 32, 56, 22], { kind: "restore", b: "inn" });
+  add("smoke", 940, 350, [4, 32, 56, 22], { kind: "restore", b: "smoke" });
   [[150, "#8a5246"], [300, "#52788a"], [440, "#6a6a4a"], [700, "#7a5a8a"], [850, "#52788a"], [990, "#8a5246"]].forEach(([x, rc], i) =>
     add("cot" + (i % 3), x, 176, [3, 26, 42, 16], say(["AN EMPTY COTTAGE. THE DOOR IS BOARDED UP.", "AN EMPTY COTTAGE. SOMEONE LEFT A TEAPOT ON THE STEP.", "AN EMPTY COTTAGE. IVY HAS TAKEN THE WINDOWS."][i % 3], "MAYBE SOMEONE WILL MOVE IN ONE DAY.")));
-  add("yard", 870, 480, [4, 32, 56, 22], say("THE SHIPYARD. HALF A HULL IS STILL ON THE SLIPWAY."));
+  add("yard", 870, 480, [4, 32, 56, 22], { kind: "restore", b: "yard" });
   add("well", 478, 404, [1, 10, 20, 10], { kind: "water" });
   add("board", 300, 400, [2, 22, 18, 6], say("WELCOME TO DRIFTWOOD ISLE. POP: 1", "SOMEONE HAS SCRATCHED UNDERNEATH: 'THE LIGHT WILL SHOW THE WAY.'"));
-  add("crate", 530, 560, [1, 8, 15, 8], say("THE FISH CRATE. EMPTY FOR NOW."));
+  add("crate", 530, 560, [1, 8, 15, 8], { kind: "crate" });
   add("cat", 551, 562, null, say("A SCRUFFY CAT. IT IS STARING AT THE CRATE."));
   add("wright", 566, 604, [2, 10, 10, 6], { kind: "talk" });
   add("raft", 652, 726, [2, 10, 40, 22], { kind: "raft" });
-  add("pile", 2, 434, [0, 4, 36, 16], say("A PILE OF DRIFTWOOD BLOCKS THE WAY. A SIGN ON TOP SAYS: DRIFTWOOD WOODS."));
   add("bin", 196, 388, [1, 8, 20, 10], { kind: "bin" });
   add("stand", 438, 384, [1, 14, 28, 10], { kind: "shop" });
   [90, 250, 470, 700, 820, 1000].forEach(x => add("lamp", x, 418, [2, 18, 4, 3]));
@@ -444,7 +455,7 @@ function portObjects() {                                   // everything standin
 }
 function shackObjects() {
   return [{ k: "bed", x: 20, y: 34, solid: [0, 0, 28, 34], act: { kind: "bed" } }, { k: "table", x: 120, y: 74, solid: [0, 4, 26, 12] },
-    { k: "stove", x: 150, y: 28, solid: [0, 4, 18, 18], act: { kind: "say", text: ["AN OLD IRON STOVE. IT STILL WORKS. COOKING COMES LATER."] } },
+    { k: "stove", x: 150, y: 28, solid: [0, 4, 18, 18], act: { kind: "cook" } },
     { k: "chest", x: 60, y: 34, solid: [0, 0, 18, 13], act: { kind: "say", text: ["A STORAGE CHEST. EMPTY."] } },
     { k: "door", x: 88, y: 148, solid: null, act: { kind: "door", to: "port", rect: [0, 0, 16, 12] } }];
 }
@@ -486,7 +497,8 @@ function terrainAt(A, x, y) {                               // -> tile kind at p
   return y > sh - 12 ? "w" : "s";
 }
 const TCOL = { g: [[96, 164, 80], [110, 178, 88], [84, 148, 72], [128, 192, 98]], s: [[236, 212, 158], [226, 200, 144], [244, 226, 180], [214, 186, 130]],
-  p: [[204, 168, 116], [192, 156, 104], [214, 180, 128], [204, 168, 116]], m: [[150, 116, 82], [138, 106, 74], [162, 128, 92], [126, 96, 66]] };
+  p: [[204, 168, 116], [192, 156, 104], [214, 180, 128], [204, 168, 116]], m: [[150, 116, 82], [138, 106, 74], [162, 128, 92], [126, 96, 66]],
+  f: [[70, 128, 64], [80, 140, 70], [60, 112, 56], [96, 156, 80]] };
 function buildArea(id) {                                    // paint the ground once into a canvas; classify tiles
   const A = AREAS[id], W = A.w * TS, H = A.h * TS, c = document.createElement("canvas");
   c.width = W; c.height = H;
@@ -496,7 +508,7 @@ function buildArea(id) {                                    // paint the ground 
     for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
       const i = (py * W + px) * 4, n = r.random(), t = terrainAt(A, px, py);
       let col;
-      if (t === "g") col = TCOL.g[n < .7 ? 0 : n < .85 ? 1 : n < .97 ? 2 : 3];
+      if (t === "g") col = (A.forest ? TCOL.f : TCOL.g)[n < .7 ? 0 : n < .85 ? 1 : n < .97 ? 2 : 3];
       else if (t === "p") col = TCOL.p[n < .7 ? 0 : n < .85 ? 1 : 2];
       else if (t === "m") col = TCOL.m[n < .7 ? 0 : n < .85 ? 1 : n < .97 ? 2 : 3];
       else if (t === "k") { const yy = py - 596; col = yy % 4 === 0 ? [120, 80, 46] : [164, 114, 70]; if ((px - 560) % 32 === 0 || (px - 591) % 32 === 0) col = INKC; }
@@ -518,22 +530,24 @@ function buildArea(id) {                                    // paint the ground 
   } else {                                                  // the shack: plank floor, back wall
     for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
       const i = (py * W + px) * 4, tx = Math.floor(px / TS), ty = Math.floor(py / TS);
-      const wall = ty < 2 || tx === 0 || tx === A.w - 1 || (ty === A.h - 1 && tx !== 5 && tx !== 6);
+      const dr = A.door || [5, 6], wall = ty < 2 || tx === 0 || tx === A.w - 1 || (ty === A.h - 1 && !dr.includes(tx));
       let col = wall ? (py % 8 === 0 ? [70, 46, 30] : [96, 64, 40]) : ((py % 8 === 0 || (px + (Math.floor(py / 8) % 2) * 12) % 24 === 0) ? [120, 82, 50] : [150, 104, 64]);
-      if (wall && ty === 1 && py % 16 > 12) col = [60, 40, 26];
+      if (A.wall && wall) col = py % 8 === 0 ? A.wall[1] : A.wall[0];
+      if (A.floor && !wall) col = (Math.floor(px / 16) + Math.floor(py / 16)) % 2 ? A.floor[0] : A.floor[1];
+      if (wall && ty === 1 && py % 16 > 12) col = A.wall ? [20, 30, 50] : [60, 40, 26];
       put(i, col);
     }
   }
   x.putImageData(img, 0, 0);
-  if (!A.outdoor) {                                          // a window and a rug
+  if (id === "shack") {                                      // a window and a rug
     x.fillStyle = INK; x.fillRect(88, 6, 24, 16); x.fillStyle = "#9ad2ec"; x.fillRect(89, 7, 22, 14); x.fillStyle = "#6e482a"; x.fillRect(99, 7, 2, 14); x.fillRect(89, 13, 22, 2);
     x.fillStyle = "#a03c32"; x.fillRect(64, 92, 64, 36); x.fillStyle = "#c85a46"; x.fillRect(68, 96, 56, 28); x.fillStyle = "#e6c45a"; x.fillRect(72, 108, 48, 2);
   }
   for (let ty = 0; ty < A.h; ty++) { const row = []; for (let tx = 0; tx < A.w; tx++) {
     if (A.outdoor) row.push(terrainAt(A, tx * TS + 8, ty * TS + 8));
-    else row.push(ty < 2 || tx === 0 || tx === A.w - 1 || (ty === A.h - 1 && tx !== 5 && tx !== 6) ? "x" : "f");
+    else row.push(ty < 2 || tx === 0 || tx === A.w - 1 || (ty === A.h - 1 && !(A.door || [5, 6]).includes(tx)) ? "x" : "f");
   } tiles.push(row); }
-  const objs = id === "port" ? portObjects() : id === "flats" ? flatsObjects() : id === "lagoon" ? lagoonObjects() : shackObjects();
+  const objs = id === "port" ? portObjects() : id === "flats" ? flatsObjects() : id === "lagoon" ? lagoonObjects() : id === "woods" ? woodsObjects() : id === "aqua" ? aquaObjects() : shackObjects();
   const glints = [], pools = [];
   if (A.outdoor) for (let k = 0; k < 900 && glints.length < 120; k++) {
     const gx = r.random() * W, gy = r.random() * H, t = terrainAt(A, gx, gy);
@@ -596,12 +610,13 @@ function startIsland() {
   ISLE = { maps: {}, map: null, px: 0, py: 0, dir: "up", walk: 0, moving: false, msg: null, menu: null, fade: 1, target: null, saveT: 0, wake: 0, lastMin: s.min };
   isleResize();
   isleGo("port", 576, 744, "up");                          // the raft always lands at the dock
-  const kit = ["HE HANDS YOU A HOE, A WATERING CAN, SEEDS, AN OLD ROD AND A NET. 'THERE'S AN OLD GARDEN ON THE TIDE FLATS, EAST OF HERE. I CLEARED THE WAY.'",
+  const kit = ["HE HANDS YOU A HOE, A WATERING CAN, SEEDS, A ROD, A NET, AN AXE AND A PICK. 'THERE'S AN OLD GARDEN ON THE TIDE FLATS, EAST OF HERE. I CLEARED THE WAY.'",
     "'SELL WHAT YOU GROW IN THE BIN BY YOUR SHACK. MORE SEEDS AT THE STAND BY THE STORE.'"];
   if (first) { s.intro = 1; s.kit = 1; isleSay(["THE RAFT BUMPS AGAINST AN OLD DOCK.", "DRIFTWOOD ISLE. NOBODY HAS LIVED HERE IN YEARS.", "THE SHIPWRIGHT TIES THE RAFT UP. 'THAT SHACK UP THE HILL STILL HAS A ROOF. IT'S YOURS IF YOU WANT IT.'"].concat(kit)); }
   else if (!s.kit) { s.kit = 1; isleSay(["THE SHIPWRIGHT IS WAITING ON THE DOCK."].concat(kit)); }
   else isleSay(["DRIFTWOOD ISLE. " + SEASONS[s.season][0] + " " + s.day + ", YEAR " + s.year + "."]);
   forageCheck();
+  if (s.woodsMsg) { s.woodsMsg = 0; ISLE.msg.pages.push("THE SHIPWRIGHT CLEARED THE DRIFTWOOD WEST OF THE PORT. HE LEFT YOU AN AXE AND A PICK.", "'DRIFTWOOD WOODS. WOOD AND STONE FOR FIXING THIS PLACE UP. C OPENS CRAFTING.'"); }
   if (s.rodMsg) { s.rodMsg = 0; ISLE.msg.pages.push("THE SHIPWRIGHT LEFT AN OLD FISHING ROD AND A NET ON YOUR STEP.", "'THE LAGOON'S OPEN, NORTH OF THE PORT. HOLD E TO CAST, LET GO TO THROW. THE NET IS FOR THE TIDE POOLS.'"); }
   saveStore(); play("plop");
 }
@@ -632,20 +647,20 @@ function isleSolidAt(x, y) {                                 // is the point x, 
   const t = M_.tiles[Math.floor(y / TS)][Math.floor(x / TS)];
   if (t === "x" || t === "a" || t === "d") return true;
   if (t === "t" && y > tideEdge(M_.A, x, s) - 2) return true;   // the tide's in over this bit of beach
-  for (const o of M_.objs) if (o.solid) { const [a, b, w, h] = o.solid; if (x >= o.x + a && x < o.x + a + w && y >= o.y + b && y < o.y + b + h) return true; }
-  return false;
+  for (const o of M_.objs) if (o.solid && !objGone(o)) { const [a, b, w, h] = o.solid; if (x >= o.x + a && x < o.x + a + w && y >= o.y + b && y < o.y + b + h) return true; }
+  return placedSolidAt(x, y);
 }
 const feetBlocked = (x, y) => isleSolidAt(x - 4, y) || isleSolidAt(x + 4, y) || isleSolidAt(x - 4, y - 3) || isleSolidAt(x + 4, y - 3);
 function facingPoint() { const d = { up: [0, -10], down: [0, 8], left: [-11, -2], right: [11, -2] }[ISLE.dir]; return [ISLE.px + d[0], ISLE.py + d[1]]; }
 function objAt(x, y) {
   for (const o of ISLE.map.objs) {
-    if (!o.act) continue;
+    if (!o.act || objGone(o)) continue;
     const r = o.act.rect || (o.solid ? [o.solid[0] - 6, o.solid[1] - 6, o.solid[2] + 12, o.solid[3] + 16] : [0, 0, IART[o.k].width, IART[o.k].height]);
     if (x >= o.x + r[0] && x < o.x + r[0] + r[2] && y >= o.y + r[1] && y < o.y + r[1] + r[3]) return o;
   }
   return null;
 }
-const WRIGHT_LINES = ["'THE OLD GARDEN'S ON THE TIDE FLATS. WATER WHAT YOU PLANT EVERY DAY, UNLESS IT RAINS.'",
+const WRIGHT_LINES = ["'THESE OLD BUILDINGS COULD BE FIXED UP. BRING WOOD AND STONE FROM THE WOODS, AND SOME SAND DOLLARS.'", "'ONE FISH FROM EVERY DIVE YOU MAKE OUT THERE ENDS UP IN THE CRATE ON THE BEACH.'", "'THE OLD GARDEN'S ON THE TIDE FLATS. WATER WHAT YOU PLANT EVERY DAY, UNLESS IT RAINS.'",
   "'THINGS WASH UP ON THE BEACHES EVERY MORNING. SHELLS AND SUCH. THEY SELL.'", "'THE RAFT'S TIED UP AT THE END OF THE DOCK WHENEVER YOU WANT TO GO BACK.'", "'THIS WHOLE PORT WAS BUSY ONCE. BOATS EVERYWHERE.'",
   "'THOSE DRIFTWOOD PILES? I'LL CLEAR THEM WHEN THERE'S A REASON TO GO OUT THERE.'", "'THE MAN WHO LIVED IN YOUR SHACK WROTE A LOT OF LETTERS. PUT THEM IN BOTTLES, I HEARD.'"];
 function isleAct(o) {
@@ -654,14 +669,16 @@ function isleAct(o) {
   else if (a.kind === "talk") { isleSay([WRIGHT_LINES[(s.day + Math.floor(s.min / 120)) % WRIGHT_LINES.length]]); }
   else if (a.kind === "raft") isleSay(["SAIL BACK TO YOUR BOAT?"], { opts: ["YES", "NOT YET"], act: [isleLeave, () => play("tick")] });
   else if (a.kind === "bed") isleSay(["GO TO BED FOR THE NIGHT?"], { opts: ["SLEEP", "NOT YET"], act: [() => isleSleep(false), () => play("tick")] });
-  else if (a.kind === "door") isleDoor(a.to);
+  else if (a.kind === "door") isleDoor(a.to, a.go);
   else if (a.kind === "bin") binAct();
   else if (a.kind === "shop") { ISLE.shop = { sel: 0 }; play("select"); }
   else if (a.kind === "water") canFill();
+  else isleAct5(o);
 }
-function isleDoor(to) {
+function isleDoor(to, a) {
   play("tick");
-  if (to === "shack") isleGo("shack", 96, 140, "up"); else isleGo("port", 151, 416, "down");
+  if (a && a.x !== undefined) isleGo(to, a.x, a.y, a.dir === "up" ? "up" : "down");
+  else if (to === "shack") isleGo("shack", 96, 140, "up"); else isleGo("port", 151, 416, "down");
 }
 function isleSleep(passedOut) {                              // a new day: in bed, 6 am
   const s = isleSave();
@@ -669,9 +686,9 @@ function isleSleep(passedOut) {                              // a new day: in be
   if (s.day > SEASON_DAYS) { s.day = 1; s.season = (s.season + 1) % 4; if (s.season === 0) s.year++; }
   isleGo("shack", 34, 86, "down");
   ISLE.wake = 2.4;
-  const paid = farmNewDay(s);
+  const paid = farmNewDay(s), news = s.news.splice(0);
   const w = weatherOf(s), wt = w === "rain" ? "IT'S RAINING. THE GARDEN GETS WATERED." : w === "snow" ? "IT'S SNOWING." : "IT'S A CLEAR DAY.";
-  isleSay((passedOut ? ["YOU FELL ASLEEP WHERE YOU STOOD AND WOKE UP IN BED. NO HARM DONE."] : []).concat(paid ? ["THE BIN PAID " + paid + " SAND DOLLARS OVERNIGHT."] : []).concat([SEASONS[s.season][0] + " " + s.day + ". " + wt]));
+  isleSay((passedOut ? ["YOU FELL ASLEEP WHERE YOU STOOD AND WOKE UP IN BED. NO HARM DONE."] : []).concat(paid ? ["THE BIN PAID " + paid + " SAND DOLLARS OVERNIGHT."] : []).concat(news).concat([SEASONS[s.season][0] + " " + s.day + ". " + wt]));
   saveStore(); play("select");
 }
 
@@ -681,7 +698,7 @@ function isleUpdate(dt) {
   I.fade = Math.max(0, I.fade - dt * 3); I.wake = Math.max(0, I.wake - dt);
   I.toasts = (I.toasts || []).filter(q => (q[1] -= dt) > 0);
   if (I.msg) { I.msg.t += dt; return; }
-  if (I.menu || I.shop || I.inv || I.log || I.card) return;
+  if (I.menu || I.shop || I.inv || I.log || I.card || I.list || I.chest) return;
   shadowsTick(dt);
   if (I.fish) { fishTick(dt); if (I.fish && I.fish.phase !== "wait") return; }
   s.min += dt * GAME_MIN_PER_S;                              // the clock runs while you're out and about
@@ -711,7 +728,7 @@ function isleUpdate(dt) {
   } else I.walk = 0;
   for (const o of I.map.objs) if (o.act && o.act.kind === "door" && o.act.rect) {   // walking into a door goes through it
     const [a, b, w, h] = o.act.rect, inside = I.px >= o.x + a && I.px < o.x + a + w && I.py >= o.y + b && I.py < o.y + b + h;
-    if (inside && ((o.act.to === "shack" && I.dir === "up") || (o.act.to === "port" && I.dir === "down")) && I.moving) { isleDoor(o.act.to); break; }
+    if (inside && I.dir === (o.act.dir || (o.act.to === "shack" ? "up" : "down")) && I.moving) { isleDoor(o.act.to, o.act.go); break; }
   }
   I.saveT += dt; if (I.saveT > 10) { I.saveT = 0; isleStore(); saveStore(); }
 }
@@ -722,6 +739,8 @@ function isleInteract() {
   if (ISLE.shop) { shopPick(1); return; }
   if (ISLE.inv) { invPick(); return; }
   if (ISLE.card) { ISLE.card = null; play("tick"); return; }
+  if (ISLE.list) { listPick(false); return; }
+  if (ISLE.chest) { chestPick(); return; }
   if (ISLE.log) { ISLE.log = null; return; }
   if (ISLE.fish) { fishPress(); return; }
   const [fx, fy] = facingPoint(), f = forageAt(fx, fy) || forageAt(ISLE.px, ISLE.py - 4);
@@ -729,7 +748,11 @@ function isleInteract() {
   const o = objAt(fx, fy) || objAt(ISLE.px, ISLE.py - 4);
   if (o) { isleAct(o); return; }
   if (potInteract()) return;
+  if (placedInteract()) return;
   const it = held();
+  if (it && (it[0] === "axe" || it[0] === "pick")) { toolHit(it[0]); return; }
+  if (it && ITEMS[it[0]].kind === "place") { placeItem(); return; }
+  if (it && it[0] === "mulch") { mulchUse(); return; }
   if (it && it[0] === "rod") { fishPress(); return; }
   if (it && it[0] === "net") { netUse(); return; }
   if (it && it[0] === "pot") { potPlace(); return; }
@@ -764,7 +787,9 @@ function drawIsle() {
     void lv;
   }
   drawFarmSoil(cx, cy); drawPools(cx, cy); drawShadows(cx, cy); drawPots(cx, cy);
-  const list = M_.objs.map(o => [o.y + (o.solid ? o.solid[1] + o.solid[3] : IART[o.k].height - 2), o]);
+  drawPlacedFlat(cx, cy);
+  const list = M_.objs.filter(o => !objGone(o) || o.res.kind === "tree").map(o => [o.y + (o.solid ? o.solid[1] + o.solid[3] : IART[o.k].height - 2), o]);
+  placedSprites(list);
   list.push([I.py, null]);
   farmSprites(list); forageSprites(list);
   list.sort((a, b) => a[0] - b[0]);
@@ -775,11 +800,14 @@ function drawIsle() {
       if (o.k === "cat") { g.drawImage(IART.cat, o.x - cx, o.y - cy - (Math.floor(t * 0.7) % 4 === 0 ? 1 : 0)); continue; }
       if (o.k === "wright") { g.drawImage(IART.wright, o.x - cx, o.y - cy + (Math.floor(t * 1.4) % 2)); continue; }
       if (o.k === "door") continue;
-      g.drawImage(IART[o.k], o.x - cx, o.y - cy);
+      if (objGone(o)) { g.drawImage(IART.stump, o.x - cx + 6, o.y - cy + IART[o.k].height - 12); continue; }
+      g.drawImage(IART[artKey(o)], o.x - cx + (o.hit > 0 ? (Math.floor(T * 30) % 2 ? 1 : -1) : 0), o.y - cy);
+      if (o.hit > 0) { o.hit -= 1 / 60; }
+      if (o.k === "tank") drawTankFish(o, cx, cy);
       if (o.k === "shack") for (let k = 0; k < 3; k++) { const u = (t * 0.45 + k / 3) % 1; g.globalAlpha = 0.7 * (1 - u); rect("#e6e6ec", o.x - cx + 58 + Math.round(Math.sin(u * 6 + k) * 2 + u * 4), o.y - cy + 12 - Math.round(u * 16), 2 + Math.round(u * 2), 2); g.globalAlpha = 1; }
     } else if (o === null) drawIslePlayer(I.px - cx, I.py - cy, t);
   }
-  const [fx, fy] = facingPoint(), near = !I.msg && !I.menu && !I.shop && !I.inv && !I.fish && (forageAt(fx, fy) || forageAt(I.px, I.py - 4) || objAt(fx, fy) || objAt(I.px, I.py - 4));
+  const [fx, fy] = facingPoint(), near = !I.msg && !I.menu && !I.shop && !I.inv && !I.fish && !I.list && !I.chest && (forageAt(fx, fy) || forageAt(I.px, I.py - 4) || objAt(fx, fy) || objAt(I.px, I.py - 4));
   if (!near && !I.msg && !I.menu && !I.shop && !I.inv && A.outdoor) drawTileCursor(cx, cy);
   if (near) { const bx = Math.round(I.px - cx), by = Math.round(I.py - cy) - 26 + Math.round(Math.sin(t * 5)); rect(INK, bx - 4, by - 4, 9, 9); rect(WHITE, bx - 3, by - 3, 7, 7); text("E", bx + 1, by + 1, 1, INK, "center", null); }
   if (A.outdoor) {                                          // weather and night
@@ -791,6 +819,7 @@ function drawIsle() {
       g.globalAlpha = dk; rect("#141a40", 0, 0, IW, IH); g.globalAlpha = 1;
       g.globalCompositeOperation = "lighter"; g.globalAlpha = dk * 0.5;
       for (const o of M_.objs) if (o.k === "lamp") disc("#ffc864", o.x - cx + 5, o.y - cy + 4, 9);
+      for (const p of s.placed) if (p.a === M_.id && PL[p.id].light) disc("#ffc864", p.x * TS + 8 - cx, p.y * TS + 2 - cy, 10);
       for (const o of M_.objs) if (o.k === "shack") { disc("#ffb450", o.x - cx + 19, o.y - cy + 58, 10); disc("#ffb450", o.x - cx + 57, o.y - cy + 58, 10); disc("#ff9640", o.x - cx + 72, o.y - cy + 68, 8); }
       g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
     }
@@ -802,6 +831,8 @@ function drawIsle() {
   if (I.shop) drawShopIsle();
   if (I.inv) drawInvIsle();
   if (I.log) drawLogIsle();
+  if (I.list) drawList();
+  if (I.chest) drawChest();
   if (I.card) drawCatchCard();
   if (I.menu) drawIsleMenu();
   if (I.fade > 0) { g.globalAlpha = I.fade; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1; }
@@ -837,7 +868,7 @@ function drawIsleMsg(m) {
     m.choice.opts.forEach((o, i) => { const bx = x + w - 64, by = y - 14 - (m.choice.opts.length - 1 - i) * 13; islePanel(bx, by, 60, 12); text((m.sel === i ? "> " : "  ") + o, bx + 4, by + 6, 1, m.sel === i ? "#b4461e" : "#3c2c22", "left", null); });
   } else if (done && Math.floor(T * 3) % 2) rect("#3c2c22", x + w - 9, y + h - 7, 4, 3);
 }
-const ISLE_MENU = [["RESUME", () => { ISLE.menu = null; }], ["ISLAND LOG", () => { ISLE.menu = null; ISLE.log = { page: 0, sel: 0 }; }], ["GO BACK TO YOUR BOAT", () => { ISLE.menu = null; isleLeave(); }]];
+const ISLE_MENU = [["RESUME", () => { ISLE.menu = null; }], ["ISLAND LOG", () => { ISLE.menu = null; ISLE.log = { page: 0, sel: 0 }; }], ["CRAFTING", () => { ISLE.menu = null; openCraft(); }], ["GO BACK TO YOUR BOAT", () => { ISLE.menu = null; isleLeave(); }]];
 function drawIsleMenu() {
   g.globalAlpha = 0.5; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
   const w = 160, h = 22 + ISLE_MENU.length * 16 + 26, x = Math.round((IW - w) / 2), y = Math.round((IH - h) / 2), s = isleSave();
@@ -856,6 +887,9 @@ function isleKey(e, down) {
   const c = e.code, I = ISLE;
   if (I.card) { if (["Space", "Enter", "KeyE", "Escape"].includes(c)) { e.preventDefault(); I.card = null; play("tick"); } return; }
   if (I.log && !I.msg) { logKey(e); return; }
+  if (I.list && !I.msg) { listKey(e); return; }
+  if (I.chest && !I.msg) { chestKey(e); return; }
+  if (c === "KeyC" && !I.msg && !I.menu && !I.fish) { openCraft(); return; }
   if (I.shop && !I.msg) { shopKey(e); return; }
   if (I.inv && !I.msg) { invKey(e); return; }
   if (["Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); isleInteract(); return; }
@@ -888,6 +922,8 @@ function isleTouch(e) {
   }
   if (I.card) { I.card = null; play("tick"); return; }
   if (I.log) { logTouch(x, y); return; }
+  if (I.list) { listTouch(x, y); return; }
+  if (I.chest) { chestTouch(x, y); return; }
   if (I.shop) { shopTouch(x, y); return; }
   if (I.inv) { invTouch(x, y); return; }
   if (x < 22 && y < 20) { I.menu = { sel: 0 }; play("tick"); return; }
@@ -939,8 +975,8 @@ const sellable = id => ITEMS[id] && ITEMS[id].sell;
 // ---- the bag
 function invAdd(id, n) {                                      // -> how many didn't fit
   const inv = isleSave().inv;
-  for (let i = 0; i < INV_N && n > 0; i++) if (inv[i] && inv[i][0] === id && ITEMS[id].kind !== "tool") { inv[i][1] += n; n = 0; }
-  for (let i = 0; i < INV_N && n > 0; i++) if (!inv[i]) { inv[i] = [id, n]; n = 0; }
+  for (let i = 0; i < inv.length && n > 0; i++) if (inv[i] && inv[i][0] === id && ITEMS[id].kind !== "tool") { inv[i][1] += n; n = 0; }
+  for (let i = 0; i < inv.length && n > 0; i++) if (!inv[i]) { inv[i] = [id, n]; n = 0; }
   return n;
 }
 function invUse(slot, n) { const inv = isleSave().inv; if (!inv[slot]) return; inv[slot][1] -= n || 1; if (inv[slot][1] <= 0) inv[slot] = null; }
@@ -1034,20 +1070,22 @@ function isleExitAt(x, y) {
 }
 
 // ---- tools on the ground
-function facingTile() { const [fx, fy] = facingPoint(); return [Math.floor(fx / TS), Math.floor(fy / TS)]; }
+function facingTile() { const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[ISLE.dir]; return [Math.floor(ISLE.px / TS) + d[0], Math.floor((ISLE.py - 3) / TS) + d[1]]; }
 const farmKey = (tx, ty) => ISLE.map.id + ":" + tx + "," + ty;
 function tileAt(tx, ty) { const M_ = ISLE.map; return ty >= 0 && ty < M_.A.h && tx >= 0 && tx < M_.A.w ? M_.tiles[ty][tx] : "x"; }
 function isWaterTile(tx, ty) { const t = tileAt(tx, ty); if (t === "a" || t === "d") return true; if (t === "t") { const A = ISLE.map.A; return ty * TS + 8 > tideEdge(A, tx * TS + 8, isleSave()); } return false; }
-function canFill() { const s = isleSave(); if (!s.inv.some(q => q && q[0] === "can")) { isleSay(["FRESH WATER. YOU'D NEED A WATERING CAN."]); return; } s.water = WATER_MAX; toast("THE CAN IS FULL", "#78c8f0"); play("plop"); }
+function canFill() { const s = isleSave(); if (!s.inv.some(q => q && q[0] === "can")) { isleSay(["FRESH WATER. YOU'D NEED A WATERING CAN."]); return; } s.water = waterMax(); toast("THE CAN IS FULL", "#78c8f0"); play("plop"); }
 function isleUse(tx, ty) {
   if (tx === undefined) [tx, ty] = facingTile();
   const s = isleSave(), it = held(), key = farmKey(tx, ty), e = s.farm[key], id = it && it[0];
   if (e && e.c && !e.dead && e.d >= CROP[e.c].days) { harvest(key, e); return; }    // anything ripe in front of you comes first
   if (id === "hoe") {
     if (tileAt(tx, ty) !== "m") { play("miss"); toast("THE HOE ONLY WORKS IN THE GARDEN"); return; }
+    if (placedAt(tx, ty)) { play("miss"); return; }
     if (e && e.dead) { delete s.farm[key]; s.farm[key] = { c: null, d: 0, w: 0 }; play("hit"); return; }
     if (e) { play("miss"); return; }
     s.farm[key] = { c: null, d: 0, w: weatherOf(s) === "rain" ? 1 : 0 }; play("hit"); splashDust(tx, ty, "#8c6a46");
+    if (s.up.hoe) { const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[ISLE.dir]; for (let k = 1; k <= 2; k++) { const ax = tx + d[0] * k, ay = ty + d[1] * k, kk = farmKey(ax, ay); if (tileAt(ax, ay) === "m" && !s.farm[kk] && !placedAt(ax, ay)) s.farm[kk] = { c: null, d: 0, w: weatherOf(s) === "rain" ? 1 : 0 }; } }
   } else if (id === "can") {
     if (isWaterTile(tx, ty)) { canFill(); return; }
     if (!e) { play("miss"); return; }
@@ -1073,11 +1111,12 @@ function farmNewDay(s) {                                      // after the day h
   for (const key in s.farm) {
     const e = s.farm[key];
     if (e.c && !e.dead) { if (!CROP[e.c].seasons.includes(s.season)) e.dead = 1; else if (e.w) e.d = Math.min(e.d + 1, CROP[e.c].days); }
-    e.w = rain ? 1 : 0;
+    e.w = rain || e.mulch ? 1 : 0;
   }
+  sprinklersWater(s);
   const paid = s.bin.reduce((a, [id, n]) => a + (sellable(id) || 0) * n, 0);
   s.sd += paid; s.earned = (s.earned || 0) + paid; s.bin = [];
-  forageCheck(); potsNewDay(s);
+  forageCheck(); potsNewDay(s); newDay5(s);
   return paid;
 }
 function drawFarmSoil(cx, cy) {
@@ -1122,6 +1161,12 @@ function forageCheck() {
   if (s.forage && s.forage.day === day) return;
   const r = seeded(day * 7 + 3), items = [];
   const pick = () => { const v = r.random(); return v < 0.42 ? "shell" : v < 0.66 ? "drift" : v < 0.86 ? "glass" : v < 0.97 ? "starfish" : "pearl"; };
+  for (let k = 0, tries = 0; k < 6 && tries < 300; tries++) {          // the woods: mushrooms, berries, garlic, pinecones
+    const A = AREAS.woods, x = r.uniform(30, A.w * TS - 30), y = r.uniform(30, A.h * TS - 30);
+    if (terrainAt(A, x, y) !== "g") continue;
+    const pool = ["mushroom", "mushroom"].concat(s.season === 0 ? ["garlic", "garlic"] : s.season === 1 ? ["wildberry", "wildberry"] : ["pinecone", "pinecone"]);
+    items.push(["woods", Math.round(x), Math.round(y), pool[Math.floor(r.random() * pool.length)]]); k++;
+  }
   for (const [id, n] of [["flats", 7], ["port", 3]]) {
     const A = AREAS[id];
     for (let k = 0, tries = 0; k < n && tries < 200; tries++) {
@@ -1204,7 +1249,7 @@ function drawSlot(x, y, it, on, s) {
   if (on) outline(x - 1, y - 1, TB_SLOT + 1, TB_SLOT + 1, "#ffd246");
   if (!it) return;
   const c = itemIcon(it[0]); g.drawImage(c, x + ((TB_SLOT - 1 - c.width) >> 1), y + ((TB_SLOT - 1 - c.height) >> 1));
-  if (it[0] === "can") { rect("#3c2c22", x + 2, y + TB_SLOT - 5, TB_SLOT - 5, 2); rect("#5aaadc", x + 2, y + TB_SLOT - 5, Math.round((TB_SLOT - 5) * s.water / WATER_MAX), 2); }
+  if (it[0] === "can") { rect("#3c2c22", x + 2, y + TB_SLOT - 5, TB_SLOT - 5, 2); rect("#5aaadc", x + 2, y + TB_SLOT - 5, Math.round((TB_SLOT - 5) * Math.min(1, s.water / waterMax())), 2); }
   else if (it[1] > 1) text(it[1], x + TB_SLOT - 2, y + TB_SLOT - 5, 1, WHITE, "right", INK);
 }
 function drawToolbar(s) {
@@ -1226,14 +1271,14 @@ function drawToasts() {
   const [, y] = tbGeo();
   (ISLE.toasts || []).forEach((q, i, a) => { g.globalAlpha = Math.min(1, q[1] * 2); text(q[0], IW / 2, y - 16 - (a.length - 1 - i) * 10, 1, q[2], "center"); g.globalAlpha = 1; });
 }
-function invGeo() { const w = 9 * TB_SLOT + 16, h = 2 * TB_SLOT + 52; return [Math.round((IW - w) / 2), Math.round((IH - h) / 2), w, h]; }
+function invGeo() { const rows = isleSave().inv.length / 9, w = 9 * TB_SLOT + 16, h = rows * (TB_SLOT + 2) + 50; return [Math.round((IW - w) / 2), Math.round((IH - h) / 2), w, h]; }
 function drawInvIsle() {
   const [x, y, w, h] = invGeo(), s = isleSave(), I = ISLE.inv;
   g.globalAlpha = 0.45; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
   islePanel(x, y, w, h);
   text("YOUR BAG", x + 8, y + 9, 1, "#b4461e", "left", null); rect("#f0ecdc", x + w - 46, y + 6, 5, 5); text(s.sd, x + w - 38, y + 9, 1, "#5a3c28", "left", null);
-  for (let i = 0; i < INV_N; i++) { const sx = x + 8 + (i % 9) * TB_SLOT, sy = y + 18 + Math.floor(i / 9) * (TB_SLOT + 2); drawSlot(sx, sy, I.held === i ? null : s.inv[i], i === I.sel, s); if (i === s.sel) rect("#b4461e", sx + 6, sy - 2, 5, 1); }
-  const it = s.inv[I.held >= 0 ? I.held : I.sel], ly = y + 18 + 2 * (TB_SLOT + 2) + 4;
+  for (let i = 0; i < s.inv.length; i++) { const sx = x + 8 + (i % 9) * TB_SLOT, sy = y + 18 + Math.floor(i / 9) * (TB_SLOT + 2); drawSlot(sx, sy, I.held === i ? null : s.inv[i], i === I.sel, s); if (i === s.sel) rect("#b4461e", sx + 6, sy - 2, 5, 1); }
+  const it = s.inv[I.held >= 0 ? I.held : I.sel], ly = y + 18 + (s.inv.length / 9) * (TB_SLOT + 2) + 4;
   if (it) text(ITEMS[it[0]].name + (sellable(it[0]) ? "  SELLS " + sellable(it[0]) : ""), x + 8, ly + 3, 1, "#3c2c22", "left", null);
   text(I.held >= 0 ? "PICK WHERE IT GOES" : "E: MOVE  TOP ROW = TOOLBAR", x + 8, ly + 14, 1, "#8c6c50", "left", null);
   if (I.held >= 0 && s.inv[I.held]) { const c = itemIcon(s.inv[I.held][0]), sx = x + 8 + (I.sel % 9) * TB_SLOT, sy = y + 18 + Math.floor(I.sel / 9) * (TB_SLOT + 2); g.drawImage(c, sx + 9, sy - 6); }
@@ -1250,14 +1295,14 @@ function invKey(e) {
   const c = e.code, I = ISLE.inv;
   if (c === "Escape" || c === "Tab" || c === "KeyI") { e.preventDefault(); if (I.held >= 0) { I.held = -1; return; } if (I.sel < 9) isleSave().sel = I.sel; ISLE.inv = null; play("back"); return; }
   const d = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1, ArrowUp: -9, KeyW: -9, ArrowDown: 9, KeyS: 9 }[c];
-  if (d) { I.sel = (I.sel + d + INV_N) % INV_N; play("tick"); return; }
+  const N = isleSave().inv.length; if (d) { I.sel = (I.sel + d + N) % N; play("tick"); return; }
   if (["Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); invPick(); }
 }
 function invTouch(x, y) {
   const [px, py, w, h] = invGeo(), I = ISLE.inv;
   if (x < px || x > px + w || y < py || y > py + h) { ISLE.inv = null; play("back"); return; }
   const col = Math.floor((x - px - 8) / TB_SLOT), row = Math.floor((y - py - 18) / (TB_SLOT + 2));
-  if (col >= 0 && col < 9 && row >= 0 && row < 2) { I.sel = row * 9 + col; invPick(); if (I.held < 0 && I.sel < 9) isleSave().sel = I.sel; }
+  if (col >= 0 && col < 9 && row >= 0 && row < isleSave().inv.length / 9) { I.sel = row * 9 + col; invPick(); if (I.held < 0 && I.sel < 9) isleSave().sel = I.sel; }
 }
 
 // =====================================================================================================================
@@ -1351,9 +1396,10 @@ function isleKeyUp(e) { if (ISLE && ["Space", "Enter", "KeyE"].includes(e.code))
 function isleTouchUp(e) { if (ISLE) { fishRelease(); ISLE.touchFish = false; } }
 function rodTip() { const I = ISLE, d = { up: [3, -22], down: [6, -6], left: [-10, -14], right: [10, -14] }[I.dir]; return [I.px + d[0], I.py + d[1]]; }
 function castLine() {
-  const I = ISLE, F = I.fish, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[I.dir], dist = 20 + F.p * 76;
+  const I = ISLE, F = I.fish, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[I.dir], dist = (20 + F.p * 76) * (isleSave().up.rod ? 1.4 : 1);
   const tx = clamp(I.px + d[0] * dist, 4, I.map.W - 4), ty = clamp(I.py - 4 + d[1] * dist, 4, I.map.H - 4);
-  I.fish = { phase: "fly", t: 0, sx: rodTip()[0], sy: rodTip()[1], x: tx, y: ty, wet: isWaterAt(tx, ty) };
+  const bait = invCount("bait") > 0 && isWaterAt(tx, ty); if (bait) invTake("bait", 1);
+  I.fish = { phase: "fly", t: 0, sx: rodTip()[0], sy: rodTip()[1], x: tx, y: ty, wet: isWaterAt(tx, ty), bait };
   play("tick");
 }
 function startReel() {
@@ -1368,7 +1414,7 @@ function fishTick(dt) {
     F.t += dt;
     if (F.t >= 0.35) {
       if (!F.wet) { I.fish = null; toast("THE LINE LANDS ON DRY GROUND"); play("miss"); return; }
-      Object.assign(F, { phase: "wait", t: 0, sh: null, nib: 0, nibT: 0, bite: 0, look: 0, dip: 0 }); play("plop");
+      Object.assign(F, { phase: "wait", t: F.bait ? 3 : 0, sh: null, nib: 0, nibT: 0, bite: 0, look: 0, dip: 0 }); play("plop");
     }
     return;
   }
@@ -1379,7 +1425,7 @@ function fishTick(dt) {
       if (F.look <= 0) {
         F.look = 0.6;
         const near = I.shadows.filter(q => !q.hook && !q.flee && Math.hypot(q.x - F.x, q.y - F.y) < 80).sort((a, b) => Math.hypot(a.x - F.x, a.y - F.y) - Math.hypot(b.x - F.x, b.y - F.y))[0];
-        if (near && Math.random() < 0.6) { F.sh = near; near.hook = true; F.nib = 1 + Math.floor(Math.random() * 3); F.nibT = 1 + Math.random(); }
+        if (near && Math.random() < (F.bait ? 0.9 : 0.6)) { F.sh = near; near.hook = true; F.nib = 1 + Math.floor(Math.random() * 3); F.nibT = 1 + Math.random(); }
         else if (F.t > 3 && Math.random() < 0.35) { const a = Math.random() * 6.28, sh = spawnShadow(F.x + Math.cos(a) * 50, F.y + Math.sin(a) * 30); if (sh) { F.sh = sh; sh.hook = true; F.nib = 1 + Math.floor(Math.random() * 3); F.nibT = 1 + Math.random(); } }
       }
       return;
@@ -1401,7 +1447,7 @@ function fishTick(dt) {
   if (F.phase === "reel") {
     const f = FISH[F.sp], str = clamp(f.max / 30 + (f.page === "legend" ? 1.4 : 0) + F.size * 0.5, 0.2, 3.2);
     F.surgeT -= dt; if (F.surgeT <= 0) { F.surge = F.surge ? 0 : 1; F.surgeT = F.surge ? 0.5 + Math.random() * 0.8 : 1.2 + Math.random() * 2; }
-    if (F.hold) { F.prog += dt * (0.34 - str * 0.06); F.ten += dt * (0.32 + str * 0.22 + F.surge * 0.45); }
+    if (F.hold) { F.prog += dt * (0.34 - str * 0.06) * (isleSave().up.rod ? 1.25 : 1); F.ten += dt * (0.32 + str * 0.22 + F.surge * 0.45); }
     else { F.ten -= dt * 0.75; F.prog -= dt * 0.04 * (1 + F.surge); }
     F.prog = clamp(F.prog, 0.02, 1); F.ten = clamp(F.ten, 0, 1);
     F.over = F.ten >= 1 ? F.over + dt : Math.max(0, F.over - dt * 2);
@@ -1646,3 +1692,466 @@ function drawCatchCard() {
   text(C_.inches + " IN   SELLS " + f.sell, x + w / 2, y + 68, 1, "#5a3c28", "center", null);
   wrap(f.note, Math.floor((w - 12) / 6)).slice(0, 3).forEach((l, i) => text(l, x + w / 2, y + 80 + i * 9, 1, "#8c6c50", "center", null));
 }
+
+// =====================================================================================================================
+// Part 5: crafting, cooking and restoring the port. Driftwood Woods (west of the Port) has trees for the axe, rocks for
+// the pick and tall grass for fiber; they grow back. C opens crafting (machines, paths, furniture to place anywhere), the
+// shack's stove cooks, and five ruins can be restored with wood, stone and sand dollars, each opening something: the store,
+// the smokehouse, the aquarium (walk in; donate topside fish), the shipyard (upgrades) and the inn. One fish from every
+// topside dive lands in the fish crate on the beach.
+const DAYN = s => (s.year - 1) * 112 + s.season * 28 + s.day;
+const waterMax = () => isleSave().up.can ? 60 : WATER_MAX;
+Object.assign(ITEMS, { axe: { name: "AXE", kind: "tool" }, pick: { name: "PICK", kind: "tool" },
+  wood: { name: "WOOD", kind: "mat", sell: 2 }, stone: { name: "STONE", kind: "mat", sell: 2 }, fiber: { name: "FIBER", kind: "mat", sell: 1 },
+  mushroom: { name: "MUSHROOM", kind: "forage", sell: 30 }, wildberry: { name: "WILD BERRY", kind: "forage", sell: 15 }, garlic: { name: "WILD GARLIC", kind: "forage", sell: 20 },
+  pinecone: { name: "PINECONE", kind: "forage", sell: 6 }, bait: { name: "BAIT", kind: "bait", sell: 1 }, mulch: { name: "MULCH", kind: "mulch", sell: 1 } });
+// topside fish (from the crate): t_<species>
+const TOPFISH = SPECIES.filter(sp => !HIDDEN.includes(sp[0]));
+TOPFISH.forEach(sp => { const avg = (sp[3][0] + sp[3][1]) / 2; ITEMS["t_" + sp[0]] = { name: sp[1], kind: "topfish", sell: Math.min(600, Math.round(avg * 1.2 + 6) * (sp[7] ? 3 : 1)), top: sp[0] }; });
+// what the pickle jar and the fish smoker make
+CROPS.forEach(c => { ITEMS["j_" + c[0]] = { name: "PICKLED " + c[1], kind: "artisan", sell: Math.round(c[5] * 2.2) }; });
+Object.keys(ITEMS).filter(k => ITEMS[k].kind === "fish" || ITEMS[k].kind === "topfish").forEach(k => { ITEMS["k_" + k] = { name: "SMOKED " + ITEMS[k].name, kind: "artisan", sell: ITEMS[k].sell * 2 }; });
+const isFishItem = id => ITEMS[id] && (ITEMS[id].kind === "fish" || ITEMS[id].kind === "topfish");
+
+// ---- things you place: [id, name, solid, flat, light, art rows, palette]
+const W_ = "#a06c40", WD = "#6e482a", ST = "#9a9aa6", SD_ = "#6e6e7a";
+const PLACE = [
+  ["chest", "CHEST", 1, 0, 0, [".wwwwwwwwww.", "wkkkkkkkkkkw", "wwwwwyywwwww", "wkkkkkkkkkkw", "wwwwwwwwwwww"], { w: W_, k: WD, y: "#ffd246" }],
+  ["sprinkler", "SPRINKLER", 1, 0, 0, ["..b..", ".bbb.", "bsssb", ".sss."], { b: "#5aaadc", s: ST }],
+  ["sprinkler2", "GOOD SPRINKLER", 1, 0, 0, ["b.b.b", ".bbb.", "bsysb", ".sss."], { b: "#5aaadc", s: ST, y: "#ffd246" }],
+  ["jar", "PICKLE JAR", 1, 0, 0, ["..kk..", ".gggg.", "gwgggg", "gggggg", "gggggg", ".gggg."], { k: WD, g: "#8cc8a0", w: "#f0fff8" }],
+  ["smoker", "FISH SMOKER", 1, 0, 0, ["..ss..", "..ss..", "ssssss", "sbbbbs", "sboobs", "ssssss"], { s: SD_, b: "#3c3c46", o: "#ff8c3c" }],
+  ["lamp", "LANTERN POST", 1, 0, 1, [".kkk.", ".kyk.", ".kkk.", "..s..", "..s..", "..s..", "..s..", ".sss."], { k: INK, y: "#ffd678", s: "#3c3c46" }],
+  ["pathstone", "STONE PATH", 0, 1, 0, null, null], ["pathwood", "WOOD PATH", 0, 1, 0, null, null],
+  ["fence", "FENCE", 1, 0, 0, ["w..w..w", "wwwwwww", "w..w..w", "wwwwwww", "w..w..w"], { w: W_ }],
+  ["table", "TABLE", 1, 0, 0, ["wwwwwwwwww", "wkkkkkkkkw", ".k......k.", ".k......k."], { w: W_, k: WD }],
+  ["chair", "CHAIR", 1, 0, 0, ["w...", "w...", "wwww", "w..w"], { w: W_ }],
+  ["bench", "BENCH", 1, 0, 0, ["wwwwwwwwww", "kkkkkkkkkk", "w........w"], { w: W_, k: WD }],
+  ["stool", "STOOL", 1, 0, 0, ["wwww", ".kk.", "k..k"], { w: W_, k: WD }],
+  ["shelf", "BOOKSHELF", 1, 0, 0, ["wwwwwwww", "wrbgyrbw", "wwwwwwww", "wgyrbgyw", "wwwwwwww"], { w: W_, r: "#c84a3c", b: "#4a78b4", g: "#5aa04a", y: "#e6c45a" }],
+  ["wcrate", "WOODEN CRATE", 1, 0, 0, ["wwwwwww", "wkwwwkw", "wwkwkww", "wwwkwww", "wwkwkww", "wwwwwww"], { w: "#ba8c58", k: "#96683e" }],
+  ["wbarrel2", "BARREL", 1, 0, 0, [".wwwww.", "kkkkkkk", "wwwwwww", "kkkkkkk", ".wwwww."], { w: W_, k: WD }],
+  ["rug", "RUG", 0, 1, 0, null, null], ["shellrug", "SHELL RUG", 0, 1, 0, null, null],
+  ["plantpot", "PLANT POT", 1, 0, 0, [".g.g.", "ggggg", ".ggg.", "rrrrr", ".rrr."], { g: "#5aa04a", r: "#b4643c" }],
+  ["fern", "FERN", 0, 0, 0, ["g.g.g", ".ggg.", "ggggg", "..g.."], { g: "#4a8c46" }],
+  ["fishbowl", "FISH BOWL", 1, 0, 0, [".ggg.", "gwbbg", "gbobg", "gbbbg", ".ggg."], { g: "#c8ecf0", w: "#ffffff", b: "#5ab4dc", o: "#ff8c32" }],
+  ["shelllamp", "SHELL LAMP", 1, 0, 1, [".ppp.", "ppppp", "..y..", "..s..", ".sss."], { p: "#f0b4c8", y: "#ffd678", s: "#c8b48c" }],
+  ["chime", "WIND CHIME", 0, 0, 0, ["wwwww", "p.p.p", "p.p.p", "..p.."], { w: "#b49a78", p: "#f0dcc8" }],
+  ["signpost", "SIGNPOST", 1, 0, 0, ["wwwwww", "wwwwww", "..k...", "..k..."], { w: "#b08250", k: WD }],
+  ["bell", "SHIP'S BELL", 1, 0, 0, ["k.....k", "kkkkkkk", "..yyy..", ".yyyyy.", ".yyyyy.", "..y.y.."], { k: WD, y: "#e6b43c" }],
+  ["anchor", "ANCHOR", 1, 0, 0, ["..s..", ".s.s.", "..s..", "sssss", "..s..", "s.s.s", ".sss."], { s: "#6e6e7a" }],
+  ["wheel", "SHIP'S WHEEL", 1, 0, 0, ["..w..", ".wkw.", "wk.kw", ".wkw.", "..w.."], { w: W_, k: WD }],
+  ["buoy", "BUOY", 1, 0, 0, [".r.", "rrr", "www", "rrr", ".k."], { r: "#f05050", w: "#fafaff", k: WD }],
+  ["netdecor", "HANGING NET", 0, 0, 0, ["kkkkkkk", "n.n.n.n", ".n.n.n.", "n.n.n.n"], { k: WD, n: "#c8c8b4" }],
+  ["trophy", "FISH TROPHY", 1, 0, 0, ["wwwwwww", "wbbbbbw", "wbbbbbe", "wwwwwww"], { w: W_, b: "#5a8cb4", e: INK }],
+  ["crabstatue", "STONE CRAB", 1, 0, 0, ["s.....s", "ss...ss", ".sssss.", "sssssss", "s.s.s.s"], { s: ST }],
+  ["plantern", "PAPER LANTERN", 0, 0, 1, ["..k..", ".ooo.", "ooyoo", ".ooo.", "..k.."], { k: WD, o: "#ff8c46", y: "#ffd678" }],
+  ["driftart", "DRIFTWOOD ART", 1, 0, 0, ["d...d", ".d.d.", "..d..", ".d.d.", "dd.dd"], { d: "#b49a78" }],
+  ["mosaic", "SEA GLASS MOSAIC", 1, 0, 0, ["kkkkkk", "kgbgbk", "kbgwgk", "kgbgbk", "kkkkkk"], { k: WD, g: "#6edcc8", b: "#5a96dc", w: "#d2fff4" }],
+  ["wreath", "STARFISH WREATH", 0, 0, 0, [".ggg.", "go.og", "g...g", "go.og", ".ggg."], { g: "#5aa04a", o: "#ff8c46" }],
+  ["pearlbox", "PEARL BOX", 1, 0, 0, ["wwwww", "wpppw", "wwwww"], { w: W_, p: "#ece8f4" }],
+  ["scarer", "GULL SCARER", 1, 0, 0, ["..h..", ".www.", "wwwww", "..w..", ".w.w."], { h: "#e6c45a", w: "#b49a78" }],
+  ["painting", "PAINTING", 1, 0, 0, ["kkkkkkk", "kbbbbbk", "kbgggbk", "kgsggsk", "kkkkkkk"], { k: "#b4823c", b: "#78c8f0", g: "#5aa04a", s: "#f0e6a0" }],
+  ["palmpot", "POTTED PALM", 1, 0, 0, ["g.g.g", ".ggg.", "..w..", "..w..", ".rrr."], { g: "#3c8c46", w: "#96683e", r: "#b4643c" }],
+  ["chart", "SEA CHART", 1, 0, 0, ["wwwwwww", "wbbybbw", "wbgbbbw", "wbbbgbw", "wwwwwww"], { w: "#e6d2a0", b: "#78b4dc", y: "#f05050", g: "#5aa04a" }],
+];
+const PL = {}; PLACE.forEach(([id, name, solid, flat, light, rows, pal]) => { PL[id] = { id, name, solid, flat, light, rows, pal }; ITEMS[id] = { name, kind: "place", sell: 0 }; });
+// [output, how many, ingredients]
+const CRAFT = [["chest", 1, [["wood", 40]]], ["sprinkler", 1, [["stone", 15], ["glass", 2]]], ["sprinkler2", 1, [["stone", 30], ["glass", 5], ["pearl", 1]]],
+  ["jar", 1, [["wood", 25], ["glass", 3]]], ["smoker", 1, [["stone", 30], ["wood", 15]]], ["pot", 1, [["wood", 20], ["stone", 5]]], ["bait", 5, [["fiber", 3], ["shell", 1]]],
+  ["mulch", 5, [["fiber", 5]]], ["lamp", 1, [["wood", 5], ["stone", 5], ["glass", 1]]], ["pathstone", 5, [["stone", 2]]], ["pathwood", 5, [["wood", 2]]], ["fence", 4, [["wood", 4]]],
+  ["table", 1, [["wood", 15]]], ["chair", 1, [["wood", 8]]], ["bench", 1, [["wood", 12]]], ["stool", 1, [["wood", 5]]], ["shelf", 1, [["wood", 30]]], ["wcrate", 1, [["wood", 10]]],
+  ["wbarrel2", 1, [["wood", 12]]], ["rug", 1, [["fiber", 20]]], ["shellrug", 1, [["fiber", 20], ["shell", 5]]], ["plantpot", 1, [["stone", 8], ["fiber", 2]]], ["fern", 1, [["fiber", 6]]],
+  ["fishbowl", 1, [["glass", 6], ["anyfish", 1]]], ["shelllamp", 1, [["shell", 6], ["glass", 2]]], ["chime", 1, [["shell", 4], ["drift", 2]]], ["signpost", 1, [["wood", 6]]],
+  ["bell", 1, [["stone", 10], ["wood", 4]]], ["anchor", 1, [["stone", 25]]], ["wheel", 1, [["wood", 20]]], ["buoy", 1, [["wood", 6], ["fiber", 4]]], ["netdecor", 1, [["fiber", 15]]],
+  ["trophy", 1, [["wood", 10], ["anyfish", 1]]], ["crabstatue", 1, [["stone", 30]]], ["plantern", 1, [["fiber", 8]]], ["driftart", 1, [["drift", 10]]], ["mosaic", 1, [["glass", 12]]],
+  ["wreath", 1, [["starfish", 3], ["fiber", 4]]], ["pearlbox", 1, [["pearl", 1], ["wood", 10]]], ["scarer", 1, [["wood", 10], ["fiber", 10]]]];
+// ---- cooking: [id, name, ingredients, needs the smokehouse, colour]
+const COOK = [
+  ["grilled", "GRILLED FISH", [["anyfish", 1]], 0, "#c8965a"], ["stew", "FISH STEW", [["anyfish", 2], ["onion", 1]], 0, "#dc8c50"],
+  ["salad", "SEAWEED SALAD", [["lettuce", 1], ["kale", 1]], 0, "#6ec85a"], ["noodles", "KELP NOODLES", [["kelp", 2]], 0, "#8cb43c"],
+  ["sampbutter", "SAMPHIRE BUTTER", [["samphire", 2]], 0, "#c8dc78"], ["beetsoup", "BEET SOUP", [["beet", 2], ["onion", 1]], 0, "#b43c5a"],
+  ["peasoup", "PEA SOUP", [["pea", 3]], 0, "#a0e05a"], ["berrytart", "BERRY TART", [["berry", 3]], 0, "#f05050"],
+  ["grapebowl", "SEA GRAPE BOWL", [["grape", 3]], 0, "#5ad2b4"], ["peppers", "STUFFED PEPPERS", [["pepper", 2], ["anycrop", 1]], 0, "#ff6e46"],
+  ["squashbake", "SQUASH BAKE", [["squash", 1], ["onion", 1]], 0, "#ffbe3c"], ["gratin", "OYSTER GRATIN", [["oyster", 1], ["potato", 1]], 0, "#b4dcf0"],
+  ["tomsoup", "TOMATO SOUP", [["tomato", 3]], 0, "#f04646"], ["melonslice", "MELON SLICES", [["melon", 1]], 0, "#e6d28c"],
+  ["norirolls", "NORI ROLLS", [["nori", 2], ["anyfish", 1]], 0, "#46825a"], ["chips", "SALT POTATO CHIPS", [["potato", 2]], 0, "#e6c878"],
+  ["crisps", "RED KELP CRISPS", [["redkelp", 2]], 0, "#c85a46"], ["beanstew", "BEAN STEW", [["bean", 3], ["onion", 1]], 0, "#8cc85a"],
+  ["jam", "BOG BERRY JAM", [["bog", 3]], 0, "#c83c5a"], ["cabrolls", "CABBAGE ROLLS", [["cabbage", 1], ["anyfish", 1]], 0, "#b4dcc8"],
+  ["chowdercorn", "CORN CHOWDER", [["corn", 2], ["potato", 1]], 0, "#ffd246"], ["pie", "PUMPKIN PIE", [["pumpkin", 1], ["bog", 1]], 0, "#ff8c32"],
+  ["frosty", "FROSTY SALAD", [["icelettuce", 2]], 0, "#dcf0fa"], ["broth", "KELP BROTH", [["frostkelp", 2]], 0, "#a0d2e6"],
+  ["wrackchips", "WRACK CHIPS", [["wrack", 2]], 0, "#c8be5a"], ["oniontart", "PEARL ONION TART", [["pearlonion", 2]], 0, "#f6f2fa"],
+  ["sardtoast", "SARDINES ON TOAST", [["f_sardine", 2], ["anycrop", 1]], 0, "#9ab4c8"], ["pate", "MACKEREL PATE", [["f_mackerel", 1], ["onion", 1]], 0, "#3c78a0"],
+  ["fishchips", "FISH AND CHIPS", [["anyfish", 1], ["potato", 2]], 0, "#e6b45a"], ["crabcakes", "CRAB CAKES", [["crab", 2]], 0, "#e6a06e"],
+  ["cocktail", "PRAWN COCKTAIL", [["prawn", 2], ["lettuce", 1]], 0, "#f0a08c"], ["lobroll", "LOBSTER ROLL", [["f_lobster", 1]], 1, "#dc5a46"],
+  ["salmonplate", "SALMON PLATTER", [["f_salmon", 1], ["anycrop", 2]], 1, "#f08c6e"], ["troutsupper", "TROUT SUPPER", [["f_rainbow", 1], ["bean", 1]], 1, "#8cb46e"],
+  ["chowder", "SHELLFISH CHOWDER", [["shellfish", 3], ["potato", 1]], 1, "#f0e6c8"], ["urchintoast", "URCHIN TOAST", [["f_urchin", 2]], 1, "#c88cdc"],
+  ["shellstew", "SHELLFISH STEW", [["shellfish", 2], ["tomato", 1]], 1, "#dc7864"], ["mushsoup", "MUSHROOM SOUP", [["mushroom", 3]], 1, "#a08c6e"],
+  ["forager", "FORAGER'S PLATE", [["mushroom", 1], ["wildberry", 1], ["garlic", 1]], 1, "#7a5a8c"], ["breakfast", "THE ANGLER'S BREAKFAST", [["anyfish", 1], ["onion", 1], ["potato", 1], ["mushroom", 1]], 1, "#ffbe3c"],
+];
+const TAG_EST = { anyfish: 40, anycrop: 40, crab: 30, prawn: 30, shellfish: 15 };
+COOK.forEach(([id, name, ing, , col]) => { ITEMS["d_" + id] = { name, kind: "dish", sell: Math.round(ing.reduce((a, [k, n]) => a + (TAG_EST[k] || (ITEMS[k] && ITEMS[k].sell) || 20) * n, 0) * 1.5 + 10), col }; });
+// ---- the buildings: what restoring them takes
+const RESTORE = {
+  store: { name: "THE GENERAL STORE", ruin: "THE OLD GENERAL STORE. THE ROOF CAVED IN YEARS AGO.", need: [["wood", 100], ["stone", 40]], sd: 800, done: "THE STORE IS OPEN AGAIN: SEEDS, TACKLE AND FURNITURE." },
+  smoke: { name: "THE SMOKEHOUSE", ruin: "A SMOKEHOUSE. IT STILL SMELLS FAINTLY OF FISH.", need: [["wood", 60], ["stone", 120], ["anyfish", 5]], sd: 600, done: "THE SMOKEHOUSE IS FIRED UP. IT COOKS THE BETTER RECIPES." },
+  aquarium: { name: "THE AQUARIUM", ruin: "AN AQUARIUM, OF ALL THINGS. THE GLASS DOME IS CRACKED AND THE TANKS ARE EMPTY.", need: [["stone", 200], ["glass", 15]], sd: 1500, done: "THE AQUARIUM'S TANKS ARE FULL OF CLEAN WATER. NOW IT NEEDS FISH." },
+  yard: { name: "THE SHIPYARD", ruin: "THE SHIPYARD. HALF A HULL IS STILL ON THE SLIPWAY.", need: [["wood", 250], ["stone", 60], ["fiber", 40]], sd: 2000, done: "THE SHIPYARD IS BACK IN BUSINESS. THE SHIPWRIGHT CAN UPGRADE YOUR GEAR." },
+  inn: { name: "THE INN", ruin: "THE INN. THE SIGN STILL SWINGS. NOBODY HAS SLEPT HERE IN A LONG TIME.", need: [["wood", 200], ["stone", 150], ["fiber", 60]], sd: 3000, done: "THE INN HAS CLEAN SHEETS AND A FIRE IN THE GRATE. GUESTS WILL COME." },
+};
+const UPGRADES = [["bag", "BIGGER BAG", "+9 BAG SLOTS", 1500, [["wood", 50]]], ["can", "BIG CAN", "HOLDS 60 WATER", 1000, [["stone", 30]]], ["rod", "GOOD ROD", "CASTS FARTHER, REELS EASIER", 1500, [["wood", 30]]],
+  ["hoe", "STEEL HOE", "TILLS 3 TILES IN A ROW", 1200, [["stone", 40]]], ["axe", "SHARP AXE", "TREES IN 2 CHOPS", 800, [["stone", 20]]], ["pick", "STRONG PICK", "ROCKS IN 1 HIT", 800, [["wood", 20]]]];
+
+// ---- counting and taking things from the bag (ids or tags)
+function matches(id, spec) {
+  if (!id) return false;
+  if (spec === "anyfish") return isFishItem(id);
+  if (spec === "anycrop") return ITEMS[id].kind === "crop";
+  if (spec === "crab" || spec === "prawn" || spec === "shellfish") { const f = id.startsWith("f_") && FISH[id.slice(2)]; return !!f && (spec === "crab" ? f.shape === "crab" : spec === "prawn" ? f.shape === "prawn" : f.shape === "shell"); }
+  return id === spec;
+}
+function invCount(spec) { return isleSave().inv.reduce((a, q) => a + (q && matches(q[0], spec) ? q[1] : 0), 0); }
+function invTake(spec, n) { const inv = isleSave().inv; for (let i = 0; i < inv.length && n > 0; i++) if (inv[i] && matches(inv[i][0], spec)) { const k = Math.min(n, inv[i][1]); inv[i][1] -= k; n -= k; if (!inv[i][1]) inv[i] = null; } }
+const specName = sp => ({ anyfish: "ANY FISH", anycrop: "ANY CROP", crab: "CRABS", prawn: "PRAWNS", shellfish: "SHELLFISH" })[sp] || ITEMS[sp].name;
+const canPay = (need, sd) => need.every(([k, n]) => invCount(k) >= n) && isleSave().sd >= (sd || 0);
+function pay(need, sd) { need.forEach(([k, n]) => invTake(k, n)); isleSave().sd -= sd || 0; }
+
+// ---- art for the woods and the restored buildings
+function artPine() {
+  const P = paintCanvas(24, 40); P.shadow(11, 36, 9, 3); P.rect(10, 28, 4, 9, "#6e482a");
+  for (let j = 0; j < 29; j++) { const tier = j % 9, half = Math.min(10, 1 + tier * 1.1 + Math.floor(j / 9) * 1.4); for (let i = -Math.round(half); i <= Math.round(half); i++) P.px(12 + i, 1 + j, Math.abs(i) === Math.round(half) || tier === 8 ? "#1e5030" : i < 0 && tier < 5 ? "#46965a" : "#2c6e3c"); }
+  return P.c;
+}
+function artOak() {
+  const P = paintCanvas(30, 38); P.shadow(14, 34, 11, 3); P.rect(12, 22, 6, 13, "#7c5232"); P.rect(12, 22, 2, 13, "#5a3c24");
+  const r = seeded(9);
+  for (let j = 0; j < 24; j++) for (let i = 0; i < 28; i++) { const e = ((i - 13.5) / 13.5) ** 2 + ((j - 11) / 11) ** 2; if (e <= 1) P.px(1 + i, 1 + j, e > 0.82 ? "#3c7432" : r.random() < 0.12 ? "#6eb45a" : j < 9 && i < 14 && r.random() < 0.3 ? "#5aa04a" : "#4a8c3c"); else if (e <= 1.12) P.px(1 + i, 1 + j, INK); }
+  return P.c;
+}
+function artStump() { const P = paintCanvas(14, 10); P.shadow(6, 7, 6, 2); P.rows([".bbbbbb.", "brrrrrrb", "bbbbbbbb"], { b: "#7c5232", r: "#c8a070" }, 2, 2); return P.c; }
+function artBoulder() { const P = paintCanvas(22, 16); P.shadow(10, 13, 10, 2); P.rows(["...ssssss...", ".sslsssssss.", "sslssssssdss", "ssssssssssds", ".ssssssssds."], { s: "#8c8c96", l: "#b4b4be", d: "#6e6e78" }, 2, 3); return P.c; }
+function artTallGrass() { const P = paintCanvas(14, 12); P.rows(["g..g..g", ".g.gg.g", "gggggg.", ".ggggg.", "ggggggg"], { g: "#5aa04a" }, 2, 3, false); return P.c; }
+function artBuilt(sign, roof, wall) {                         // a restored building: whole roof, open door, lit windows
+  const P = paintCanvas(64, 62), x0 = 2, y0 = 10, sw = sign.length * 6 + 2;
+  P.shadow(x0 + 30, y0 + 46, 33, 4);
+  for (let j = 0; j < 24; j++) for (let i = 0; i < 56; i++) P.px(x0 + 2 + i, y0 + 20 + j, j % 4 === 0 ? shade(wall, 0.85) : (i % 14 === 0 ? shade(wall, 0.9) : wall));
+  for (let j = 0; j < 20; j++) for (let i = -2; i < 62; i++) if (Math.abs(i - 30) <= 32 - Math.max(0, 10 - j) * 0) P.px(x0 + i, y0 + j, j % 3 === 2 ? shade(roof, 0.75) : (Math.floor(i / 4) + Math.floor(j / 3)) % 2 ? roof : shade(roof, 0.9));
+  P.rect(x0 - 2, y0 + 19, 64, 2, INK); P.rect(x0 - 2, y0 - 1, 64, 1, INK);
+  P.rect(x0 + 21, y0 + 30, 12, 14, "#3c2818"); P.rect(x0 + 21, y0 + 30, 12, 1, INK); P.px(x0 + 30, y0 + 37, "#f0c85a");
+  for (const wx of [x0 + 6, x0 + 42]) { P.rect(wx - 1, y0 + 25, 11, 9, INK); P.rect(wx, y0 + 26, 9, 7, "#ffd678"); P.rect(wx + 4, y0 + 26, 1, 7, "#78502e"); }
+  const sx = x0 + 27 - (sw >> 1); P.rect(sx, y0 + 21, sw, 8, "#785432"); P.rect(sx, y0 + 21, sw, 1, INK); P.text(sign, sx + 1, y0 + 22, "#ffe6a0");
+  P.rect(x0 + 2, y0 + 44, 56, 1, INK);
+  return P.c;
+}
+function artAquaFixed() { const c = artAquarium(), x = c.getContext("2d"); x.fillStyle = "#78c4dc"; for (const [a, b] of [[2, -14], [4, -11], [3, -8], [6, -6], [5, -3]]) { x.fillRect(38 + a, 32 + b, 2, 2); } x.fillStyle = "#1e3c50"; x.fillRect(31, 43, 14, 16); return c; }
+function artTank(n) { const P = paintCanvas(52, 34); P.rect(0, 0, 52, 30, INK); P.rect(1, 1, 50, 28, "#2c5a78"); P.rect(2, 2, 48, 22, "#4a8cb4"); P.rect(2, 22, 48, 4, "#c8b48c"); for (let k = 0; k < 4; k++) P.rect(6 + k * 11, 18, 2, 5, "#4a8c46"); P.rect(0, 30, 52, 4, "#6e482a"); return P.c; }
+function artDonate() { const P = paintCanvas(18, 22); P.shadow(8, 19, 7, 2); P.rect(1, 4, 16, 14, INK); P.rect(2, 5, 14, 12, "#96643c"); P.rect(5, 6, 8, 2, "#3c2818"); P.text("+", 6, 9, "#ffd246"); return P.c; }
+function artPlaque() { const P = paintCanvas(30, 14); P.rect(0, 0, 30, 12, INK); P.rect(1, 1, 28, 10, "#b4823c"); P.rect(3, 3, 24, 6, "#e6c878"); return P.c; }
+function isleArt5() {
+  if (IART.pine) return;
+  Object.assign(IART, { pine: artPine(), oak: artOak(), stump: artStump(), boulder: artBoulder(), tgrass: artTallGrass(), sign_woods: artSign("DRIFTWOOD WOODS"),
+    store_r: artBuilt("STORE", "#52788a", "#d8ccb4"), inn_r: artBuilt("INN", "#8a5246", "#e0d2b8"), smoke_r: artBuilt("SMOKEHOUSE", "#5a5a62", "#c8bea8"),
+    yard_r: artBuilt("SHIPYARD", "#6a6a4a", "#d2c4a0"), aquarium_r: artAquaFixed(), tank: artTank(), donate: artDonate(), plaque: artPlaque(), adoor: paintCanvas(32, 12).c });
+}
+const _isleArt = isleArt; isleArt = function () { _isleArt(); isleArt5(); };
+function artKey(o) { return o.act && o.act.kind === "restore" && isleSave().rest[o.act.b] === "done" ? o.k + "_r" : o.k; }
+function objGone(o) { return !!(o.res && (isleSave().cut[o.res.key] || 0) > DAYN(isleSave())); }
+
+// ---- the woods
+function woodsObjects() {
+  const o = [], add = (k, x, y, solid, act, res) => o.push({ k, x, y, solid, act, res }), A = AREAS.woods, r = seeded(555);
+  add("sign_woods", 1180, 520, [44, 10, 6, 8], { kind: "say", text: ["DRIFTWOOD WOODS. TREES FOR THE AXE, ROCKS FOR THE PICK, GRASS FOR FIBER. IT ALL GROWS BACK."] });
+  add("pile", 2, 404, [0, 4, 36, 16], { kind: "say", text: ["A PILE OF DRIFTWOOD BLOCKS THE WAY. A SIGN ON TOP SAYS: SHIPWRECK BEACH."] });
+  const clear = (x, y, w, h) => !o.some(q => x + w > q.x - 2 && x < q.x + IART[q.k].width + 2 && y + h > q.y && y < q.y + IART[q.k].height) && pathDist(A, x + w / 2, y + h - 4) > 16
+    && freshDepth(A, x + w / 2, y + h - 2) < -10 && Math.hypot(x + w / 2 - 1180, y + h - 540) > 60;
+  for (let i = 0; i < 1400; i++) {
+    const x = r.uniform(-12, A.w * TS - 12), y = r.uniform(-36, A.h * TS - 36), pine = r.random() < 0.55, [w, h] = pine ? [24, 40] : [30, 36];
+    if (clear(x, y + h - 12, w, 12)) add(pine ? "pine" : "oak", x, y, pine ? [9, 28, 6, 8] : [11, 26, 8, 8], null, { kind: "tree" });
+  }
+  for (let i = 0; i < 300; i++) { const x = r.uniform(10, A.w * TS - 30), y = r.uniform(10, A.h * TS - 20); if (clear(x, y, 22, 16)) add("boulder", x, y, [3, 6, 16, 8], null, { kind: "rock", big: 1 }); }
+  for (let i = 0; i < 900; i++) { const x = r.uniform(10, A.w * TS - 20), y = r.uniform(10, A.h * TS - 20); if (clear(x, y, 14, 12)) add("tgrass", x, y, null, { kind: "grass", rect: [0, 0, 14, 12] }, { kind: "grass" }); }
+  for (let i = 0; i < 80; i++) { const x = r.uniform(0, A.w * TS), y = r.uniform(0, A.h * TS), d = freshDepth(A, x, y + 14); if (d > -7 && d < -1) add("reed", x - 4, y, null); }
+  return o;
+}
+function aquaObjects() {
+  const o = [];
+  for (let k = 0; k < 5; k++) o.push({ k: "tank", x: 14 + k * 60, y: 22, solid: [0, 0, 52, 34], act: { kind: "tank", z: k } });
+  for (let k = 0; k < 5; k++) o.push({ k: "tank", x: 14 + k * 60, y: 96, solid: [0, 0, 52, 34], act: { kind: "tank", z: k + 5 } });
+  o.push({ k: "donate", x: 110, y: 150, solid: [1, 10, 16, 8], act: { kind: "donate" } });
+  o.push({ k: "plaque", x: 196, y: 156, solid: [0, 4, 30, 8], act: { kind: "plaque" } });
+  o.push({ k: "adoor", x: 144, y: 180, solid: null, act: { kind: "door", to: "port", rect: [0, 0, 32, 12], dir: "down", go: { x: 598, y: 414, dir: "down" } } });
+  return o;
+}
+const _buildArea = buildArea;
+buildArea = function (id) {                                     // number the things that can be cut down; rocks everywhere break
+  const m = _buildArea(id);
+  m.objs.forEach((o, i) => { if (o.k === "rock" && !o.res) o.res = { kind: "rock" }; if (o.res) o.res.key = id + ":" + i; });
+  return m;
+};
+function resAt(x, y) {
+  for (const o of ISLE.map.objs) {
+    if (!o.res || objGone(o)) continue;
+    const r = o.solid ? [o.solid[0] - 6, o.solid[1] - 10, o.solid[2] + 12, o.solid[3] + 14] : [0, 0, IART[o.k].width, IART[o.k].height];
+    if (x >= o.x + r[0] && x < o.x + r[0] + r[2] && y >= o.y + r[1] && y < o.y + r[1] + r[3]) return o;
+  }
+  return null;
+}
+function toolHit(tool) {
+  const s = isleSave(), [fx, fy] = facingPoint(), o = resAt(fx, fy) || resAt(ISLE.px, ISLE.py - 6);
+  if (!o) { play("miss"); return; }
+  const k = o.res.kind, want = k === "tree" ? "axe" : k === "rock" ? "pick" : null;
+  if (k === "grass") { cutGrass(o); return; }
+  if (want !== tool) { toast(k === "tree" ? "THAT NEEDS THE AXE" : "THAT NEEDS THE PICK"); play("miss"); return; }
+  const full = k === "tree" ? 3 : o.res.big ? 2 : 1, dmg = (tool === "axe" && s.up.axe) || (tool === "pick" && s.up.pick) ? 2 : 1;
+  o.hp = (o.hp === undefined ? full : o.hp) - dmg; o.hit = 0.2; play("hit"); splashDust(Math.floor((o.x + 12) / TS), Math.floor((o.y + IART[o.k].height - 6) / TS), k === "tree" ? "#8c6a46" : "#b4b4be");
+  if (o.hp > 0) return;
+  o.hp = undefined;
+  const n = k === "tree" ? (o.k === "oak" ? 5 : 4) : o.res.big ? 3 + Math.floor(Math.random() * 3) : 1, item = k === "tree" ? "wood" : "stone";
+  const left = invAdd(item, n); if (left) toast("YOUR BAG IS FULL");
+  toast("+" + (n - left) + " " + ITEMS[item].name, "#d2b482"); play("chime");
+  s.cut[o.res.key] = DAYN(s) + (k === "tree" ? 7 : o.res.big ? 6 : 3);
+  if (k === "tree" && Math.random() < 0.15) { invAdd("fiber", 2); toast("+2 FIBER", "#a0dc78"); }
+}
+function cutGrass(o) {
+  const s = isleSave(), n = 1 + (Math.random() < 0.5 ? 1 : 0);
+  if (invAdd("fiber", n) > 0) { toast("YOUR BAG IS FULL"); play("miss"); return; }
+  s.cut[o.res.key] = DAYN(s) + 2; toast("+" + n + " FIBER", "#a0dc78"); play("tick");
+}
+
+// ---- placing things
+function placedAt(tx, ty, area) { const a = area || ISLE.map.id; return isleSave().placed.find(p => p.a === a && p.x === tx && p.y === ty); }
+function placedSolidAt(x, y) { const p = placedAt(Math.floor(x / TS), Math.floor(y / TS)); return !!(p && PL[p.id].solid); }
+function placeItem() {
+  const s = isleSave(), it = held(), [tx, ty] = facingTile(), t = tileAt(tx, ty), cx = tx * TS + 8, cy = ty * TS + 8;
+  const blocked = ["a", "d", "x", "t"].includes(t) || placedAt(tx, ty) || s.farm[farmKey(tx, ty)] || isleSolidAt(cx, cy) || isleSolidAt(cx, cy + 6) || (Math.floor(ISLE.px / TS) === tx && Math.floor((ISLE.py - 2) / TS) === ty);
+  if (blocked) { toast("IT WON'T FIT THERE"); play("miss"); return; }
+  s.placed.push({ a: ISLE.map.id, x: tx, y: ty, id: it[0] }); invUse(s.sel); play("hit");
+}
+function plSprite(id) { const P_ = PL[id]; return P_.rows ? pix("pl_" + id, P_.rows, P_.pal) : null; }
+function drawPlacedFlat(cx, cy) {
+  for (const p of isleSave().placed) {
+    if (p.a !== ISLE.map.id || !PL[p.id].flat) continue;
+    const x = p.x * TS - cx, y = p.y * TS - cy; if (x < -16 || y < -16 || x > IW || y > IH) continue;
+    if (p.id === "pathstone") { rect("#8c8c96", x + 1, y + 1, 14, 14); rect("#a0a0aa", x + 2, y + 2, 6, 5); rect("#a0a0aa", x + 9, y + 8, 5, 5); rect("#76767e", x + 2, y + 9, 5, 4); }
+    else if (p.id === "pathwood") { for (let k = 0; k < 4; k++) { rect(k % 2 ? "#a06c40" : "#b47e4a", x, y + k * 4, 16, 4); rect("#6e482a", x, y + k * 4 + 3, 16, 1); } }
+    else { const c1 = p.id === "rug" ? "#a03c32" : "#4a78b4", c2 = p.id === "rug" ? "#e6c45a" : "#f0b4c8"; rect(c1, x, y + 1, 16, 14); rect(c2, x + 2, y + 3, 12, 1); rect(c2, x + 2, y + 12, 12, 1); rect(c2, x + 6, y + 6, 4, 4); }
+  }
+}
+function placedSprites(list) {
+  for (const p of isleSave().placed) {
+    if (p.a !== ISLE.map.id || PL[p.id].flat) continue;
+    list.push([p.y * TS + 15, { draw(cx, cy) {
+      const c = plSprite(p.id), x = p.x * TS + 8 - (c.width >> 1) - cx, y = p.y * TS + 15 - c.height - cy;
+      if (x < -20 || y < -30 || x > IW || y > IH) return;
+      g.globalAlpha = 0.22; g.fillStyle = "#000"; g.beginPath(); g.ellipse(p.x * TS + 8 - cx, p.y * TS + 14 - cy, 6, 2, 0, 0, 7); g.fill(); g.globalAlpha = 1;
+      g.drawImage(c, x, y);
+      if (p.m && p.m.ready <= DAYN(isleSave()) && Math.floor(T * 3) % 2) rect(GOLD, p.x * TS + 8 - cx, y - 4, 1, 3);
+      if (p.m && p.m.ready > DAYN(isleSave()) && p.id === "smoker") { g.globalAlpha = 0.5; rect("#c8c8d2", p.x * TS + 7 - cx + Math.round(Math.sin(T * 3)), y - 3 - (T * 6 % 6), 2, 2); g.globalAlpha = 1; }
+    } }]);
+  }
+}
+function placedInteract() {
+  const s = isleSave(), [tx, ty] = facingTile(), p = placedAt(tx, ty);
+  if (!p) return false;
+  const P_ = PL[p.id], it = held(), day = DAYN(s);
+  if (p.id === "chest") { ISLE.chest = { p, side: 0, sel: 0 }; play("select"); return true; }
+  if (p.id === "jar" || p.id === "smoker") {
+    if (p.m && p.m.ready <= day) { if (invAdd(p.m.out, 1) > 0) { toast("YOUR BAG IS FULL"); return true; } toast("+1 " + ITEMS[p.m.out].name, GOLD); p.m = null; play("chime"); return true; }
+    if (p.m) { toast(p.id === "jar" ? "STILL PICKLING. TRY TOMORROW" : "STILL SMOKING. READY TOMORROW"); return true; }
+    if (it && p.id === "jar" && ITEMS[it[0]].kind === "crop") { p.m = { out: "j_" + it[0], ready: day + 2 }; invUse(s.sel); toast("PICKLING. READY IN 2 DAYS"); play("plop"); return true; }
+    if (it && p.id === "smoker" && isFishItem(it[0])) { p.m = { out: "k_" + it[0], ready: day + 1 }; invUse(s.sel); toast("SMOKING. READY TOMORROW"); play("plop"); return true; }
+    isleSay([p.id === "jar" ? "A PICKLE JAR. HOLD A CROP AND USE IT: PICKLES IN 2 DAYS, WORTH MORE THAN TWICE AS MUCH." : "A FISH SMOKER. HOLD A FISH AND USE IT: SMOKED BY MORNING, WORTH TWICE AS MUCH."], { opts: ["PICK IT UP", "LEAVE IT"], act: [() => pickUp(p), () => play("tick")] });
+    return true;
+  }
+  isleSay([P_.name + ".", "PICK IT UP?"], { opts: ["PICK IT UP", "LEAVE IT"], act: [() => pickUp(p), () => play("tick")] });
+  return true;
+}
+function pickUp(p) {
+  const s = isleSave();
+  if (p.id === "chest" && (s.chests[p.a + ":" + p.x + "," + p.y] || []).some(Boolean)) { toast("EMPTY THE CHEST FIRST"); return; }
+  if (invAdd(p.id, 1) > 0) { toast("YOUR BAG IS FULL"); return; }
+  s.placed = s.placed.filter(q => q !== p); play("select");
+}
+function sprinklersWater(s) {
+  for (const p of s.placed) if (p.id === "sprinkler" || p.id === "sprinkler2") {
+    const R = p.id === "sprinkler" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+    for (const [a, b] of R) { const e = s.farm[p.a + ":" + (p.x + a) + "," + (p.y + b)]; if (e) e.w = 1; }
+  }
+}
+function mulchUse() {
+  const s = isleSave(), [tx, ty] = facingTile(), e = s.farm[farmKey(tx, ty)];
+  if (!e || e.mulch) { toast(e ? "ALREADY MULCHED" : "MULCH GOES ON TILLED GROUND"); play("miss"); return; }
+  e.mulch = 1; e.w = 1; invUse(s.sel); toast("MULCHED: IT STAYS WATERED", "#a0dc78"); play("plop");
+}
+
+// ---- the chest
+const chestKey_ = p => p.a + ":" + p.x + "," + p.y;
+function chestSlots() { const s = isleSave(), k = chestKey_(ISLE.chest.p); if (!s.chests[k]) s.chests[k] = Array(18).fill(null); return s.chests[k]; }
+function chestGeo() { const w = 9 * TB_SLOT + 16, bagRows = isleSave().inv.length / 9, h = (2 + bagRows) * (TB_SLOT + 2) + 46; return [Math.round((IW - w) / 2), Math.max(2, Math.round((IH - h) / 2)), w, h]; }
+function chestCells() {
+  const [x, y] = chestGeo(), out = [], bagRows = isleSave().inv.length / 9;
+  for (let i = 0; i < 18; i++) out.push([x + 8 + (i % 9) * TB_SLOT, y + 18 + Math.floor(i / 9) * (TB_SLOT + 2), TB_SLOT, TB_SLOT, 0, i]);
+  for (let i = 0; i < bagRows * 9; i++) out.push([x + 8 + (i % 9) * TB_SLOT, y + 26 + (2 + Math.floor(i / 9)) * (TB_SLOT + 2), TB_SLOT, TB_SLOT, 1, i]);
+  return out;
+}
+function drawChest() {
+  const [x, y, w, h] = chestGeo(), s = isleSave(), C_ = ISLE.chest, ch = chestSlots();
+  g.globalAlpha = 0.45; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
+  islePanel(x, y, w, h); text("CHEST", x + 8, y + 9, 1, "#b4461e", "left", null);
+  chestCells().forEach(([cx_, cy_, , , side, i]) => drawSlot(cx_, cy_, side ? s.inv[i] : ch[i], C_.side === side && C_.sel === i, s));
+  text("YOUR BAG", x + 8, y + 18 + 2 * (TB_SLOT + 2) + 4, 1, "#b4461e", "left", null);
+  text("E: MOVE A STACK ACROSS", x + 8, y + h - 7, 1, "#8c6c50", "left", null);
+}
+function chestPick() {
+  const s = isleSave(), C_ = ISLE.chest, ch = chestSlots(), from = C_.side ? s.inv : ch, to = C_.side ? ch : s.inv, it = from[C_.sel];
+  if (!it) return;
+  let n = it[1];
+  for (let i = 0; i < to.length && n > 0; i++) if (to[i] && to[i][0] === it[0] && ITEMS[it[0]].kind !== "tool") { to[i][1] += n; n = 0; }
+  for (let i = 0; i < to.length && n > 0; i++) if (!to[i]) { to[i] = [it[0], n]; n = 0; }
+  if (n) { it[1] = n; toast("NO ROOM"); } else from[C_.sel] = null;
+  play("select");
+}
+function chestKey(e) {
+  const c = e.code, C_ = ISLE.chest, n = C_.side ? isleSave().inv.length : 18;
+  if (c === "Escape" || c === "Tab") { e.preventDefault(); ISLE.chest = null; play("back"); return; }
+  if (["Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); chestPick(); return; }
+  const d = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1, ArrowUp: -9, KeyW: -9, ArrowDown: 9, KeyS: 9 }[c]; if (!d) return;
+  let i = C_.sel + d;
+  if (i < 0 && C_.side) { C_.side = 0; i += 18; } else if (i >= n && !C_.side) { C_.side = 1; i -= 18; }
+  C_.sel = clamp(i, 0, (C_.side ? isleSave().inv.length : 18) - 1); play("tick");
+}
+function chestTouch(x, y) {
+  const [px, py, w, h] = chestGeo(); if (x < px || x > px + w || y < py || y > py + h) { ISLE.chest = null; play("back"); return; }
+  const c = hitAt(chestCells(), x, y); if (c) { ISLE.chest.side = c[4]; ISLE.chest.sel = c[5]; chestPick(); }
+}
+
+// ---- one list menu for crafting, cooking, the store and the shipyard
+function openCraft() { ISLE.list = { kind: "craft", sel: 0, top: 0 }; play("select"); }
+function listRows() {
+  const L = ISLE.list, s = isleSave(), rows = [];
+  if (L.kind === "craft") for (const [out, n, ing] of CRAFT) rows.push({ icon: out, name: ITEMS[out].name + (n > 1 ? " X" + n : ""), info: ing.map(([k, m]) => m + " " + specName(k)).join(", "), ok: canPay(ing), act: () => { pay(ing); if (invAdd(out, n)) toast("YOUR BAG IS FULL"); toast("MADE " + ITEMS[out].name, "#a0dc78"); } });
+  else if (L.kind === "cook") for (const [id, name, ing, smoke] of COOK) { const lock = smoke && L.where !== "smoke"; rows.push({ icon: "d_" + id, name, info: lock ? "COOKED AT THE SMOKEHOUSE" : ing.map(([k, m]) => m + " " + specName(k)).join(", "), ok: !lock && canPay(ing), act: () => { pay(ing); invAdd("d_" + id, 1); s.cooked = s.cooked || {}; s.cooked[id] = (s.cooked[id] || 0) + 1; toast("COOKED " + name, "#ffbe3c"); } }); }
+  else if (L.kind === "store") {
+    const stock = shopList().map(r => [r.item, r.price, r.info]).concat([["bait", 30, "5 BAIT. FISH BITE SOONER"], ["mulch", 40, "5 MULCH. KEEPS GROUND WATERED"], ["rug", 150, "A RUG"], ["table", 200, "A TABLE"], ["chair", 90, "A CHAIR"],
+      ["shelllamp", 260, "A LAMP OF SHELLS"], ["painting", 400, "A PAINTING OF THE HARBOUR"], ["palmpot", 300, "A POTTED PALM"], ["chart", 500, "AN OLD SEA CHART"]]);
+    for (const [item, price, info] of stock) { const n = ["bait", "mulch"].includes(item) ? 5 : 1; rows.push({ icon: item, name: ITEMS[item].name, info: info + ". " + price + " SD", ok: s.sd >= price, act: () => { if (invAdd(item, n)) { toast("YOUR BAG IS FULL"); return; } s.sd -= price; toast("+" + n + " " + ITEMS[item].name, "#5ac85a"); } }); }
+  } else if (L.kind === "yard") for (const [id, name, info, sd, ing] of UPGRADES) { const done = s.up[id]; rows.push({ icon: id === "bag" ? "chest" : id === "can" ? "can" : id === "rod" ? "rod" : id, name: name + (done ? " (DONE)" : ""), info: done ? info : info + ". " + sd + " SD, " + ing.map(([k, m]) => m + " " + specName(k)).join(", "), ok: !done && canPay(ing, sd), act: () => { pay(ing, sd); s.up[id] = 1; if (id === "bag") s.inv.push(...Array(9).fill(null)); toast(name + "!", GOLD); play("fanfare"); } }); }
+  return rows;
+}
+const LIST_TITLE = { craft: "CRAFTING", cook: "COOKING", store: "THE GENERAL STORE", yard: "THE SHIPYARD" };
+function listGeo() { const w = Math.min(IW - 12, 320), h = IH - 12; return [Math.round((IW - w) / 2), 6, w, h, Math.floor((h - 46) / 11)]; }
+function drawList() {
+  const [x, y, w, h, vis] = listGeo(), L = ISLE.list, rows = listRows(), s = isleSave();
+  if (L.sel < L.top) L.top = L.sel; if (L.sel >= L.top + vis) L.top = L.sel - vis + 1;
+  g.globalAlpha = 0.5; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
+  islePanel(x, y, w, h);
+  text(LIST_TITLE[L.kind] + (L.kind === "cook" ? (L.where === "smoke" ? ": SMOKEHOUSE" : ": STOVE") : ""), x + 8, y + 9, 1, "#b4461e", "left", null);
+  rect("#f0ecdc", x + w - 46, y + 6, 5, 5); text(s.sd, x + w - 38, y + 9, 1, "#5a3c28", "left", null);
+  rows.slice(L.top, L.top + vis).forEach((r, k) => {
+    const i = L.top + k, ry = y + 18 + k * 11, on = i === L.sel;
+    if (on) { rect("#f4e4c0", x + 5, ry, w - 10, 10); outline(x + 5, ry, w - 10, 10, "#b4461e"); }
+    const c = itemIcon(r.icon), kk = Math.min(1, 9 / c.height, 12 / c.width); g.drawImage(c, 0, 0, c.width, c.height, x + 8, ry + 1, Math.round(c.width * kk), Math.round(c.height * kk));
+    text(r.name.slice(0, Math.floor((w - 40) / 6)), x + 22, ry + 5, 1, r.ok ? "#3c2c22" : "#a08c78", "left", null);
+    if (r.ok) rect("#5ac85a", x + w - 12, ry + 3, 4, 4);
+  });
+  if (L.top > 0) text("-", x + w / 2, y + 15, 1, "#8c6c50", "center", null);
+  const sel = rows[L.sel]; if (sel) wrap(sel.info, Math.floor((w - 16) / 6)).slice(0, 2).forEach((l, i) => text(l, x + 8, y + h - 24 + i * 9, 1, "#5a3c28", "left", null));
+  text(IW >= 300 ? "E: " + ({ craft: "MAKE", cook: "COOK", store: "BUY", yard: "UPGRADE" })[L.kind] + "   ESC: DONE" : "TAP TWICE: DO IT", x + 8, y + h - 6, 1, "#8c6c50", "left", null);
+}
+function listPick() { const r = listRows()[ISLE.list.sel]; if (!r) return; if (!r.ok) { play("miss"); toast(ISLE.list.kind === "store" || ISLE.list.kind === "yard" ? "YOU CAN'T AFFORD IT YET" : "MISSING SOMETHING"); return; } r.act(); play("select"); saveStore(); }
+function listKey(e) {
+  const c = e.code, L = ISLE.list, n = listRows().length;
+  if (c === "Escape" || c === "Tab" || (c === "KeyC" && L.kind === "craft")) { e.preventDefault(); ISLE.list = null; play("back"); return; }
+  const v = { ArrowUp: -1, KeyW: -1, ArrowDown: 1, KeyS: 1, ArrowLeft: -10, ArrowRight: 10 }[c];
+  if (v) { L.sel = clamp(L.sel + v, 0, n - 1); play("tick"); return; }
+  if (["Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); listPick(); }
+}
+function listTouch(x, y) {
+  const [px, py, w, h, vis] = listGeo(), L = ISLE.list, i = L.top + Math.floor((y - py - 18) / 11);
+  if (x < px || x > px + w || y < py || y > py + h) { ISLE.list = null; play("back"); return; }
+  if (y >= py + 18 && i < L.top + vis && i < listRows().length) { if (L.sel === i) listPick(); else { L.sel = i; play("tick"); } }
+  else if (y < py + 18 && L.top > 0) { L.sel = Math.max(0, L.sel - vis); }
+  else if (y > py + h - 30) { L.sel = Math.min(listRows().length - 1, L.sel + vis); }
+}
+
+// ---- restoring buildings, the crate, the aquarium
+function isleAct5(o) {
+  const a = o.act, s = isleSave();
+  if (a.kind === "cook") { ISLE.list = { kind: "cook", where: "stove", sel: 0, top: 0 }; play("select"); }
+  else if (a.kind === "grass") cutGrass(o);
+  else if (a.kind === "crate") crateAct();
+  else if (a.kind === "restore") {
+    const R = RESTORE[a.b], st = s.rest[a.b];
+    if (st === "done") restoredAct(a.b);
+    else if (st === "work") isleSay(["WORK ON " + R.name + " IS UNDERWAY. IT'LL BE READY TOMORROW MORNING."]);
+    else {
+      const need = R.need.map(([k, n]) => n + " " + specName(k) + " (" + Math.min(invCount(k), n) + ")").join(", ") + ", " + R.sd + " SAND DOLLARS";
+      if (canPay(R.need, R.sd)) isleSay([R.ruin, "RESTORE IT? IT TAKES " + need + "."], { opts: ["RESTORE IT", "NOT YET"], act: [() => { pay(R.need, R.sd); s.rest[a.b] = "work"; toast("WORK BEGINS. READY TOMORROW", GOLD); play("fanfare"); saveStore(); }, () => play("tick")] });
+      else isleSay([R.ruin, "TO RESTORE IT: " + need + "."]);
+    }
+  }
+  else if (a.kind === "tank") { const z = ZONES[a.z], all = TOPFISH.filter(sp => sp[2] === a.z), got = all.filter(sp => s.donated[sp[0]]).length; isleSay([z[0] + " TANK. " + got + " OF " + all.length + " DONATED."]); }
+  else if (a.kind === "donate") donateAct();
+  else if (a.kind === "plaque") { const n = Object.keys(s.donated).length; isleSay(["THE AQUARIUM. DONATED: " + n + " OF " + TOPFISH.length + " FISH FROM THE OPEN SEA.", "EVERY 10 DONATIONS, THE TOWN SENDS 300 SAND DOLLARS AS THANKS."]); }
+}
+function restoredAct(b) {
+  if (b === "store") { ISLE.list = { kind: "store", sel: 0, top: 0 }; play("select"); }
+  else if (b === "smoke") { ISLE.list = { kind: "cook", where: "smoke", sel: 0, top: 0 }; play("select"); }
+  else if (b === "yard") { ISLE.list = { kind: "yard", sel: 0, top: 0 }; play("select"); }
+  else if (b === "aquarium") isleDoor("aqua", { x: 160, y: 172, dir: "up" });
+  else isleSay(["THE INN. FRESH SHEETS, A FIRE IN THE GRATE AND NOBODY HERE YET.", "THE SHIPWRIGHT SAYS PEOPLE WILL COME NOW THERE'S SOMEWHERE TO STAY."]);
+}
+function newDay5(s) {
+  for (const b in s.rest) if (s.rest[b] === "work") { s.rest[b] = "done"; s.news.push(RESTORE[b].name + " IS RESTORED! " + RESTORE[b].done); }
+}
+function crateAdd(catch_) {                                     // from game.js, on every haul: one fish from the dive goes to the island
+  if (!store.isle.built) return null;
+  const fish = (catch_ || []).filter(c => !HIDDEN.includes(c[0]) && ITEMS["t_" + c[0]]);
+  if (!fish.length) return null;
+  const s = isleSave(), f = fish[Math.floor(Math.random() * fish.length)];
+  if (s.crate.length >= 99) s.crate.shift();
+  s.crate.push(f[0]);
+  return SPEC[f[0]][1];
+}
+function crateAct() {
+  const s = isleSave();
+  if (!s.crate.length) { isleSay(["THE FISH CRATE. ONE FISH FROM EVERY DIVE YOU MAKE OUT AT SEA ENDS UP IN HERE."]); return; }
+  let got = 0;
+  while (s.crate.length && invAdd("t_" + s.crate[0], 1) === 0) { s.crate.shift(); got++; }
+  toast(got ? "+" + got + " FISH FROM THE CRATE" : "YOUR BAG IS FULL", got ? GOLD : WHITE); play(got ? "chime" : "miss");
+}
+function donateAct() {
+  const s = isleSave(), before = Object.keys(s.donated).length;
+  let n = 0;
+  for (const q of s.inv) if (q && q[0].startsWith("t_") && !s.donated[q[0].slice(2)]) { s.donated[q[0].slice(2)] = 1; q[1]--; n++; }
+  s.inv.forEach((q, i) => { if (q && q[1] <= 0) s.inv[i] = null; });
+  if (!n) { isleSay(["THE DONATION BOX. BRING FISH FROM THE OPEN SEA (THE CRATE ON THE BEACH FILLS FROM YOUR DIVES). ONE OF EACH KIND."]); return; }
+  const after = before + n, gifts = Math.floor(after / 10) - Math.floor(before / 10);
+  if (gifts) { s.sd += 300 * gifts; s.news.push("THE TOWN SENT " + 300 * gifts + " SAND DOLLARS FOR YOUR DONATIONS."); }
+  toast("DONATED " + n + " NEW FISH. " + after + "/" + TOPFISH.length + (gifts ? ". +" + 300 * gifts + " SD" : ""), GOLD); play("fanfare");
+}
+function drawTankFish(o, cx, cy) {                               // donated fish swim in their zone's tank
+  const s = isleSave(), list = TOPFISH.filter(sp => sp[2] === o.act.z && s.donated[sp[0]]).slice(0, 6);
+  list.forEach((sp, i) => {
+    const a = DATA.atlas[sp[0]]; if (!a) return;
+    const k = Math.min(1, 12 / a[2], 8 / a[3]), w = Math.max(1, Math.round(a[2] * k)), h = Math.max(1, Math.round(a[3] * k));
+    const t = T * (0.3 + i * 0.07) + i * 2, x = o.x + 6 + ((Math.sin(t) + 1) / 2) * (40 - w), y = o.y + 4 + (i % 3) * 6 + Math.sin(t * 2) * 1;
+    g.save(); if (Math.cos(t) < 0) { g.translate(Math.round(x - cx) + w, 0); g.scale(-1, 1); g.drawImage(atlas, a[0], a[1], a[2], a[3], 0, Math.round(y - cy), w, h); }
+    else g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(x - cx), Math.round(y - cy), w, h);
+    g.restore();
+  });
+}
+// topside fish icons come from the topside sprites; wood, stone and the rest get small row art
+const _itemIcon5 = itemIcon;
+itemIcon = function (id) {
+  if (id.startsWith("t_")) { const key = "icon_" + id; if (ISPR[key]) return ISPR[key]; const a = DATA.atlas[id.slice(2)], k = Math.min(1, 14 / a[2], 11 / a[3]), w = Math.max(1, Math.round(a[2] * k)), h = Math.max(1, Math.round(a[3] * k)), c = document.createElement("canvas"); c.width = w; c.height = h; const x = c.getContext("2d"); x.imageSmoothingEnabled = false; x.drawImage(atlas, a[0], a[1], a[2], a[3], 0, 0, w, h); return (ISPR[key] = c); }
+  if (id.startsWith("j_")) return pix("icon_" + id, [".kk.", "gggg", "gffg", "gffg", "gggg"], { k: "#6e482a", g: "#b4e6c8", f: CROP[id.slice(2)].fruit });
+  if (id.startsWith("k_")) { const base = itemIcon(id.slice(2)), key = "icon_" + id; if (ISPR[key]) return ISPR[key]; const c = document.createElement("canvas"); c.width = base.width; c.height = base.height; const x = c.getContext("2d"); x.drawImage(base, 0, 0); x.globalCompositeOperation = "source-atop"; x.fillStyle = "rgba(120,60,20,0.5)"; x.fillRect(0, 0, c.width, c.height); return (ISPR[key] = c); }
+  if (id.startsWith("d_")) return pix("icon_" + id, [".fff.", "fffff", "wwwww", ".www."], { f: ITEMS[id].col || "#c8965a", w: "#fafaff" });
+  if (PL[id]) return PL[id].rows ? plSprite(id) : pix("icon_" + id, ["rrrrr", "rwwwr", "rrrrr"], { r: id === "pathstone" ? "#8c8c96" : id === "pathwood" ? "#a06c40" : id === "rug" ? "#a03c32" : "#4a78b4", w: "#e6c45a" });
+  const R = { axe: [["..ss", ".sss", ".bs.", "b...", "b..."], { s: "#a0a8b8", b: "#96683e" }], pick: [["ssss.", "s.b.s", "..b..", "..b..", "..b.."], { s: "#a0a8b8", b: "#96683e" }],
+    wood: [["bbbbbb", "brbbrb", "bbbbbb"], { b: "#a06c40", r: "#c8a070" }], stone: [[".ss.", "slss", "ssss"], { s: "#8c8c96", l: "#b4b4be" }], fiber: [["g.g", "ggg", "gg."], { g: "#8cc85a" }],
+    mushroom: [[".rrr.", "rwrwr", "..w..", "..w.."], { r: "#c8643c", w: "#f0e6d2" }], wildberry: [[".g.", "rrr", "rrr"], { g: "#5aa04a", r: "#a03c8c" }], garlic: [["..g..", ".www.", "wwwww", ".www."], { g: "#5aa04a", w: "#f0ece0" }],
+    pinecone: [[".b.", "bbb", "bbb", ".b."], { b: "#8c5a32" }], bait: [["..rr", ".rr.", "rr.."], { r: "#c86e8c" }], mulch: [[".bb.", "bbbb", "bbbb"], { b: "#5a3c24" }] }[id];
+  return R ? pix("icon_" + id, R[0], R[1]) : _itemIcon5(id);
+};

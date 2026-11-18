@@ -108,7 +108,7 @@ async def main():
         # the menu: go back to your boat
         await page.keyboard.press("Escape")
         check("Escape opens the menu", await ev("!!ISLE.menu"))
-        await page.keyboard.press("ArrowDown"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter")
+        await ev("ISLE.menu.sel = ISLE_MENU.findIndex(m => m[0].startsWith('GO BACK'))"); await page.keyboard.press("Enter")
         r = await ev("({ st: REEL.S.state, w: canvas.width, isle: !!ISLE })")
         check("going back: title screen, ocean canvas", r["st"] == "title" and r["w"] == await ev("REEL.width") and r["isle"] is False, r)
         saved = await ev("JSON.parse(localStorage.getItem('reeldeep')).isle.g")
