@@ -30,6 +30,13 @@ have found and holding the rewards that come with them. Secret rewards are never
 
 Some things also happen on their own, going by your device's clock: certain hours, certain nights and certain days of the year.
 
+## The raft
+
+After 50 dives a shipwright waits on a little pier next to your boat. Planks drift in the sea: touch one and it's yours,
+without using a hook slot. Bring him 60 planks, a rope (somewhere in the Kelp Forest), a sail (around the Wreck) and a
+compass (the old fisherman sells one for chips), and he builds you a raft. Tap him to see how far along you are.
+Where the raft goes is a story for later.
+
 ## Save codes
 
 Progress lives in your browser. **MORE > SAVE CODE** makes a short code (like `K7QX-M2PD`) that loads your coins, log,
@@ -90,6 +97,7 @@ made-up score. For a game between friends that is usually fine, and you can dele
 ## Files
 
 - `index.html`, `game.js` - the game
+- `derby.js`, `finprix.js`, `island.js` - the derby, FIN PRIX, and Driftwood Isle (the raft so far)
 - `data.js`, `assets/` - fish, zones and sprites
 - `config.js` - the leaderboard address
 - `database.rules.json` - the database rules to paste into Firebase
