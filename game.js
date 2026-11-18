@@ -341,7 +341,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     ["abysscup", "ABYSS CHAMP", null], ["finlegend", "FIN PRIX LEGEND", "GOLD IN EVERY CUP"]])
   .concat([["castaway", "CASTAWAY", "BUILD THE RAFT"]])                 // Driftwood Isle (island.js)
   .concat([["whale", "WHALE", "SPEND 100,000 CHIPS"], ["captain", "THE CAPTAIN", "OWN THE WHOLE LOCKER"]])   // casino.js, Nov 18, 2026
-  .concat([["snaphappy", "SNAP HAPPY", "CASH OUT X50 IN LINE SNAP"], ["biggerfish", "BIGGER FISH", "10 RIGHT CALLS IN A ROW"]]);
+  .concat([["snaphappy", "SNAP HAPPY", "CASH OUT X50 IN LINE SNAP"], ["biggerfish", "BIGGER FISH", "10 RIGHT CALLS IN A ROW"]])
+  .concat([["anchors", "ANCHORS AWEIGH", "ROLL THREE ANCHORS"], ["reeldeal", "THE REEL DEAL", "THREE LEGENDS ON THE REELS"], ["helmsman", "HELMSMAN", "HIT X10 ON THE WHEEL"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];

@@ -203,8 +203,8 @@ function casinoOpen(id) {                                    // -> true if casin
 // The tavern's games grouped into two menus (TABLES and MACHINES) so the bar doesn't get longer as games are added, plus
 // Line Snap (a crash game) and Bigger Fish (higher or lower). Later parts add their games to HUBS.
 const HUBS = {
-  tables: { title: "THE TABLES", say: "CARDS AND DICE", games: [["c21", "CATCH 21", "FISH CARDS TO 21"], ["bigger", "BIGGER FISH", "HIGHER OR LOWER?"]] },
-  machines: { title: "THE MACHINES", say: "PULL, DROP, SPIN", games: [["plinko", "PLINKO", "DROP A FISH, X25"], ["snap", "LINE SNAP", "CASH OUT IN TIME"]] },
+  tables: { title: "THE TABLES", say: "CARDS AND DICE", games: [["c21", "CATCH 21", "FISH CARDS TO 21"], ["bigger", "BIGGER FISH", "HIGHER OR LOWER?"], ["crown", "CROWN & ANCHOR", "THE SAILOR'S DICE"]] },
+  machines: { title: "THE MACHINES", say: "PULL, DROP, SPIN", games: [["plinko", "PLINKO", "DROP A FISH, X25"], ["snap", "LINE SNAP", "CASH OUT IN TIME"], ["reel", "THE REEL DEAL", "SLOTS, UP TO X250"], ["wheel", "SHIP'S WHEEL", "SPIN FOR X10"]] },
 };
 CZ.hub = { sel: 0 };
 const GAME_OPEN = {
@@ -212,6 +212,9 @@ const GAME_OPEN = {
   plinko: () => { plinkoOpen(); openOverlay("plinko"); },
   snap: () => { snapOpen(); openOverlay("snap"); },
   bigger: () => { bigOpen(); openOverlay("bigger"); },
+  crown: () => { caOpen(); openOverlay("crown"); },
+  reel: () => { rdOpen(); openOverlay("reel"); },
+  wheel: () => { whOpen(); openOverlay("wheel"); },
 };
 function hubHits(o) {
   const L = czL(), g0 = HUBS[o].games;
@@ -452,6 +455,226 @@ function bigKey(code, dir) {
 }
 EXTRA_OV.bigger = { draw: drawBig, tap: bigTap, key: bigKey, back: () => CZ.big && CZ.big.phase === "play" ? "bigger" : "tables", music: true };
 
-function casinoTick(dt) { snapTick(dt); }
+// ===================================================================== Part 3
+// ---- CROWN & ANCHOR, the old sailors' dice game. Three dice with six symbols; bet on one. One match pays x2 (even
+// money), two x3, three x10: 205 / 216 = 94.9% back (the traditional x4 for three would be 92%). Title ANCHORS AWEIGH.
+const CA_FACES = [["anchor", "ANCHOR"], ["hat3", "CROWN"], ["clown", "FISH"], ["blacktip", "SHARK"], ["boot", "BOOT"], ["jelly0", "JELLY"]], CA_PAY = [0, 2, 3, 10];
+CZ.ca = null;
+function caOpen() { if (!CZ.ca) CZ.ca = { bet: 10, pick: 0, phase: "bet", dice: [0, 1, 2], t: 0, msg: "PICK ONE AND ROLL", win: 0, k: 0 }; }
+function caRoll() {
+  const c = CZ.ca; if (c.phase === "roll") return;
+  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet; c.on = c.pick;
+  c.final = [0, 1, 2].map(() => Math.floor(Math.random() * 6)); c.phase = "roll"; c.t = 0; c.win = 0; c.msg = "ROLLING..."; play("tick");
+}
+function caSettle() {
+  const c = CZ.ca; c.dice = c.final; c.phase = "done";
+  const n = c.dice.filter(d => d === c.on).length; c.win = Math.floor(c.staked * CA_PAY[n]);
+  if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
+  if (c.dice.every(d => d === 0)) tavAward("anchors");
+  c.msg = n ? (n === 3 ? "THREE " + CA_FACES[c.on][1] + "S! +" : n === 2 ? "TWO! +" : "ONE! +") + c.win : "NO " + CA_FACES[c.on][1] + ". UNLUCKY"; play(n >= 2 ? "fanfare" : n ? "chime" : "miss");
+}
+function caTick(dt) { const c = CZ.ca; if (!c || c.phase !== "roll") return; c.t += dt; c.k += dt; if (c.k > 0.07) { c.k = 0; c.dice = c.dice.map(() => Math.floor(Math.random() * 6)); play("reel"); } if (c.t > 0.9) caSettle(); }
+function caHits() {
+  const L = czL(), h = [];
+  if (L.w) { CA_FACES.forEach((f, i) => h.push(["face", L.X + (i % 3) * 76, 70 + Math.floor(i / 3) * 46, 72, 42, i])); const px = L.X + 236; stakeCtl(h, "stake", px, 70, 112); h.push(["roll", px, 92, 112, 26, 0]); }
+  else { CA_FACES.forEach((f, i) => h.push(["face", L.X + 4 + (i % 3) * 38, 70 + Math.floor(i / 3) * 28, 36, 26, i])); stakeCtl(h, "stake", L.X + 4, 128, 112); h.push(["roll", L.X + 14, 148, 92, 18, 0]); }
+  return h;
+}
+function caDie(x, y, sz, f) { rect("#f6f2e6", x, y, sz, sz); outline(x, y, sz, sz, INK); rect("#dcd4c0", x + 1, y + sz - 3, sz - 2, 2); fitDraw(atlas, CA_FACES[f][0], x + sz / 2, y + sz / 2 - 1, sz - 6, sz - 8, 3); }
+function drawCa() {
+  const c = CZ.ca, L = czL(), X = L.X;
+  rect(FELT, 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
+  czTitle(L, "CROWN & ANCHOR");
+  const dz = L.w ? 34 : 28, dx = L.w ? X + 114 - (3 * dz + 16) / 2 : X + 60 - (3 * dz + 8) / 2;
+  c.dice.forEach((f, i) => caDie(dx + i * (dz + (L.w ? 8 : 4)), L.w ? 22 : 26, dz, f));
+  text(c.msg.slice(0, L.w ? 36 : 19), L.w ? X + 114 : X + 60, L.w ? 62 : 60, 1, c.phase === "done" && c.win ? GOLD : c.phase === "done" ? "#ff8c8c" : WHITE, "center", null);
+  for (const [id, x, y, w, h, v] of caHits()) {
+    if (id === "face") { const on = v === c.pick; rect(on ? "#1e6a46" : "#0a3a24", x, y, w, h); outline(x, y, w, h, on ? GOLD : "#2a7a5a"); fitDraw(atlas, CA_FACES[v][0], x + w / 2, y + h / 2 - (L.w ? 4 : 0), w - 10, h - (L.w ? 16 : 6), 3); if (L.w) text(CA_FACES[v][1], x + w / 2, y + h - 6, 1, on ? GOLD : "#a0c8b4", "center", null); }
+    else if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, L.w ? "STAKE" : "BET");
+    else if (id === "roll") btn(x, y, w, h, "ROLL", c.phase === "roll" ? GREY : tav().chips >= c.bet ? GOLD : GREY);
+  }
+  if (L.w) { ["ONE MATCH  X2", "TWO MATCH  X3", "THREE      X10", "ABOUT 95% BACK"].forEach((l, i) => text(l, X + 292, 128 + i * 10, 1, "#8cc8a8", "center", null)); text("ARROWS: PICK   UP/DOWN: STAKE   SPACE: ROLL", LW / 2, 176, 1, "#5a8a74", "center", null); }
+  else text("1 X2  2 X3  3 X10", X + 60, 176, 1, "#8cc8a8", "center", null);
+  text(c.phase === "roll" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function caTap(rx, ly) {
+  const c = CZ.ca, h = hitAt(caHits(), rx, ly);
+  if (!h) { if (ly > 186 && c.phase !== "roll") closeOverlay(); return; }
+  const [id, , , , , v] = h;
+  if (c.phase === "roll") return;
+  if (id === "face") { c.pick = v; play("tick"); }
+  else if (id === "stake") { c.bet = stakeStep(c.bet, v); play("tick"); }
+  else if (id === "roll") caRoll();
+}
+function caKey(code, dir) {
+  const c = CZ.ca; if (c.phase === "roll") return;
+  if (dir) { c.pick = (c.pick + dir + 6) % 6; play("tick"); }
+  else if (code === "ArrowUp" || code === "KeyW" || code === "ArrowDown" || code === "KeyS") { c.bet = stakeStep(c.bet, code === "ArrowUp" || code === "KeyW" ? 1 : -1); play("tick"); }
+  else if (code === "Space" || code === "Enter") caRoll();
+}
+EXTRA_OV.crown = { draw: drawCa, tap: caTap, key: caKey, back: () => CZ.ca && CZ.ca.phase === "roll" ? "crown" : "tables", music: true };
 
-window.CASINO = { HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
+// ---- THE REEL DEAL: a three-reel slot machine with fishing reels. Each reel has 24 stops (weights below, the same on
+// every reel, each reel in its own fixed order). Pays on the middle line: three of a kind (legend x250, shark x60, tuna
+// x25, clown x12, minnow x8, old boots x3), bait anywhere (1 = stake back, 2 = x5, 3 = x20), or two of one fish (legend
+// x10, shark x4, tuna x3, clown x2, minnow x2). Worked out exactly: 94.97% back, 25% of spins pay more than the stake.
+const RD_SYM = { L: [null, "LEGEND"], S: ["blacktip", "SHARK"], T: ["tuna", "TUNA"], K: ["clown", "CLOWN"], M: ["minnow", "MINNOW"], B: ["boot", "BOOT"], C: ["shrimp", "BAIT"], G: [null, "WEED"] };
+const RD_W = { L: 1, S: 2, T: 3, K: 4, M: 5, B: 4, C: 1, G: 4 };
+const RD_THREE = { L: 250, S: 60, T: 25, K: 12, M: 8, B: 3 }, RD_BAIT = [0, 1, 5, 20], RD_PAIR = { L: 10, S: 4, T: 3, K: 2, M: 2 };
+const RD_STRIPS = [0, 1, 2].map(k => { const r = RNG(hashStr("reel deal " + k)), a = []; for (const [s0, n] of Object.entries(RD_W)) for (let i = 0; i < n; i++) a.push(s0); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; });
+function rdPays(t) {                                         // -> multiple of the stake for symbols t (three letters)
+  if (t[0] === t[1] && t[1] === t[2] && RD_THREE[t[0]]) return RD_THREE[t[0]];
+  const nb = t.filter(x => x === "C").length; if (nb) return RD_BAIT[nb];
+  for (const f of "LSTKM") if (t.filter(x => x === f).length === 2) return RD_PAIR[f];
+  return 0;
+}
+CZ.rd = null;
+function rdOpen() { if (!CZ.rd) CZ.rd = { bet: 10, phase: "idle", stops: [0, 5, 10], off: [0, 0, 0], t: 0, msg: "PULL THE LEVER", win: 0, k: 0 }; }
+function rdSpin() {
+  const c = CZ.rd; if (c.phase === "spin") return;
+  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet;
+  c.final = [0, 1, 2].map(() => Math.floor(Math.random() * 24)); c.phase = "spin"; c.t = 0; c.win = 0; c.msg = ""; c.lever = 0.3; play("tick");
+}
+function rdSettle() {
+  const c = CZ.rd, t = c.final.map((s0, k) => RD_STRIPS[k][s0]), x = rdPays(t);
+  c.phase = "done"; c.win = Math.floor(c.staked * x);
+  if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
+  if (t.every(q => q === "L")) tavAward("reeldeal");
+  c.msg = x >= 25 ? "BIG CATCH! +" + c.win : x > 1 ? "WIN! +" + c.win : x === 1 ? "BAIT: STAKE BACK" : "NOTHING. AGAIN?";
+  play(x >= 25 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
+}
+const RD_STOP = [0.8, 1.15, 1.5];
+function rdTick(dt) {
+  const c = CZ.rd; if (!c) return;
+  if (c.lever > 0) c.lever = Math.max(0, c.lever - dt);
+  if (c.phase !== "spin") return;
+  c.t += dt; c.k += dt;
+  for (let k = 0; k < 3; k++) { if (c.t < RD_STOP[k]) c.off[k] = (c.off[k] + dt * 18) % 24; else if (c.stops[k] !== c.final[k] || c.off[k]) { c.stops[k] = c.final[k]; c.off[k] = 0; play("hit"); } }
+  if (c.k > 0.06) { c.k = 0; play("reel"); }
+  if (c.t >= RD_STOP[2]) rdSettle();
+}
+function rdSymbol(sym, cx, cy, sz) {
+  if (sym === "G") { for (let k = -1; k <= 1; k++) for (let y = 0; y < sz * 0.7; y += 2) rect("#46a046", cx + k * 4 + Math.round(Math.sin(y * 0.4 + k) * 1.5), cy + sz * 0.35 - y, 1, 2); return; }
+  if (sym === "L") { disc("#fff2a0", cx, cy, sz * 0.42); fitDraw(atlas, C21_LEG[0], cx, cy, sz - 4, sz - 6, 2); return; }
+  fitDraw(atlas, RD_SYM[sym][0], cx, cy, sz - 4, sz - 6, 2);
+}
+function rdHits() {
+  const L = czL(), h = [];
+  if (L.w) { const px = L.X + 236; stakeCtl(h, "stake", px, 30, 112); h.push(["spin", px, 52, 112, 26, 0]); h.push(["lever", L.X + 196, 26, 30, 110, 0]); }
+  else { stakeCtl(h, "stake", L.X + 4, 130, 112); h.push(["spin", L.X + 14, 150, 92, 18, 0]); h.push(["lever", L.X + 104, 28, 16, 80, 0]); }
+  return h;
+}
+function drawRd() {
+  const c = CZ.rd, L = czL(), X = L.X;
+  tavernBg();
+  czTitle(L, "THE REEL DEAL", "#ff6e6e");
+  const mx = L.w ? X + 8 : X + 4, my = L.w ? 22 : 26, cw = L.w ? 186 : 98, ch = L.w ? 116 : 84, sz = L.w ? 32 : 22;
+  rect("#7a1e1e", mx, my, cw, ch); outline(mx, my, cw, ch, GOLD); rect("#5a1414", mx + 2, my + ch - 10, cw - 4, 8);
+  text(L.w ? "~ THE REEL DEAL ~".replace(/~/g, "*") : "REEL DEAL", mx + cw / 2, my + 7, 1, GOLD, "center", null);
+  const wx0 = mx + (L.w ? 12 : 6), wy = my + 15, ww = (cw - (L.w ? 24 : 12) - 8) / 3, wh = sz * 3;
+  for (let k = 0; k < 3; k++) {
+    const x = wx0 + k * (ww + 4);
+    rect("#f6f2e6", x, wy, ww, wh); outline(x, wy, ww, wh, INK);
+    g.save(); g.beginPath(); g.rect(x + 1, wy + 1, ww - 2, wh - 2); g.clip();
+    const pos = c.phase === "spin" && c.t < RD_STOP[k] ? c.stops[k] + c.off[k] : c.stops[k], base = Math.floor(pos), fr = pos - base;
+    for (let r = -1; r <= 2; r++) { const sym = RD_STRIPS[k][((base + r) % 24 + 24) % 24]; rdSymbol(sym, x + ww / 2, wy + sz / 2 + (r - fr) * sz + sz * 0, sz); }
+    g.restore();
+  }
+  rect(c.phase === "done" && c.win > c.staked ? GOLD : "#e63246", wx0 - 3, wy + sz * 1.5 - 1, ww * 3 + 14, 1);   // the pay line (middle row)
+  const lv = c.lever ? Math.sin((0.3 - c.lever) / 0.3 * Math.PI) : 0, lx = L.w ? X + 210 : X + 111, ly0 = L.w ? 40 : 34, llen = L.w ? 60 : 40;
+  rect("#8a8aa0", lx - 1, ly0 + 8, 3, llen); disc("#e63246", lx, ly0 + lv * llen * 0.8, L.w ? 6 : 4);   // the lever
+  text(c.msg.slice(0, L.w ? 30 : 19), L.w ? X + 101 : X + 60, L.w ? 150 : 120, 1, c.phase === "done" && c.win > c.staked ? GOLD : WHITE, "center", null);
+  for (const [id, x, y, w, h, v] of rdHits()) {
+    if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, L.w ? "STAKE" : "BET");
+    else if (id === "spin") btn(x, y, w, h, "SPIN", c.phase === "spin" ? GREY : tav().chips >= c.bet ? GOLD : GREY);
+  }
+  if (L.w) {
+    const rows = [["L", "X250"], ["S", "X60"], ["T", "X25"], ["K", "X12"], ["M", "X8"], ["B", "X3"]];
+    rows.forEach(([q, p0], i) => { const y = 92 + i * 12; for (let k = 0; k < 3; k++) rdSymbol(q, L.X + 248 + k * 16, y, 15); text(p0, L.X + 344, y, 1, CHIP, "right", null); });
+    text("BAIT: X1 / X5 / X20", L.X + 292, 166, 1, "#d8c8b0", "center", null); text("PAIRS: X2 TO X10", L.X + 292, 176, 1, "#d8c8b0", "center", null);
+    text("ABOUT 95% BACK", X + 101, 164, 1, "#a08c70", "center", null);
+  } else text("3 LEGENDS X250", X + 60, 176, 1, "#d8c8b0", "center", null);
+  text(c.phase === "spin" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function rdTap(rx, ly) {
+  const c = CZ.rd, h = hitAt(rdHits(), rx, ly);
+  if (!h) { if (ly > 186 && c.phase !== "spin") closeOverlay(); return; }
+  if (c.phase === "spin") return;
+  if (h[0] === "stake") { c.bet = stakeStep(c.bet, h[5]); play("tick"); } else rdSpin();
+}
+function rdKey(code, dir) { const c = CZ.rd; if (c.phase === "spin") return; if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); } else if (code === "Space" || code === "Enter" || code === "ArrowDown") rdSpin(); }
+EXTRA_OV.reel = { draw: drawRd, tap: rdTap, key: rdKey, back: () => CZ.rd && CZ.rd.phase === "spin" ? "reel" : "machines", music: true };
+
+// ---- THE SHIP'S WHEEL: spin the helm. 40 segments: 24 x0, 8 x1 (stake back), 5 x2, 2 x5, 1 x10 -> 38 / 40 = 95% back.
+const WH_NZ = [10, 1, 2, 1, 5, 1, 2, 1, 2, 1, 5, 1, 2, 1, 2, 1];
+const WH_SEG = (() => { const a = new Array(40).fill(0); WH_NZ.forEach((v, k) => { a[Math.round(k * 2.5)] = v; }); return a; })();
+const WH_COL = { 0: "#2a1e3c", 1: "#8c96c8", 2: "#46c88c", 5: "#ffd246", 10: "#f05050" };
+CZ.wh = null;
+function whOpen() { if (!CZ.wh) CZ.wh = { bet: 10, phase: "idle", ang: 0, a0: 0, a1: 0, t: 0, msg: "SPIN THE WHEEL", win: 0, seg: 0, k: 0, last: -1 }; }
+function whSpin() {
+  const c = CZ.wh; if (c.phase === "spin") return;
+  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet;
+  c.seg = Math.floor(Math.random() * 40);
+  const segA = (c.seg + 0.5) / 40 * Math.PI * 2, jitter = (Math.random() - 0.5) * 0.8 * (Math.PI * 2 / 40);
+  c.a0 = c.ang; c.a1 = c.ang - (c.ang % (Math.PI * 2)) + Math.PI * 2 * 4 + (Math.PI * 2 - segA) + jitter;   // the segment ends under the pointer at the top
+  c.t = 0; c.phase = "spin"; c.win = 0; c.msg = ""; play("tick");
+}
+function whTick(dt) {
+  const c = CZ.wh; if (!c || c.phase !== "spin") return;
+  c.t += dt; const u = Math.min(1, c.t / 3), e = 1 - Math.pow(1 - u, 3);
+  c.ang = c.a0 + (c.a1 - c.a0) * e;
+  const under = Math.floor(((Math.PI * 2 - (c.ang % (Math.PI * 2))) % (Math.PI * 2)) / (Math.PI * 2) * 40) % 40;
+  if (under !== c.last) { c.last = under; play("tick", 0.6); }
+  if (u >= 1) {
+    const x = WH_SEG[c.seg]; c.phase = "done"; c.win = Math.floor(c.staked * x);
+    if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
+    if (x === 10) tavAward("helmsman");
+    c.msg = x === 10 ? "X10! TOP OF THE WHEEL! +" + c.win : x > 1 ? "X" + x + "! +" + c.win : x === 1 ? "X1: STAKE BACK" : "NOTHING. SPIN AGAIN?"; play(x >= 5 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
+  }
+}
+function whHits() {
+  const L = czL(), h = [];
+  if (L.w) { const px = L.X + 236; stakeCtl(h, "stake", px, 40, 112); h.push(["spin", px, 62, 112, 26, 0]); }
+  else { stakeCtl(h, "stake", L.X + 4, 130, 112); h.push(["spin", L.X + 14, 150, 92, 18, 0]); }
+  return h;
+}
+function drawWheel(cx, cy, r, ang) {
+  for (let i = 0; i < 40; i++) {
+    const a0 = ang + i / 40 * Math.PI * 2 - Math.PI / 2, a1 = a0 + Math.PI * 2 / 40;
+    g.fillStyle = WH_COL[WH_SEG[i]]; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, r, a0, a1); g.closePath(); g.fill();
+    if (WH_SEG[i] >= 2 && r >= 50) { const am = (a0 + a1) / 2; text(WH_SEG[i], cx + Math.cos(am) * r * 0.78, cy + Math.sin(am) * r * 0.78, 1, INK, "center", null); }
+  }
+  g.strokeStyle = "#8a5c38"; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, r + 1, 0, Math.PI * 2); g.stroke(); g.lineWidth = 1;
+  for (let k = 0; k < 8; k++) { const a = ang + k / 8 * Math.PI * 2; rect("#8a5c38", Math.round(cx + Math.cos(a) * (r + 5)) - 2, Math.round(cy + Math.sin(a) * (r + 5)) - 2, 4, 4); }   // the handles
+  disc("#6a4428", cx, cy, Math.max(4, r * 0.16)); disc(GOLD, cx, cy, Math.max(2, r * 0.07));
+  poly(WHITE, [[cx - 4, cy - r - 7], [cx + 4, cy - r - 7], [cx, cy - r + 2]]);                    // the pointer
+}
+function drawWh() {
+  const c = CZ.wh, L = czL(), X = L.X;
+  rect("#0e1a2e", 0, 0, LW, LH);
+  czTitle(L, "SHIP'S WHEEL", CYAN);
+  if (L.w) drawWheel(X + 108, 90, 58, c.ang); else drawWheel(X + 60, 74, 38, c.ang);
+  text(c.msg.slice(0, L.w ? 36 : 19), L.w ? X + 108 : X + 60, L.w ? 166 : 122, 1, c.phase === "done" && c.win > c.staked ? GOLD : WHITE, "center", null);
+  for (const [id, x, y, w, h, v] of whHits()) {
+    if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, L.w ? "STAKE" : "BET");
+    else if (id === "spin") btn(x, y, w, h, "SPIN", c.phase === "spin" ? GREY : tav().chips >= c.bet ? GOLD : GREY);
+  }
+  if (L.w) { [[10, "1 IN 40"], [5, "2 IN 40"], [2, "5 IN 40"], [1, "8 IN 40"], [0, "24 IN 40"]].forEach(([v, n], i) => { rect(WH_COL[v], L.X + 240, 100 + i * 12, 8, 8); text("X" + v, L.X + 254, 104 + i * 12, 1, WHITE, "left", null); text(n, L.X + 344, 104 + i * 12, 1, "#8c96c8", "right", null); }); text("ABOUT 95% BACK", L.X + 292, 168, 1, "#5a7aa0", "center", null); }
+  else text("X1-X10 ON 16 OF 40", X + 60, 176, 1, "#8c96c8", "center", null);
+  text(c.phase === "spin" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function whTap(rx, ly) {
+  const c = CZ.wh, h = hitAt(whHits(), rx, ly);
+  if (!h) { if (ly > 186 && c.phase !== "spin") closeOverlay(); return; }
+  if (c.phase === "spin") return;
+  if (h[0] === "stake") { c.bet = stakeStep(c.bet, h[5]); play("tick"); } else whSpin();
+}
+function whKey(code, dir) { const c = CZ.wh; if (c.phase === "spin") return; if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); } else if (code === "Space" || code === "Enter") whSpin(); }
+EXTRA_OV.wheel = { draw: drawWh, tap: whTap, key: whKey, back: () => CZ.wh && CZ.wh.phase === "spin" ? "wheel" : "machines", music: true };
+
+function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); }
+
+window.CASINO = { CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
