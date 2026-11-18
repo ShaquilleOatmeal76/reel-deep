@@ -101,16 +101,16 @@ async def main():
         # talking to the shipwright and the raft home
         await ev("(() => { ISLE.msg = null; isleGo('port', 572, 626); ISLE.dir = 'up'; isleSave().min = 700; })()")
         await page.keyboard.press("KeyE")
-        check("the shipwright talks", (await ev("ISLE.msg && ISLE.msg.pages[0]") or "").startswith('"'))
+        check("the shipwright talks", (await ev("ISLE.msg && ISLE.msg.pages[0]") or "").startswith("'"))
         await page.keyboard.press("Space")
         await page.wait_for_timeout(300); await page.screenshot(path=OUT + "/dock.png")
 
         # the menu: go back to your boat
         await page.keyboard.press("Escape")
         check("Escape opens the menu", await ev("!!ISLE.menu"))
-        await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter")
-        r = await ev("({ st: REEL.S.state, w: canvas.width, isle: ISLE })")
-        check("going back: title screen, ocean canvas", r["st"] == "title" and r["w"] == await ev("REEL.width") and r["isle"] is None, r)
+        await page.keyboard.press("ArrowDown"); await page.keyboard.press("ArrowDown"); await page.keyboard.press("Enter")
+        r = await ev("({ st: REEL.S.state, w: canvas.width, isle: !!ISLE })")
+        check("going back: title screen, ocean canvas", r["st"] == "title" and r["w"] == await ev("REEL.width") and r["isle"] is False, r)
         saved = await ev("JSON.parse(localStorage.getItem('reeldeep')).isle.g")
         check("the island is saved", saved and saved["season"] == 1 and saved["intro"] == 1, saved)
         # coming back: no intro, a short welcome

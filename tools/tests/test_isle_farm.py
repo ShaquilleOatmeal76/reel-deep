@@ -39,7 +39,7 @@ async def main():
         ev = page.evaluate
         await ev("startIsland()")
         r = await ev("({ inv: isleSave().inv.slice(0, 4), sd: isleSave().sd, water: isleSave().water, pages: ISLE.msg.pages.length })")
-        check("starting kit: hoe, can, 15 lettuce seeds, 100 sand dollars", r["inv"] == [["hoe", 1], ["can", 1], ["s_lettuce", 15], None] and r["sd"] == 100 and r["water"] == 30, r)
+        check("starting kit: hoe, can, 15 lettuce seeds, 100 sand dollars", r["inv"] == [["hoe", 1], ["can", 1], ["s_lettuce", 15], ["rod", 1]] and r["sd"] == 100 and r["water"] == 30, r)
         check("the intro explains the garden", r["pages"] == 5, r)
         await ev("ISLE.msg = null")
 
@@ -109,10 +109,10 @@ async def main():
         await ev("(() => { isleGo('port', 452, 414, 'up'); ISLE.msg = null; })()")
         await page.keyboard.press("KeyE")
         check("the seed stand opens", await ev("!!ISLE.shop"))
-        r = await ev("shopList().map(c => c.id)")
+        r = await ev("shopList().map(c => c.item.replace(/^s_/, ''))")
         check("it sells this season's seeds", "melon" in r and "lettuce" not in r and "kelp" in r, r)
         sd0 = await ev("isleSave().sd"); await page.keyboard.press("KeyE")
-        r = await ev("[isleSave().sd, isleSave().inv.some(q => q && q[0] === 's_' + shopList()[0].id)]")
+        r = await ev("[isleSave().sd, isleSave().inv.some(q => q && q[0] === shopList()[0].item)]")
         check("buying takes sand dollars", r[0] == sd0 - (await ev("shopList()[0].price")) and r[1], r)
         await page.wait_for_timeout(200); await page.screenshot(path=OUT + "/shop.png")
         await page.keyboard.press("Escape")

@@ -232,9 +232,14 @@ function isleSave() {                                        // the island's par
   if (!q.g) q.g = { year: 1, season: 0, day: 1, min: DAY_START, sd: 0, intro: 0, area: "port", x: 0, y: 0 };
   const g_ = q.g;
   if (!g_.inv) {                                              // the starting kit (part 3): a hoe, a watering can, some seeds, 100 sand dollars
-    g_.inv = Array(INV_N).fill(null); g_.inv[0] = ["hoe", 1]; g_.inv[1] = ["can", 1]; g_.inv[2] = ["s_lettuce", 15];
+    g_.inv = Array(INV_N).fill(null); g_.inv[0] = ["hoe", 1]; g_.inv[1] = ["can", 1]; g_.inv[2] = ["s_lettuce", 15]; g_.inv[3] = ["rod", 1]; g_.inv[4] = ["net", 1]; g_.fish0 = 1;
     g_.sel = 0; g_.water = WATER_MAX; g_.sd = (g_.sd || 0) + 100; g_.farm = {}; g_.bin = []; g_.forage = null; g_.earned = 0; g_.kit = 0;
   }
+  if (!g_.fish0) {                                            // part 4: a fishing rod and a net for saves from before it
+    g_.fish0 = 1; g_.rodMsg = 1;
+    for (const id of ["rod", "net"]) { const i = g_.inv.indexOf(null); if (i >= 0) g_.inv[i] = [id, 1]; else g_.rodLater = 1; }
+  }
+  if (!g_.log) { g_.log = {}; g_.pots = []; g_.pools = null; }
   return g_;
 }
 
@@ -382,7 +387,7 @@ const AREAS = {
       [[170, 244], [604, 236]], [[604, 236], [1010, 244]],                          // the back lane past the cottages
       [[860, 444], [900, 520]]],
     dock: [[560, 596, 32, 204], [592, 716, 64, 40]],
-    exits: [{ side: "e", a: 410, b: 490, to: "flats", x: 14, y: 300 }],
+    exits: [{ side: "e", a: 410, b: 490, to: "flats", x: 14, y: 300 }, { side: "n", a: 560, b: 640, to: "lagoon", x: 560, y: 862 }],
   },
   flats: {                                                    // the Tide Flats: the old garden, tide pools, the long beach
     name: "TIDE FLATS", w: 80, h: 60, outdoor: true,
@@ -391,6 +396,14 @@ const AREAS = {
     paths: [[[0, 300], [250, 300], [460, 340]], [[250, 300], [760, 296], [1100, 330]], [[760, 296], [820, 600]]],
     garden: [304, 368, 320, 192],                            // farmable ground (x, y, w, h): 20 x 12 tiles
     exits: [{ side: "w", a: 260, b: 340, to: "port", x: 1106, y: 450 }],
+  },
+  lagoon: {                                                   // the Lagoon: a freshwater lake, the river through it, the old hatchery
+    name: "THE LAGOON", w: 70, h: 55, outdoor: true, fresh: true,
+    lakes: [[480, 430, 250, 160], [300, 370, 120, 105], [650, 510, 140, 86]],
+    river: [[[820, -20], [780, 120], [700, 230], [600, 300]], [[700, 470], [860, 520], [1000, 540], [1140, 560]]], riverW: 22,
+    paths: [[[560, 880], [560, 700], [470, 650]], [[560, 700], [760, 690], [990, 600], [1120, 600]], [[470, 650], [300, 600], [140, 520], [140, 300], [560, 60], [600, -10]], [[760, 690], [760, 760]]],
+    dock: [[460, 556, 24, 76], [988, 506, 30, 76]],           // a little pier into the lake, and a footbridge over the river
+    exits: [{ side: "s", a: 520, b: 600, to: "port", x: 602, y: 24 }],
   },
   shack: { name: "YOUR SHACK", w: 12, h: 10, outdoor: false },
 };
@@ -415,7 +428,6 @@ function portObjects() {                                   // everything standin
   add("pile", 2, 434, [0, 4, 36, 16], say("A PILE OF DRIFTWOOD BLOCKS THE WAY. A SIGN ON TOP SAYS: DRIFTWOOD WOODS."));
   add("bin", 196, 388, [1, 8, 20, 10], { kind: "bin" });
   add("stand", 438, 384, [1, 14, 28, 10], { kind: "shop" });
-  add("pile", 584, 4, [0, 4, 36, 16], say("A PILE OF DRIFTWOOD BLOCKS THE PATH NORTH. A SIGN ON TOP SAYS: LIGHTHOUSE POINT."));
   [90, 250, 470, 700, 820, 1000].forEach(x => add("lamp", x, 418, [2, 18, 4, 3]));
   [[230, 520], [470, 590], [1010, 560], [70, 560]].forEach(([x, y]) => add("log", x, y, [2, 2, 22, 5]));
   [[96, 410], [690, 410], [1060, 410]].forEach(([x, y]) => add("barrel", x, y, [1, 6, 10, 6]));
@@ -445,8 +457,25 @@ function pathDist(A, x, y) {
   return best;
 }
 function inDock(A, x, y) { return (A.dock || []).some(([a, b, w, h]) => x >= a && x < a + w && y >= b && y < b + h); }
+function freshDepth(A, x, y) {                              // how far inside the Lagoon's water a point is (px; negative = on land)
+  let d = -99;
+  for (const [cx, cy, rx, ry] of A.lakes) { const e = 1 - ((x - cx) / rx) ** 2 - ((y - cy) / ry) ** 2; d = Math.max(d, e * Math.min(rx, ry) * 0.5); }
+  for (const pl of A.river) for (let i = 1; i < pl.length; i++) {
+    const [ax, ay] = pl[i - 1], [bx, by] = pl[i], dx = bx - ax, dy = by - ay, k = clamp(((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy), 0, 1);
+    d = Math.max(d, A.riverW - Math.hypot(x - ax - k * dx, y - ay - k * dy));
+  }
+  return d;
+}
+function riverNear(A, x, y) { const sav = A.lakes; A.lakes = []; const d = freshDepth(A, x, y); A.lakes = sav; return d > -10; }
 function terrainAt(A, x, y) {                               // -> tile kind at pixel x, y (outdoor areas)
   if (inDock(A, x, y)) return "k";
+  if (A.fresh) {
+    const d = freshDepth(A, x, y);
+    if (d > 26) return "d";
+    if (d > 0) return "a";
+    if (d > -6) return "w";
+    return pathDist(A, x, y) < 9 ? "p" : "g";
+  }
   const sh = A.shore(x);
   if (y >= sh + TIDE_BAND + 60) return "d";
   if (y >= sh + TIDE_BAND) return "a";
@@ -472,6 +501,7 @@ function buildArea(id) {                                    // paint the ground 
       else if (t === "m") col = TCOL.m[n < .7 ? 0 : n < .85 ? 1 : n < .97 ? 2 : 3];
       else if (t === "k") { const yy = py - 596; col = yy % 4 === 0 ? [120, 80, 46] : [164, 114, 70]; if ((px - 560) % 32 === 0 || (px - 591) % 32 === 0) col = INKC; }
       else if (t === "s" || t === "w" || t === "t") { col = TCOL.s[n < .75 ? 0 : n < .9 ? 1 : n < .97 ? 2 : 3]; if (t !== "s") col = col.map(v => Math.round(v * (t === "t" ? 0.8 : 0.88))); }
+      else if (A.fresh) { const dep = freshDepth(A, px, py); col = dep < 8 ? [104, 178, 168] : dep < 26 ? [72, 148, 156] : [52, 116, 140]; if (dep >= 26 && dep < 29 && (px + py) % 2) col = [72, 148, 156]; }
       else { const dep = py - A.shore(px) - TIDE_BAND; col = dep < 14 ? [118, 204, 214] : dep < 50 ? [78, 172, 204] : [52, 140, 190]; if (((dep >= 14 && dep < 17) || (dep >= 50 && dep < 53)) && (px + py) % 2) col = dep < 30 ? [118, 204, 214] : [78, 172, 204]; }
       put(i, col);
     }
@@ -503,8 +533,14 @@ function buildArea(id) {                                    // paint the ground 
     if (A.outdoor) row.push(terrainAt(A, tx * TS + 8, ty * TS + 8));
     else row.push(ty < 2 || tx === 0 || tx === A.w - 1 || (ty === A.h - 1 && tx !== 5 && tx !== 6) ? "x" : "f");
   } tiles.push(row); }
-  const objs = id === "port" ? portObjects() : id === "flats" ? flatsObjects() : shackObjects();
-  return { id, A, c, tiles, objs, W, H };
+  const objs = id === "port" ? portObjects() : id === "flats" ? flatsObjects() : id === "lagoon" ? lagoonObjects() : shackObjects();
+  const glints = [], pools = [];
+  if (A.outdoor) for (let k = 0; k < 900 && glints.length < 120; k++) {
+    const gx = r.random() * W, gy = r.random() * H, t = terrainAt(A, gx, gy);
+    if ((t === "a" || t === "d") && !inDock(A, gx, gy)) glints.push([gx, gy, r.random() * 6]);
+  }
+  if (A.shore) for (const o of objs) if (o.k === "rock" && o.y > A.shore(o.x) && pools.length < (id === "flats" ? 12 : 4) && !pools.some(q => Math.hypot(q[0] - o.x, q[1] - o.y) < 40)) pools.push([o.x + 14, o.y + 4]);
+  return { id, A, c, tiles, objs, W, H, glints, pools };
 }
 const INKC = [26, 22, 40];
 function isleArt() {
@@ -517,6 +553,7 @@ function isleArt() {
   IART.well = artWell(); IART.lamp = artLamp(); IART.rock = artRock(); IART.barrel = artBarrel();
   IART.fenceh = artFenceH(); IART.fencev = artFenceV(); IART.wbarrel = artWaterBarrel(); IART.bin = artBin(); IART.stand = artStand();
   IART.sgarden = artSign("THE OLD GARDEN"); IART.sport = artSign("PORT");
+  IART.hatch = artRuin("HATCHERY", ["#5a7a8a", "#4a6874"]); IART.slagoon = artSign("THE LAGOON"); IART.reed = artReed(); IART.lily = artLily();
   IART.bed = artBed(); IART.table = artTable(); IART.stove = artStove(); IART.chest = artChest(); IART.door = paintCanvas(16, 12).c;
 }
 
@@ -559,12 +596,13 @@ function startIsland() {
   ISLE = { maps: {}, map: null, px: 0, py: 0, dir: "up", walk: 0, moving: false, msg: null, menu: null, fade: 1, target: null, saveT: 0, wake: 0, lastMin: s.min };
   isleResize();
   isleGo("port", 576, 744, "up");                          // the raft always lands at the dock
-  const kit = ["HE HANDS YOU A HOE, A WATERING CAN AND A PACKET OF SEEDS. \"THERE'S AN OLD GARDEN ON THE TIDE FLATS, EAST OF HERE. I CLEARED THE WAY.\"",
-    "\"SELL WHAT YOU GROW IN THE BIN BY YOUR SHACK. MORE SEEDS AT THE STAND BY THE STORE.\""];
-  if (first) { s.intro = 1; s.kit = 1; isleSay(["THE RAFT BUMPS AGAINST AN OLD DOCK.", "DRIFTWOOD ISLE. NOBODY HAS LIVED HERE IN YEARS.", "THE SHIPWRIGHT TIES THE RAFT UP. \"THAT SHACK UP THE HILL STILL HAS A ROOF. IT'S YOURS IF YOU WANT IT.\""].concat(kit)); }
+  const kit = ["HE HANDS YOU A HOE, A WATERING CAN, SEEDS, AN OLD ROD AND A NET. 'THERE'S AN OLD GARDEN ON THE TIDE FLATS, EAST OF HERE. I CLEARED THE WAY.'",
+    "'SELL WHAT YOU GROW IN THE BIN BY YOUR SHACK. MORE SEEDS AT THE STAND BY THE STORE.'"];
+  if (first) { s.intro = 1; s.kit = 1; isleSay(["THE RAFT BUMPS AGAINST AN OLD DOCK.", "DRIFTWOOD ISLE. NOBODY HAS LIVED HERE IN YEARS.", "THE SHIPWRIGHT TIES THE RAFT UP. 'THAT SHACK UP THE HILL STILL HAS A ROOF. IT'S YOURS IF YOU WANT IT.'"].concat(kit)); }
   else if (!s.kit) { s.kit = 1; isleSay(["THE SHIPWRIGHT IS WAITING ON THE DOCK."].concat(kit)); }
   else isleSay(["DRIFTWOOD ISLE. " + SEASONS[s.season][0] + " " + s.day + ", YEAR " + s.year + "."]);
   forageCheck();
+  if (s.rodMsg) { s.rodMsg = 0; ISLE.msg.pages.push("THE SHIPWRIGHT LEFT AN OLD FISHING ROD AND A NET ON YOUR STEP.", "'THE LAGOON'S OPEN, NORTH OF THE PORT. HOLD E TO CAST, LET GO TO THROW. THE NET IS FOR THE TIDE POOLS.'"); }
   saveStore(); play("plop");
 }
 function isleLeave() {
@@ -607,9 +645,9 @@ function objAt(x, y) {
   }
   return null;
 }
-const WRIGHT_LINES = ["\"THE OLD GARDEN'S ON THE TIDE FLATS. WATER WHAT YOU PLANT EVERY DAY, UNLESS IT RAINS.\"",
-  "\"THINGS WASH UP ON THE BEACHES EVERY MORNING. SHELLS AND SUCH. THEY SELL.\"", "\"THE RAFT'S TIED UP AT THE END OF THE DOCK WHENEVER YOU WANT TO GO BACK.\"", "\"THIS WHOLE PORT WAS BUSY ONCE. BOATS EVERYWHERE.\"",
-  "\"THOSE DRIFTWOOD PILES? I'LL CLEAR THEM WHEN THERE'S A REASON TO GO OUT THERE.\"", "\"THE MAN WHO LIVED IN YOUR SHACK WROTE A LOT OF LETTERS. PUT THEM IN BOTTLES, I HEARD.\""];
+const WRIGHT_LINES = ["'THE OLD GARDEN'S ON THE TIDE FLATS. WATER WHAT YOU PLANT EVERY DAY, UNLESS IT RAINS.'",
+  "'THINGS WASH UP ON THE BEACHES EVERY MORNING. SHELLS AND SUCH. THEY SELL.'", "'THE RAFT'S TIED UP AT THE END OF THE DOCK WHENEVER YOU WANT TO GO BACK.'", "'THIS WHOLE PORT WAS BUSY ONCE. BOATS EVERYWHERE.'",
+  "'THOSE DRIFTWOOD PILES? I'LL CLEAR THEM WHEN THERE'S A REASON TO GO OUT THERE.'", "'THE MAN WHO LIVED IN YOUR SHACK WROTE A LOT OF LETTERS. PUT THEM IN BOTTLES, I HEARD.'"];
 function isleAct(o) {
   const a = o.act, s = isleSave();
   if (a.kind === "say") isleSay(a.text);
@@ -643,7 +681,9 @@ function isleUpdate(dt) {
   I.fade = Math.max(0, I.fade - dt * 3); I.wake = Math.max(0, I.wake - dt);
   I.toasts = (I.toasts || []).filter(q => (q[1] -= dt) > 0);
   if (I.msg) { I.msg.t += dt; return; }
-  if (I.menu || I.shop || I.inv) return;
+  if (I.menu || I.shop || I.inv || I.log || I.card) return;
+  shadowsTick(dt);
+  if (I.fish) { fishTick(dt); if (I.fish && I.fish.phase !== "wait") return; }
   s.min += dt * GAME_MIN_PER_S;                              // the clock runs while you're out and about
   if (s.min >= DAY_END) { isleSleep(true); return; }
   if (Math.floor(s.min / 10) !== Math.floor(I.lastMin / 10) && I.map.A.outdoor && Math.floor(s.min / 60) !== Math.floor(I.lastMin / 60)) play("tick", 0.3);
@@ -654,11 +694,16 @@ function isleUpdate(dt) {
     if (Math.hypot(dx, dy) < 3) { const o = I.target[2]; I.target = null; if (o) isleTryAct(o); }
     else { mx = Math.abs(dx) > 2 ? Math.sign(dx) : 0; my = Math.abs(dy) > 2 ? Math.sign(dy) : 0; }
   } else if (mx || my) I.target = null;
+  if (I.fish && (mx || my)) { I.fish = null; play("back"); }        // walking off reels the line in
   I.moving = !!(mx || my);
   if (I.moving) {
     I.dir = Math.abs(mx) > Math.abs(my) || (mx && !my) ? (mx < 0 ? "left" : "right") : (my < 0 ? "up" : "down");
     const k = (mx && my ? 0.7071 : 1) * WALK * dt, ex = isleExitAt(I.px + mx * k, I.py + my * k);
-    if (ex) { isleGo(ex.to, ex.x, clamp(ex.y + (I.py - (ex.a + ex.b) / 2), 8, AREAS[ex.to].h * TS - 8), I.dir); play("tick"); return; }
+    if (ex) {
+      const ns = ex.side === "n" || ex.side === "s";
+      isleGo(ex.to, ns ? clamp(ex.x + (I.px - (ex.a + ex.b) / 2), 8, AREAS[ex.to].w * TS - 8) : ex.x, ns ? ex.y : clamp(ex.y + (I.py - (ex.a + ex.b) / 2), 8, AREAS[ex.to].h * TS - 8), I.dir);
+      play("tick"); return;
+    }
     if (mx && !feetBlocked(I.px + mx * k, I.py)) I.px += mx * k;
     if (my && !feetBlocked(I.px, I.py + my * k)) I.py += my * k;
     I.walk += dt;
@@ -676,10 +721,18 @@ function isleInteract() {
   if (ISLE.menu) { isleMenuPick(); return; }
   if (ISLE.shop) { shopPick(1); return; }
   if (ISLE.inv) { invPick(); return; }
+  if (ISLE.card) { ISLE.card = null; play("tick"); return; }
+  if (ISLE.log) { ISLE.log = null; return; }
+  if (ISLE.fish) { fishPress(); return; }
   const [fx, fy] = facingPoint(), f = forageAt(fx, fy) || forageAt(ISLE.px, ISLE.py - 4);
   if (f) { forageTake(f); return; }
   const o = objAt(fx, fy) || objAt(ISLE.px, ISLE.py - 4);
   if (o) { isleAct(o); return; }
+  if (potInteract()) return;
+  const it = held();
+  if (it && it[0] === "rod") { fishPress(); return; }
+  if (it && it[0] === "net") { netUse(); return; }
+  if (it && it[0] === "pot") { potPlace(); return; }
   isleUse();
 }
 
@@ -694,7 +747,8 @@ function drawIsle() {
   const I = ISLE, M_ = I.map, s = isleSave(), [cx, cy] = isleCam(), t = T, A = M_.A;
   g.fillStyle = A.outdoor ? "#2c5a8c" : "#0c0a14"; g.fillRect(0, 0, IW, IH);
   g.drawImage(M_.c, -cx, -cy);
-  if (A.outdoor) {                                          // the tide over the flats, foam, and glints on the water
+  if (A.outdoor && !A.shore) for (const [x, y, ph] of M_.glints) if (Math.sin(t * 1.6 + ph) > 0.5 && x > cx - 4 && x < cx + IW && y > cy && y < cy + IH) rect("#a6dcd6", x - cx + Math.round(Math.sin(t + ph) * 2), y - cy, 3, 1);
+  if (A.outdoor && A.shore) {                                // the tide over the flats, foam, and glints on the water
     const lv = tideLevel(s);
     for (let x = Math.max(0, cx - (cx % 2)); x < Math.min(M_.W, cx + IW + 2); x += 2) {
       const sh = A.shore(x), e = tideEdge(A, x, s), bot = sh + TIDE_BAND;
@@ -709,7 +763,7 @@ function drawIsle() {
     }
     void lv;
   }
-  drawFarmSoil(cx, cy);
+  drawFarmSoil(cx, cy); drawPools(cx, cy); drawShadows(cx, cy); drawPots(cx, cy);
   const list = M_.objs.map(o => [o.y + (o.solid ? o.solid[1] + o.solid[3] : IART[o.k].height - 2), o]);
   list.push([I.py, null]);
   farmSprites(list); forageSprites(list);
@@ -725,7 +779,7 @@ function drawIsle() {
       if (o.k === "shack") for (let k = 0; k < 3; k++) { const u = (t * 0.45 + k / 3) % 1; g.globalAlpha = 0.7 * (1 - u); rect("#e6e6ec", o.x - cx + 58 + Math.round(Math.sin(u * 6 + k) * 2 + u * 4), o.y - cy + 12 - Math.round(u * 16), 2 + Math.round(u * 2), 2); g.globalAlpha = 1; }
     } else if (o === null) drawIslePlayer(I.px - cx, I.py - cy, t);
   }
-  const [fx, fy] = facingPoint(), near = !I.msg && !I.menu && !I.shop && !I.inv && (forageAt(fx, fy) || forageAt(I.px, I.py - 4) || objAt(fx, fy) || objAt(I.px, I.py - 4));
+  const [fx, fy] = facingPoint(), near = !I.msg && !I.menu && !I.shop && !I.inv && !I.fish && (forageAt(fx, fy) || forageAt(I.px, I.py - 4) || objAt(fx, fy) || objAt(I.px, I.py - 4));
   if (!near && !I.msg && !I.menu && !I.shop && !I.inv && A.outdoor) drawTileCursor(cx, cy);
   if (near) { const bx = Math.round(I.px - cx), by = Math.round(I.py - cy) - 26 + Math.round(Math.sin(t * 5)); rect(INK, bx - 4, by - 4, 9, 9); rect(WHITE, bx - 3, by - 3, 7, 7); text("E", bx + 1, by + 1, 1, INK, "center", null); }
   if (A.outdoor) {                                          // weather and night
@@ -742,10 +796,13 @@ function drawIsle() {
     }
   } else { const dk = darkness(s.min) * 0.5; if (dk > 0) { g.globalAlpha = dk; rect("#141a40", 0, 0, IW, IH); g.globalAlpha = 1; } }
   drawIsleHud(s);
+  drawFishing(cx, cy);
   drawToolbar(s); drawToasts();
   if (I.msg) drawIsleMsg(I.msg);
   if (I.shop) drawShopIsle();
   if (I.inv) drawInvIsle();
+  if (I.log) drawLogIsle();
+  if (I.card) drawCatchCard();
   if (I.menu) drawIsleMenu();
   if (I.fade > 0) { g.globalAlpha = I.fade; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1; }
 }
@@ -780,7 +837,7 @@ function drawIsleMsg(m) {
     m.choice.opts.forEach((o, i) => { const bx = x + w - 64, by = y - 14 - (m.choice.opts.length - 1 - i) * 13; islePanel(bx, by, 60, 12); text((m.sel === i ? "> " : "  ") + o, bx + 4, by + 6, 1, m.sel === i ? "#b4461e" : "#3c2c22", "left", null); });
   } else if (done && Math.floor(T * 3) % 2) rect("#3c2c22", x + w - 9, y + h - 7, 4, 3);
 }
-const ISLE_MENU = [["RESUME", () => { ISLE.menu = null; }], ["GO BACK TO YOUR BOAT", () => { ISLE.menu = null; isleLeave(); }]];
+const ISLE_MENU = [["RESUME", () => { ISLE.menu = null; }], ["ISLAND LOG", () => { ISLE.menu = null; ISLE.log = { page: 0, sel: 0 }; }], ["GO BACK TO YOUR BOAT", () => { ISLE.menu = null; isleLeave(); }]];
 function drawIsleMenu() {
   g.globalAlpha = 0.5; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
   const w = 160, h = 22 + ISLE_MENU.length * 16 + 26, x = Math.round((IW - w) / 2), y = Math.round((IH - h) / 2), s = isleSave();
@@ -797,10 +854,13 @@ function isleMenuPick() { ISLE_MENU[ISLE.menu.sel][1](); play("select"); }
 function isleKey(e, down) {
   if (!ISLE || !down) return;
   const c = e.code, I = ISLE;
+  if (I.card) { if (["Space", "Enter", "KeyE", "Escape"].includes(c)) { e.preventDefault(); I.card = null; play("tick"); } return; }
+  if (I.log && !I.msg) { logKey(e); return; }
   if (I.shop && !I.msg) { shopKey(e); return; }
   if (I.inv && !I.msg) { invKey(e); return; }
   if (["Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); isleInteract(); return; }
   if (c === "Escape") { e.preventDefault(); if (I.msg) { I.msg = null; return; } I.menu = I.menu ? null : { sel: 0 }; play("tick"); return; }
+  if (c === "KeyL" && !I.msg && !I.menu) { I.log = { page: 0, sel: 0 }; play("select"); return; }
   if ((c === "Tab" || c === "KeyI") && !I.msg && !I.menu) { e.preventDefault(); I.inv = { sel: isleSave().sel, held: -1 }; play("select"); return; }
   if (/^Digit[1-9]$/.test(c) && !I.msg && !I.menu) { isleSave().sel = +c.slice(5) - 1; play("tick"); return; }
   if ((c === "KeyQ" || c === "BracketLeft" || c === "BracketRight") && !I.msg && !I.menu) { const d = c === "KeyQ" || c === "BracketRight" ? 1 : -1; isleSave().sel = (isleSave().sel + d + 9) % 9; play("tick"); return; }
@@ -826,10 +886,15 @@ function isleTouch(e) {
     }
     isleMsgAdvance(); return;
   }
+  if (I.card) { I.card = null; play("tick"); return; }
+  if (I.log) { logTouch(x, y); return; }
   if (I.shop) { shopTouch(x, y); return; }
   if (I.inv) { invTouch(x, y); return; }
   if (x < 22 && y < 20) { I.menu = { sel: 0 }; play("tick"); return; }
   if (toolbarTouch(x, y)) return;
+  if (I.fish) { fishPress(); return; }
+  { const it = held(), [cx0, cy0] = isleCam(), wx0 = x + cx0, wy0 = y + cy0;     // holding the rod: a tap on water casts toward it
+    if (it && it[0] === "rod" && I.map.A.outdoor && isWaterAt(wx0, wy0)) { const dx = wx0 - I.px, dy = wy0 - I.py; I.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down"); fishPress(); I.touchFish = true; return; } }
   const [cx, cy] = isleCam(), wx = x + cx, wy = y + cy, o = objAt(wx, wy), f = forageAt(wx, wy);
   if (f && Math.hypot(wx - I.px, wy - I.py) < 30) { forageTake(f); return; }
   if (o && Math.hypot(wx - I.px, wy - I.py) < 36) { isleAct(o); return; }
@@ -962,6 +1027,8 @@ function isleExitAt(x, y) {
   for (const e of M_.A.exits || []) {
     if (e.side === "e" && x > M_.W - 6 && y >= e.a && y < e.b) return e;
     if (e.side === "w" && x < 6 && y >= e.a && y < e.b) return e;
+    if (e.side === "n" && y < 6 && x >= e.a && x < e.b) return e;
+    if (e.side === "s" && y > M_.H - 4 && x >= e.a && x < e.b) return e;
   }
   return null;
 }
@@ -1010,7 +1077,7 @@ function farmNewDay(s) {                                      // after the day h
   }
   const paid = s.bin.reduce((a, [id, n]) => a + (sellable(id) || 0) * n, 0);
   s.sd += paid; s.earned = (s.earned || 0) + paid; s.bin = [];
-  forageCheck();
+  forageCheck(); potsNewDay(s);
   return paid;
 }
 function drawFarmSoil(cx, cy) {
@@ -1089,31 +1156,32 @@ function binAct() {
 }
 
 // ---- the seed stand by the store (an honour box until the store is fixed up)
-const shopList = () => CROPS.filter(c => c[2].includes(isleSave().season)).map(c => CROP[c[0]]);
+const shopList = () => CROPS.filter(c => c[2].includes(isleSave().season)).map(c => { const k = CROP[c[0]]; return { item: "s_" + k.id, name: k.name, price: k.price, info: k.days + " DAYS. SELLS " + k.sell + (k.regrow ? ", REGROWS " + k.regrow : "") + (k.seasons.length > 1 ? ". 2 SEASONS" : "") }; })
+  .concat([{ item: "pot", name: "CRAB POT", price: 120, info: "PUT IT IN WATER. CHECK IT EACH MORNING." }]);
 function shopGeo() { const w = Math.min(IW - 16, 300), n = shopList().length, h = 56 + n * 11; return [Math.round((IW - w) / 2), Math.max(4, Math.round((IH - h) / 2)), w, h]; }
 function drawShopIsle() {
   const [x, y, w, h] = shopGeo(), L = shopList(), s = isleSave(), sel = L[ISLE.shop.sel];
   g.globalAlpha = 0.45; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
   islePanel(x, y, w, h);
-  text("SEED STAND", x + 8, y + 9, 1, "#b4461e", "left", null); text(SEASONS[s.season][0], x + w / 2 + 10, y + 9, 1, "#8c6c50", "center", null);
+  text("SEEDS & TACKLE", x + 8, y + 9, 1, "#b4461e", "left", null); text(SEASONS[s.season][0], x + w / 2 + 10, y + 9, 1, "#8c6c50", "center", null);
   rect("#f0ecdc", x + w - 46, y + 6, 5, 5); text(s.sd, x + w - 38, y + 9, 1, "#5a3c28", "left", null);
   text("AN HONOUR BOX. LEAVE THE MONEY.", x + 8, y + 20, 1, "#8c6c50", "left", null);
   L.forEach((c, i) => {
     const ry = y + 28 + i * 11, on = i === ISLE.shop.sel;
     if (on) { rect("#f4e4c0", x + 5, ry, w - 10, 10); outline(x + 5, ry, w - 10, 10, "#b4461e"); }
-    g.drawImage(itemIcon("s_" + c.id), x + 8, ry + 1);
+    g.drawImage(itemIcon(c.item), x + 8, ry + 1);
     text(c.name, x + 18, ry + 5, 1, "#3c2c22", "left", null);
     text(c.price, x + w - 9, ry + 5, 1, s.sd >= c.price ? "#3c2c22" : "#b46446", "right", null);
   });
   const dy = y + 30 + L.length * 11;
-  if (sel) text(sel.days + " DAYS. SELLS " + sel.sell + (sel.regrow ? ", REGROWS " + sel.regrow : "") + (sel.seasons.length > 1 ? ". 2 SEASONS" : ""), x + 8, dy + 4, 1, "#5a3c28", "left", null);
+  if (sel) text(sel.info, x + 8, dy + 4, 1, "#5a3c28", "left", null);
   text(wideMenus() || IW >= 300 ? "E: BUY 1  SHIFT+E: BUY 5  ESC: DONE" : "TAP: BUY 1   OUT: DONE", x + 8, dy + 15, 1, "#8c6c50", "left", null);
 }
 function shopPick(n) {
   const c = shopList()[ISLE.shop.sel], s = isleSave(); if (!c) return;
   let got = 0;
-  for (let k = 0; k < n; k++) { if (s.sd < c.price || invAdd("s_" + c.id, 1) > 0) break; s.sd -= c.price; got++; }
-  if (got) { toast("+" + got + " " + c.name + " SEEDS", "#5ac85a"); play("select"); saveStore(); } else { toast(s.sd < c.price ? "NOT ENOUGH SAND DOLLARS" : "YOUR BAG IS FULL"); play("miss"); }
+  for (let k = 0; k < n; k++) { if (s.sd < c.price || invAdd(c.item, 1) > 0) break; s.sd -= c.price; got++; }
+  if (got) { toast("+" + got + " " + ITEMS[c.item].name, "#5ac85a"); play("select"); saveStore(); } else { toast(s.sd < c.price ? "NOT ENOUGH SAND DOLLARS" : "YOUR BAG IS FULL"); play("miss"); }
 }
 function shopKey(e) {
   const c = e.code, L = shopList();
@@ -1190,4 +1258,391 @@ function invTouch(x, y) {
   if (x < px || x > px + w || y < py || y > py + h) { ISLE.inv = null; play("back"); return; }
   const col = Math.floor((x - px - 8) / TB_SLOT), row = Math.floor((y - py - 18) / (TB_SLOT + 2));
   if (col >= 0 && col < 9 && row >= 0 && row < 2) { I.sel = row * 9 + col; invPick(); if (I.held < 0 && I.sel < 9) isleSave().sel = I.sel; }
+}
+
+// =====================================================================================================================
+// Part 4: chill fishing and the island log. The rod: hold E to cast (the bar swings), let go to throw. Fish shadows drift in
+// the water; one wanders over, nibbles, then pulls the bobber under: press E, then hold to reel and ease off when the line
+// glows. Nothing snaps; a fish that gets away just swims off. The net searches tide pools at low tide; crab pots fill
+// overnight. Every catch goes in the island log (isle_fish.js, 175 entries) with the lost angler's journal note.
+const FISH = {};
+ISLE_FISH.forEach(f => {
+  const [id, name, page, where, seasons, time, weather, min, max, shape, c1, c2, sell, w, note] = f;
+  FISH[id] = { id, name, page, where, seasons, time, weather, min, max, shape, c1, c2, sell, w, note };
+  ITEMS["f_" + id] = { name, kind: "fish", sell, fish: id };
+});
+ITEMS.rod = { name: "FISHING ROD", kind: "tool" }; ITEMS.net = { name: "NET", kind: "tool" }; ITEMS.pot = { name: "CRAB POT", kind: "pot" };
+const LOG_PAGES = [["sea", "THE SEA", "SEA"], ["fresh", "LAGOON AND RIVER", "FRESH"], ["pool", "TIDE POOLS", "POOLS"], ["pot", "CRAB POTS", "POTS"],
+  ["cave", "THE CAVES", "CAVES"], ["legend", "LEGENDS", "LGND"], ["special", "SPECIALS", "SPCL"]];
+const TIME_WIN = { a: [360, 1560], m: [360, 660], d: [660, 1020], e: [1020, 1260], n: [1260, 1560], w: [360, 420] };
+const LATER = /^(cave|marsh|wreck|gull|fest_|light)/;          // places and days still to come
+function fishOk(f, s) {
+  if (LATER.test(f.where) || !f.seasons.includes(String(s.season))) return false;
+  const [a, b] = TIME_WIN[f.time]; if (s.min < a || s.min >= b) return false;
+  const w = weatherOf(s);
+  if ((f.weather === "r" && w !== "rain") || (f.weather === "s" && w !== "sun") || (f.weather === "n" && w !== "snow")) return false;
+  if (f.id === "moonfish" && s.day !== 14) return false;          // the island's full moon: the middle of each season
+  return true;
+}
+function pickFish(where, s) {
+  const pool = Object.values(FISH).filter(f => (f.where === where || (where === "deep" && f.where === "sea")) && fishOk(f, s));
+  let tot = pool.reduce((a, f) => a + f.w, 0), r = Math.random() * tot;
+  for (const f of pool) if ((r -= f.w) <= 0) return f.id;
+  return pool.length ? pool[pool.length - 1].id : null;
+}
+function isWaterAt(x, y) {
+  const M_ = ISLE.map; if (x < 0 || y < 0 || x >= M_.W || y >= M_.H || inDock(M_.A, x, y)) return false;
+  const t = M_.tiles[Math.floor(y / TS)][Math.floor(x / TS)];
+  if (t === "a" || t === "d") return true;
+  return t === "t" && y > tideEdge(M_.A, x, isleSave()) + 2;
+}
+function waterKind(x, y) {
+  const M_ = ISLE.map, A = M_.A;
+  if (A.fresh) return riverNear(A, x, y) ? "river" : "lake";
+  return M_.tiles[Math.floor(y / TS)][Math.floor(x / TS)] === "d" ? "deep" : "sea";
+}
+const shadowR = sp => { const f = FISH[sp]; return f.page === "legend" ? 9 : f.max >= 24 ? 7 : f.max >= 8 ? 5 : 3; };
+
+// ---- fish shadows in the water
+function spawnShadow(x, y) {
+  if (!isWaterAt(x, y)) return null;
+  const sp = pickFish(waterKind(x, y), isleSave()); if (!sp) return null;
+  const f = { x, y, sp, size: Math.random(), vx: 0, vy: 0, t: 0, ph: Math.random() * 6 };
+  ISLE.shadows.push(f); return f;
+}
+function shadowsTick(dt) {
+  const I = ISLE, M_ = I.map;
+  if (!M_.A.outdoor) { I.shadows = []; return; }
+  if (I.shadowArea !== M_.id) { I.shadows = []; I.shadowArea = M_.id; }
+  const [cx, cy] = isleCam();
+  I.shadows = I.shadows.filter(f => !f.gone && f.x > cx - 90 && f.x < cx + IW + 90 && f.y > cy - 90 && f.y < cy + IH + 90);
+  I.shadowT = (I.shadowT || 0) - dt;
+  if (I.shadows.length < 7 && I.shadowT <= 0) { I.shadowT = 0.3; spawnShadow(cx + Math.random() * IW, cy + Math.random() * IH); }
+  for (const f of I.shadows) {
+    if (f.hook) continue;                                        // the one coming to the bobber moves in fishTick
+    if (f.flee) { f.x += f.vx * dt * 3; f.y += f.vy * dt * 3; f.flee -= dt; if (f.flee <= 0) f.gone = true; continue; }
+    f.t -= dt;
+    if (f.t <= 0) { const a = Math.random() * 6.28, sp = 4 + Math.random() * 8; f.vx = Math.cos(a) * sp; f.vy = Math.sin(a) * sp * 0.6; f.t = 1.5 + Math.random() * 3; }
+    const nx = f.x + f.vx * dt, ny = f.y + f.vy * dt;
+    if (isWaterAt(nx, ny)) { f.x = nx; f.y = ny; } else { f.vx = -f.vx; f.vy = -f.vy; }
+  }
+}
+function drawShadows(cx, cy) {
+  for (const f of ISLE.shadows || []) {
+    const r = shadowR(f.sp), x = f.x - cx, y = f.y - cy, dir = (f.vx || 1) >= 0 ? 1 : -1, wig = Math.sin(T * 6 + f.ph) * 0.8;
+    if (x < -20 || y < -10 || x > IW + 20 || y > IH + 10) continue;
+    g.globalAlpha = 0.32; g.fillStyle = "#0a2232";
+    g.beginPath(); g.ellipse(Math.round(x), Math.round(y), r, Math.max(1.5, r * 0.4), 0, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(x - dir * r, y); g.lineTo(x - dir * (r + r * 0.7), y - r * 0.4 + wig); g.lineTo(x - dir * (r + r * 0.7), y + r * 0.4 + wig); g.fill();
+    g.globalAlpha = 1;
+    if (FISH[f.sp].page === "legend" && Math.floor(T * 2) % 2) { g.globalAlpha = 0.35; outline(Math.round(x - r - 2), Math.round(y - 4), r * 2 + 4, 8, "#ffd246"); g.globalAlpha = 1; }
+  }
+}
+
+// ---- the rod
+function fishPress() {
+  const I = ISLE, F = I.fish;
+  if (!F) { if (!I.map.A.outdoor) { toast("NO WATER IN HERE"); play("miss"); return; } I.fish = { phase: "charge", p: 0, d: 1 }; return; }
+  if (F.phase === "wait") { if (F.bite > 0) startReel(); else { I.fish = null; if (F.sh) F.sh.hook = false; play("back"); } return; }
+  if (F.phase === "reel") F.hold = true;
+}
+function fishRelease() { const F = ISLE.fish; if (!F) return; if (F.phase === "charge") castLine(); else if (F.phase === "reel") F.hold = false; }
+function isleKeyUp(e) { if (ISLE && ["Space", "Enter", "KeyE"].includes(e.code)) fishRelease(); }
+function isleTouchUp(e) { if (ISLE) { fishRelease(); ISLE.touchFish = false; } }
+function rodTip() { const I = ISLE, d = { up: [3, -22], down: [6, -6], left: [-10, -14], right: [10, -14] }[I.dir]; return [I.px + d[0], I.py + d[1]]; }
+function castLine() {
+  const I = ISLE, F = I.fish, d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[I.dir], dist = 20 + F.p * 76;
+  const tx = clamp(I.px + d[0] * dist, 4, I.map.W - 4), ty = clamp(I.py - 4 + d[1] * dist, 4, I.map.H - 4);
+  I.fish = { phase: "fly", t: 0, sx: rodTip()[0], sy: rodTip()[1], x: tx, y: ty, wet: isWaterAt(tx, ty) };
+  play("tick");
+}
+function startReel() {
+  const I = ISLE, F = I.fish, sh = F.sh;
+  I.fish = { phase: "reel", sp: sh.sp, size: sh.size, prog: 0.15, ten: 0.25, hold: true, over: 0, surge: 0, surgeT: 1.5, x: F.x, y: F.y };
+  sh.gone = true; play("hit");
+}
+function fishTick(dt) {
+  const I = ISLE, F = I.fish, s = isleSave();
+  if (F.phase === "charge") { F.p += F.d * dt / 0.9; if (F.p >= 1) { F.p = 1; F.d = -1; } else if (F.p <= 0) { F.p = 0; F.d = 1; } return; }
+  if (F.phase === "fly") {
+    F.t += dt;
+    if (F.t >= 0.35) {
+      if (!F.wet) { I.fish = null; toast("THE LINE LANDS ON DRY GROUND"); play("miss"); return; }
+      Object.assign(F, { phase: "wait", t: 0, sh: null, nib: 0, nibT: 0, bite: 0, look: 0, dip: 0 }); play("plop");
+    }
+    return;
+  }
+  if (F.phase === "wait") {
+    F.t += dt; F.dip = Math.max(0, F.dip - dt);
+    if (!F.sh) {
+      F.look -= dt;
+      if (F.look <= 0) {
+        F.look = 0.6;
+        const near = I.shadows.filter(q => !q.hook && !q.flee && Math.hypot(q.x - F.x, q.y - F.y) < 80).sort((a, b) => Math.hypot(a.x - F.x, a.y - F.y) - Math.hypot(b.x - F.x, b.y - F.y))[0];
+        if (near && Math.random() < 0.6) { F.sh = near; near.hook = true; F.nib = 1 + Math.floor(Math.random() * 3); F.nibT = 1 + Math.random(); }
+        else if (F.t > 3 && Math.random() < 0.35) { const a = Math.random() * 6.28, sh = spawnShadow(F.x + Math.cos(a) * 50, F.y + Math.sin(a) * 30); if (sh) { F.sh = sh; sh.hook = true; F.nib = 1 + Math.floor(Math.random() * 3); F.nibT = 1 + Math.random(); } }
+      }
+      return;
+    }
+    const sh = F.sh, dx = F.x - sh.x, dy = F.y - sh.y, dd = Math.hypot(dx, dy);
+    if (dd > 5) { sh.vx = dx / dd * 14; sh.vy = dy / dd * 14; sh.x += sh.vx * dt; sh.y += sh.vy * dt; return; }
+    if (F.bite > 0) {
+      F.bite -= dt;
+      if (F.bite <= 0) { sh.hook = false; sh.flee = 1.5; sh.vx = -sh.vx || 10; sh.vy = -sh.vy; F.sh = null; F.t = 0; toast("IT SWAM OFF. NO HARM DONE"); }
+      return;
+    }
+    F.nibT -= dt;
+    if (F.nibT <= 0) {
+      if (F.nib > 0) { F.nib--; F.dip = 0.18; F.nibT = 0.6 + Math.random() * 0.8; play("tick", 0.4); }
+      else { F.bite = 1.2; play("plop"); }
+    }
+    return;
+  }
+  if (F.phase === "reel") {
+    const f = FISH[F.sp], str = clamp(f.max / 30 + (f.page === "legend" ? 1.4 : 0) + F.size * 0.5, 0.2, 3.2);
+    F.surgeT -= dt; if (F.surgeT <= 0) { F.surge = F.surge ? 0 : 1; F.surgeT = F.surge ? 0.5 + Math.random() * 0.8 : 1.2 + Math.random() * 2; }
+    if (F.hold) { F.prog += dt * (0.34 - str * 0.06); F.ten += dt * (0.32 + str * 0.22 + F.surge * 0.45); }
+    else { F.ten -= dt * 0.75; F.prog -= dt * 0.04 * (1 + F.surge); }
+    F.prog = clamp(F.prog, 0.02, 1); F.ten = clamp(F.ten, 0, 1);
+    F.over = F.ten >= 1 ? F.over + dt : Math.max(0, F.over - dt * 2);
+    if (F.over > 1.1) { I.fish = null; toast("IT SLIPPED OFF THE HOOK. NO HARM DONE"); play("miss"); return; }
+    if (F.prog >= 1) { I.fish = null; logCatch(F.sp, F.size, "rod"); }
+  }
+}
+function logCatch(sp, size, how) {                               // into the bag and the log; a card the first time
+  const s = isleSave(), f = FISH[sp], inches = Math.round(f.min + (f.max - f.min) * size), e = s.log[sp], isNew = !e;
+  if (invAdd("f_" + sp, 1) > 0) { toast("YOUR BAG IS FULL. YOU LET IT GO"); play("miss"); return; }
+  const best = e ? e.best : 0;
+  s.log[sp] = { n: (e ? e.n : 0) + 1, best: Math.max(best, inches) };
+  if (isNew) { ISLE.card = { sp, inches, how }; play("fanfare"); }
+  else { toast("+1 " + f.name + ", " + inches + " IN" + (inches > best ? ". NEW BEST!" : ""), inches > best ? GOLD : WHITE); play("chime"); }
+  saveStore();
+}
+function drawFishing(cx, cy) {
+  const I = ISLE, F = I.fish; if (!F) return;
+  const [rx, ry] = rodTip(), px = Math.round(I.px - cx), py = Math.round(I.py - cy);
+  if (F.phase === "charge") {
+    rect(INK, px + 10, py - 30, 5, 24); rect("#3c2c22", px + 11, py - 29, 3, 22);
+    const h = Math.round(22 * F.p); rect(F.p > 0.85 ? "#ffd246" : F.p > 0.5 ? "#82f082" : "#5ae6ff", px + 11, py - 7 - h, 3, h);
+    line("#c8b48c", rx - cx, ry - cy, rx - cx + 2, ry - cy - 8);
+    return;
+  }
+  let bx = F.x, by = F.y;
+  if (F.phase === "fly") { const k = F.t / 0.35; bx = lerp(F.sx, F.x, k); by = lerp(F.sy, F.y, k) - Math.sin(k * Math.PI) * 24; }
+  const under = F.phase === "wait" && F.bite > 0, dip = F.phase === "wait" && F.dip > 0 ? 1 : 0;
+  g.globalAlpha = 0.8; g.strokeStyle = "#e6e6e6"; g.lineWidth = 1; g.beginPath(); g.moveTo(rx - cx + 0.5, ry - cy + 0.5);
+  g.quadraticCurveTo((rx + bx) / 2 - cx, Math.max(ry, by) - cy + 8, bx - cx + 0.5, by - cy + 0.5); g.stroke(); g.globalAlpha = 1;
+  if (F.phase === "reel") {
+    const t = T, wob = Math.sin(t * 9) * 2; rect("#ffffff", F.x - cx - 4 + wob, F.y - cy, 3, 1); rect("#ffffff", F.x - cx + 3 - wob, F.y - cy + 1, 2, 1);
+  } else if (!under) { rect(INK, bx - cx - 2, by - cy - 3 + dip, 5, 6); rect("#f05050", bx - cx - 1, by - cy - 2 + dip, 3, 2); rect("#fafaff", bx - cx - 1, by - cy + dip, 3, 2); }
+  if (F.phase === "wait") { const rr = (T * 0.8) % 1; g.globalAlpha = 0.5 * (1 - rr); g.strokeStyle = "#e6faff"; g.beginPath(); g.ellipse(bx - cx, by - cy + 2, 3 + rr * (under ? 10 : 6), 1 + rr * 3, 0, 0, 7); g.stroke(); g.globalAlpha = 1; }
+  if (under && Math.floor(T * 8) % 2) text("!", px, py - 30, 2, GOLD, "center");
+  if (F.phase === "reel") {
+    const w = Math.min(IW - 16, 250), x = Math.round((IW - w) / 2), y = tbGeo()[1] - 42, bx = x + 42, bw = w - 48;
+    islePanel(x, y, w, 36);
+    text(IW >= 300 ? "HOLD E TO REEL. EASE OFF WHEN THE LINE GLOWS" : "HOLD TO REEL. EASE OFF", x + w / 2, y + 8, 1, "#5a3c28", "center", null);
+    text("CATCH", x + 6, y + 18, 1, "#3c2c22", "left", null); rect("#3c2c22", bx, y + 15, bw, 6); rect("#5ac85a", bx + 1, y + 16, Math.round((bw - 2) * F.prog), 4);
+    const tc = F.ten > 0.85 ? (Math.floor(T * 10) % 2 ? "#ff5a3c" : "#ffd246") : F.ten > 0.6 ? "#ffa046" : "#e6e6e6";
+    text("LINE", x + 6, y + 28, 1, "#3c2c22", "left", null); rect("#3c2c22", bx, y + 25, bw, 6); rect(tc, bx + 1, y + 26, Math.round((bw - 2) * F.ten), 4);
+  }
+}
+
+// ---- tide pools (the net, at low tide) and crab pots (overnight)
+function poolDry(p) { const A = ISLE.map.A; return p[1] < tideEdge(A, p[0], isleSave()) - 3; }
+function poolsToday() { const s = isleSave(), day = s.year * 1000 + s.season * 100 + s.day; if (!s.pools || s.pools.day !== day) s.pools = { day, used: [] }; return s.pools; }
+function drawPools(cx, cy) {
+  const M_ = ISLE.map; if (!M_.pools || !M_.pools.length) return;
+  const used = poolsToday().used;
+  M_.pools.forEach((p, i) => {
+    if (!poolDry(p)) return;
+    const x = p[0] - cx, y = p[1] - cy; if (x < -20 || y < -10 || x > IW + 20 || y > IH + 10) return;
+    g.fillStyle = "#3c7884"; g.beginPath(); g.ellipse(x, y, 9, 4, 0, 0, 7); g.fill();
+    g.fillStyle = "#5aa0a8"; g.beginPath(); g.ellipse(x - 1, y - 1, 6, 2, 0, 0, 7); g.fill();
+    if (!used.includes(M_.id + i) && Math.floor(T * 2 + i) % 3 === 0) { rect(WHITE, x + 3, y - 2, 1, 1); rect(WHITE, x - 4, y, 1, 1); }
+  });
+}
+function netUse() {
+  const I = ISLE, M_ = I.map, [fx, fy] = facingPoint();
+  const i = (M_.pools || []).findIndex(p => Math.hypot(p[0] - fx, p[1] - fy) < 14 || Math.hypot(p[0] - I.px, p[1] - I.py) < 14);
+  if (i < 0) { toast(M_.A.shore ? "THE NET IS FOR TIDE POOLS ON THE FLATS" : "THE NET IS FOR TIDE POOLS BY THE SEA"); play("miss"); return; }
+  if (!poolDry(M_.pools[i])) { toast("THE TIDE IS IN OVER THIS POOL"); play("miss"); return; }
+  const pt = poolsToday();
+  if (pt.used.includes(M_.id + i)) { toast("YOU'VE SEARCHED THIS POOL TODAY"); play("miss"); return; }
+  pt.used.push(M_.id + i); splashDust(Math.floor(M_.pools[i][0] / TS), Math.floor(M_.pools[i][1] / TS), "#a0dce6");
+  const sp = Math.random() < 0.72 ? pickFish("pool", isleSave()) : null;
+  if (sp) logCatch(sp, Math.random(), "net"); else { toast("JUST SAND AND A CONFUSED BARNACLE"); play("tick"); }
+}
+function potAt(tx, ty) { const s = isleSave(); return s.pots.find(p => p.a === ISLE.map.id && p.x === tx && p.y === ty); }
+function potPlace() {
+  const s = isleSave(), [tx, ty] = facingTile(), x = tx * TS + 8, y = ty * TS + 8;
+  if (!isWaterAt(x, y)) { toast("CRAB POTS GO IN THE WATER"); play("miss"); return; }
+  if (potAt(tx, ty)) { play("miss"); return; }
+  if (s.pots.length >= 12) { toast("12 POTS IS PLENTY"); play("miss"); return; }
+  s.pots.push({ a: ISLE.map.id, x: tx, y: ty, c: null }); invUse(s.sel); play("plop"); toast("THE POT IS SET. CHECK IT TOMORROW");
+}
+function potInteract() {
+  const [tx, ty] = facingTile(), p = potAt(tx, ty) || potAt(tx, ty + 1) || potAt(tx, ty - 1);
+  if (!p) return false;
+  if (p.c) { const c = p.c; p.c = null; logCatch(c, Math.random(), "pot"); return true; }
+  isleSay(["AN EMPTY CRAB POT. PICK IT UP?"], { opts: ["PICK UP", "LEAVE IT"], act: [() => { if (invAdd("pot", 1) === 0) { const s = isleSave(); s.pots = s.pots.filter(q => q !== p); play("select"); } else toast("YOUR BAG IS FULL"); }, () => play("tick")] });
+  return true;
+}
+function potsNewDay(s) { for (const p of s.pots) if (!p.c && Math.random() < 0.85) p.c = pickFish(AREAS[p.a].fresh ? "freshpot" : "seapot", s); }
+function drawPots(cx, cy) {
+  const s = isleSave();
+  for (const p of s.pots) if (p.a === ISLE.map.id) {
+    const x = p.x * TS + 8 - cx, y = p.y * TS + 8 - cy + Math.round(Math.sin(T * 2 + p.x) * 1);
+    if (x < -10 || y < -10 || x > IW + 10 || y > IH + 10) continue;
+    rect("#c8b48c", x, y + 2, 1, 4); rect(INK, x - 3, y - 3, 7, 6); rect("#f05050", x - 2, y - 2, 5, 2); rect("#fafaff", x - 2, y, 5, 2);
+    if (p.c && Math.floor(T * 3) % 2) rect(GOLD, x, y - 8, 1, 3);
+  }
+}
+
+// ---- the Lagoon
+function artReed() { const P = paintCanvas(8, 16); P.rect(2, 4, 1, 12, "#5a8c3c"); P.rect(5, 2, 1, 14, "#4a7a32"); P.rect(1, 2, 3, 5, "#7a5232"); P.rect(4, 0, 3, 5, "#6e482a"); P.rect(0, 9, 3, 1, "#6ea046"); P.rect(5, 8, 3, 1, "#6ea046"); return P.c; }
+function artLily() { const P = paintCanvas(10, 6); P.rows([".gggg.", "gggggg", "ggg.gg", ".gggg."], { g: "#468c46" }, 1, 1, false); P.rect(5, 1, 2, 2, "#f0b4c8"); return P.c; }
+function lagoonObjects() {
+  const o = [], add = (k, x, y, solid, act) => o.push({ k, x, y, solid, act }), A = AREAS.lagoon, say = (...text) => ({ kind: "say", text });
+  add("hatch", 704, 616, [4, 32, 56, 22], say("THE OLD HATCHERY. TANKS AND TROUGHS, ALL DRY. SOMEONE BRED FISH HERE ONCE.", "IT COULD BE FIXED UP ONE DAY."));
+  add("slagoon", 590, 790, [24, 10, 6, 8], say("THE LAGOON. FRESH WATER, AND FISH YOU WON'T FIND IN THE SEA."));
+  add("pile", 580, 4, [0, 4, 36, 16], say("A PILE OF DRIFTWOOD BLOCKS THE PATH NORTH. A SIGN ON TOP SAYS: LIGHTHOUSE POINT."));
+  add("pile", 1084, 584, [0, 4, 36, 16], say("A PILE OF DRIFTWOOD BLOCKS THE WAY. A SIGN ON TOP SAYS: MANGROVE MARSH."));
+  const r = seeded(123);
+  for (let i = 0; i < 260; i++) { const x = r.uniform(0, A.w * TS), y = r.uniform(0, A.h * TS), d = freshDepth(A, x, y + 14); if (d > -7 && d < -1 && !inDock(A, x, y + 14)) add("reed", x - 4, y, null); }
+  for (let i = 0; i < 400 && o.filter(q => q.k === "lily").length < 28; i++) { const x = r.uniform(0, A.w * TS), y = r.uniform(0, A.h * TS); if (A.lakes.some(([cx, cy, rx, ry]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 0.8) && freshDepth(A, x, y) > 10 && !inDock(A, x, y) && !riverNear(A, x, y)) add("lily", x, y, null); }
+  const clear = (x, y, w, h) => !o.some(q => q.solid && x + w > q.x - 6 && x < q.x + IART[q.k].width + 6 && y + h > q.y - 4 && y < q.y + IART[q.k].height + 4) && pathDist(A, x + w / 2, y + h - 4) > 18
+    && freshDepth(A, x + w / 2, y + h - 2) < -12 && freshDepth(A, x + 2, y + h - 2) < -12 && freshDepth(A, x + w - 2, y + h - 2) < -12;
+  for (let i = 0; i < 500; i++) {
+    const x = r.uniform(-10, A.w * TS - 10), y = r.uniform(-30, A.h * TS - 40), palm = r.random() < 0.45, [w, h] = palm ? [28, 42] : [16, 12];
+    if (!clear(x, y, w, h)) continue;
+    if (palm) add("palm", x, y, [10, 30, 8, 6]); else add(r.random() < 0.5 ? "bush" : "bushb", x, y, [3, 6, 10, 4]);
+  }
+  for (let i = 0; i < 30; i++) { const x = r.uniform(20, 1100), y = r.uniform(20, 860); if (clear(x, y, 12, 9)) add("rock", x, y, [1, 3, 8, 4]); }
+  return o;
+}
+
+// ---- fish sprites, drawn from each species' shape and colours
+function fishPal(f) {
+  const pat = f.c2[0] === "~" || f.c2[0] === "*", c2 = pat ? f.c2.slice(1) : f.c2;
+  return { b: f.c1, c: pat ? shade(f.c1, 1.3) : c2, p: pat ? c2 : f.c1, d: shade(f.c1, 0.72), e: INK, w: "#fafaff" };
+}
+const SHAPE_ROWS = {
+  crab: ["b.....b", "bb...bb", ".bbbbb.", "bbebebb", "bbbbbbb", ".ccccc.", "b.b.b.b"],
+  prawn: ["d........", ".d.......", "..bbb....", ".bpbbbbe.", "..bbpbbbb", "....bbpbb", "...b.b.cc"],
+  star: ["...b...", "...b...", "bbbpbbb", ".bbbbb.", ".bb.bb.", "b.....b"],
+  urchin: ["d.d.d", ".bbb.", "dbpbd", ".bbb.", "d.d.d"],
+  anemone: ["p.p.p.p", ".ppppp.", "..bbb..", "..bbb..", ".ccccc."],
+  shell: ["...bb..", "..bpbb.", ".bbbpbb", "bbpbbbb", "ccccccb", ".e....."],
+  slug: ["p....p.", "bbbbbbb", "bpbbpbb", ".ccccc."],
+  horse: [".bbb.", "bbebb", "..bbb", "..bb.", ".bbp.", ".bb..", "..bb.", "...b."],
+  jelly: [".bbbbb.", "bbpbpbb", "bbbbbbb", ".c.c.c.", ".c.c.c.", "c.c.c.."],
+  squid: [".......bb", "..bbbbbbb", "ccbbbbebb", "..bbbbbbb", ".......bb"],
+  octo: ["..bbbb..", ".bbbbbb.", ".bebbeb.", "..bbbb..", ".b.bb.b.", "b..bb..b"],
+  ray: ["...bb....", "..bbbb...", ".bbpbbb..", "bbbbbbbbd", ".bbbbbb..", "..bbbb...", "...bb...."],
+};
+function fishRows(f) {
+  const sh = f.shape;
+  if (SHAPE_ROWS[sh]) return SHAPE_ROWS[sh];
+  const L = { small: 9, fish: 13, long: 15, eel: 15, shark: 15, flat: 12, round: 11 }[sh] || 12, H = { small: 5, fish: 7, long: 4, eel: 5, shark: 7, flat: 7, round: 9 }[sh] || 6;
+  const stripe = f.c2[0] === "~", spots = f.c2[0] === "*", rows = [];
+  for (let y = 0; y < H; y++) {
+    let row = "";
+    for (let x = 0; x < L; x++) {
+      let ch = ".";
+      const tail = sh === "round" ? 2 : 3, cy0 = (H - 1) / 2;
+      if (sh === "eel") { const off = Math.round(Math.sin(x / 2.2) * 1); if (Math.abs(y - 2 - off) <= 0.5 + (x > L - 4 ? 0.5 : 0)) ch = "b"; }
+      else if (x < tail) { if (Math.abs(y - cy0) <= (tail - x) * H / 7 + 0.5 && sh !== "flat") ch = "d"; }
+      else { const ex = (x - tail - (L - tail) / 2) / ((L - tail) / 2), ey = (y - cy0) / (H / 2); if (ex * ex + ey * ey <= 1) ch = y > cy0 + (sh === "flat" ? 1 : 0.5) ? "c" : "b"; }
+      if (ch === "b" && stripe && x % 3 === 1 && sh !== "eel") ch = "p";
+      if ((ch === "b" || ch === "c") && spots && (x * 7 + y * 3) % 5 === 0) ch = "p";
+      row += ch;
+    }
+    rows.push(row);
+  }
+  const ey = Math.max(1, Math.floor((H - 1) / 2) - 1), ex = sh === "eel" ? L - 2 : L - 3;
+  rows[ey] = rows[ey].slice(0, ex) + "e" + rows[ey].slice(ex + 1);
+  if (sh === "shark" || sh === "fish") { const mid = Math.floor(L / 2) + (sh === "shark" ? 0 : 1); rows.unshift(".".repeat(mid) + (sh === "shark" ? "dd" : "d") + ".".repeat(L - mid - (sh === "shark" ? 2 : 1))); }
+  return rows;
+}
+function fishIcon(sp, sil) {
+  const key = "fish_" + sp + (sil ? "s" : "");
+  if (ISPR[key]) return ISPR[key];
+  const f = FISH[sp], pal = sil ? Object.fromEntries("bcpdew".split("").map(k => [k, "#3c4058"])) : fishPal(f);
+  return pix(key, fishRows(f), pal);
+}
+const _itemIcon = itemIcon;
+itemIcon = function (id) { return id.startsWith("f_") ? fishIcon(id.slice(2)) : id === "rod" ? pix("icon_rod", ["......b", ".....b.", "....b..", "...b..l", "..b...l", ".h....l", "h.....w"], { b: "#96683e", h: "#5a3c24", l: "#e6e6e6", w: "#f05050" })
+  : id === "net" ? pix("icon_net", ["nnnn...", "n.n.n..", "nnnn...", "n.n.n..", "nnnnb..", "....b..", ".....b."], { n: "#c8c8b4", b: "#96683e" })
+  : id === "pot" ? pix("icon_pot", [".kkkkk.", "kmkmkmk", "kkkkkkk", "kmkmkmk", ".kkkkk."], { k: "#7c5232", m: "#c8b48c" }) : _itemIcon(id); };
+
+// ---- the island log
+function logGeo() { const wide = IW >= 300, w = wide ? Math.min(IW - 12, 372) : IW - 8; return [Math.round((IW - w) / 2), 4, w, IH - 8, wide]; }
+const logList = p => ISLE_FISH.filter(f => f[2] === LOG_PAGES[p][0]).map(f => FISH[f[0]]);
+const WHERE_TXT = { sea: "THE SEA", deep: "DEEP SEA WATER", lake: "THE LAGOON", river: "THE RIVER", pool: "TIDE POOLS, LOW TIDE", seapot: "CRAB POTS IN THE SEA", freshpot: "CRAB POTS IN THE LAGOON",
+  marsh: "THE MARSH", wreck: "THE WRECK", gull: "GULL ROCK", light: "???" };
+function whereTxt(f) { return f.where.startsWith("cave") ? "THE CAVES, LAYER " + f.where.slice(4) : f.where.startsWith("fest_") ? "A FESTIVAL" : WHERE_TXT[f.where]; }
+function whenTxt(f) {
+  const ss = f.seasons.length === 4 ? "ALL YEAR" : f.seasons.split("").map(d => SEASONS[+d][1]).join(" ");
+  const tt = { a: "", m: ", MORNINGS", d: ", DAYTIME", e: ", EVENINGS", n: ", NIGHTS", w: ", DAWN" }[f.time], ww = { a: "", r: ", RAIN", s: ", SUN", n: ", SNOW" }[f.weather];
+  return ss + tt + ww;
+}
+function logCells() {
+  const [x, y, w, h, wide] = logGeo(), L = logList(ISLE.log.page), cols = 8, cw = 20, ch = 17, out = [];
+  L.forEach((f, i) => out.push([x + 6 + (i % cols) * cw, y + 32 + Math.floor(i / cols) * ch, cw - 2, ch - 2, i]));
+  return out;
+}
+function drawLogIsle() {
+  const [x, y, w, h, wide] = logGeo(), s = isleSave(), P = ISLE.log, L = logList(P.page), got = Object.keys(s.log).length;
+  g.globalAlpha = 0.55; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
+  islePanel(x, y, w, h);
+  text("ISLAND LOG", x + 8, y + 9, 1, "#b4461e", "left", null); text(got + "/" + ISLE_FISH.length, x + w - 8, y + 9, 1, "#5a3c28", "right", null);
+  const tw = (w - 12) / LOG_PAGES.length;
+  LOG_PAGES.forEach(([k, name, short], i) => { const tx = Math.round(x + 6 + i * tw), on = i === P.page; rect(on ? "#f4e4c0" : "#dcc49a", tx, y + 16, Math.round(tw) - 2, 12); if (on) outline(tx, y + 16, Math.round(tw) - 2, 12, "#b4461e"); text(short, tx + tw / 2 - 1, y + 22, 1, on ? "#b4461e" : "#5a3c28", "center", null); });
+  for (const [cx_, cy_, cw, ch, i] of logCells()) {
+    const f = L[i], e = s.log[f.id], on = i === P.sel;
+    rect(on ? "#fff0b4" : "#e8d4aa", cx_, cy_, cw, ch); outline(cx_, cy_, cw, ch, on ? "#b4461e" : "#c8b088");
+    const c = fishIcon(f.id, !e), k = Math.min(1, (cw - 2) / c.width, (ch - 2) / c.height);
+    g.drawImage(c, 0, 0, c.width, c.height, Math.round(cx_ + (cw - c.width * k) / 2), Math.round(cy_ + (ch - c.height * k) / 2), Math.round(c.width * k), Math.round(c.height * k));
+  }
+  const f = L[P.sel], e = f && s.log[f.id], rows = Math.ceil(L.length / 8);
+  const dx = wide ? x + 6 + 8 * 20 + 6 : x + 8, dy = wide ? y + 34 : y + 34 + rows * 17 + 4, dw = wide ? x + w - 6 - dx : w - 16, cols = Math.floor(dw / 6);
+  if (!f) return;
+  if (e) {
+    text(f.name, dx, dy + 3, 1, f.page === "legend" ? "#b4781e" : "#3c2c22", "left", null);
+    text("CAUGHT " + e.n + "  BEST " + e.best + " IN", dx, dy + 14, 1, "#5a3c28", "left", null);
+    wrap(whereTxt(f) + ". " + whenTxt(f) + ".", cols).slice(0, 2).forEach((l, i) => text(l, dx, dy + 25 + i * 9, 1, "#8c6c50", "left", null));
+    text("SELLS " + f.sell, dx, dy + 45, 1, "#8c6c50", "left", null);
+    wrap(f.note, cols).slice(0, wide ? 6 : 8).forEach((l, i) => text(l, dx, dy + 58 + i * 9, 1, "#5a3c28", "left", null));
+  } else {
+    text("???", dx, dy + 3, 1, "#3c2c22", "left", null);
+    const hint = ["legend", "special"].includes(f.page) ? "NOT CAUGHT YET. THE STORIES SAY IT'S OUT THERE." : LATER.test(f.where) ? "SOMEWHERE YOU HAVEN'T BEEN YET." : whereTxt(f) + ". " + whenTxt(f) + ".";
+    wrap(hint, cols).slice(0, 4).forEach((l, i) => text(l, dx, dy + 16 + i * 9, 1, "#8c6c50", "left", null));
+  }
+  text(wide ? "ARROWS: PICK   TAB: NEXT PAGE   ESC: CLOSE" : "TAP A TAB OR A FISH", x + w / 2, y + h - 7, 1, "#8c6c50", "center", null);
+}
+function logKey(e) {
+  const c = e.code, P = ISLE.log, n = logList(P.page).length;
+  if (["Escape", "KeyL", "Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); ISLE.log = null; play("back"); return; }
+  if (c === "Tab" || c === "BracketRight") { e.preventDefault(); P.page = (P.page + 1) % LOG_PAGES.length; P.sel = 0; play("tick"); return; }
+  if (c === "BracketLeft") { P.page = (P.page + LOG_PAGES.length - 1) % LOG_PAGES.length; P.sel = 0; play("tick"); return; }
+  if (/^Digit[1-7]$/.test(c)) { P.page = +c.slice(5) - 1; P.sel = 0; play("tick"); return; }
+  const d = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1, ArrowUp: -8, KeyW: -8, ArrowDown: 8, KeyS: 8 }[c];
+  if (d) { P.sel = clamp(P.sel + d, 0, n - 1); play("tick"); }
+}
+function logTouch(x, y) {
+  const [px, py, w, h] = logGeo(), P = ISLE.log;
+  if (x < px || x > px + w || y < py || y > py + h) { ISLE.log = null; play("back"); return; }
+  if (y >= py + 16 && y < py + 28) { P.page = clamp(Math.floor((x - px - 6) / ((w - 12) / LOG_PAGES.length)), 0, LOG_PAGES.length - 1); P.sel = 0; play("tick"); return; }
+  const c = hitAt(logCells(), x, y); if (c) { P.sel = c[4]; play("tick"); }
+}
+function drawCatchCard() {
+  const C_ = ISLE.card, f = FISH[C_.sp], w = Math.min(IW - 20, 240), h = 112, x = Math.round((IW - w) / 2), y = Math.round((IH - h) / 2) - 10;
+  g.globalAlpha = 0.5; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
+  islePanel(x, y, w, h);
+  text("NEW IN THE LOG!", x + w / 2, y + 9, 1, "#b4461e", "center", null);
+  const c = fishIcon(f.id), k = Math.min(4, 60 / c.width, 34 / c.height);
+  g.drawImage(c, 0, 0, c.width, c.height, Math.round(x + w / 2 - c.width * k / 2), y + 16 + Math.round((34 - c.height * k) / 2), Math.round(c.width * k), Math.round(c.height * k));
+  text(f.name, x + w / 2, y + 58, 1, f.page === "legend" ? "#b4781e" : "#3c2c22", "center", null);
+  text(C_.inches + " IN   SELLS " + f.sell, x + w / 2, y + 68, 1, "#5a3c28", "center", null);
+  wrap(f.note, Math.floor((w - 12) / 6)).slice(0, 3).forEach((l, i) => text(l, x + w / 2, y + 80 + i * 9, 1, "#8c6c50", "center", null));
 }
