@@ -215,7 +215,9 @@ function fpMapPath(segs) {                   // a top-down outline of the track 
 
 // ---- racers
 const FP_NAMES = ["FINN", "BUBBLES", "GILL", "SHELLY", "CORAL", "RIPTIDE", "NEMO JR", "SCALES", "DORY 2", "BARNACLE"];
-function fpFishColors(id) {                  // the two main colours of a fish sprite, for its rear view
+const FP_COLS = {};
+function fpFishColors(id) { return FP_COLS[id] || (FP_COLS[id] = fpFishColors0(id)); }
+function fpFishColors0(id) {                 // the two main colours of a fish sprite, for its rear view
   const fb = ["#ff8c32", "#fafaff"];
   try {
     const a = DATA.atlas[id], c = document.createElement("canvas"); c.width = a[2]; c.height = a[3];
@@ -226,18 +228,22 @@ function fpFishColors(id) {                  // the two main colours of a fish s
     return [top[0] || fb[0], top[1] || top[0] || fb[1]];
   } catch (e) { return fb; }
 }
-function startKart(test, bot, track) {      // bot (tests only): a robot drives your fish: { noise, lag, lv }
-  const segs = fpTrack(track), len = segs.length * FP.SEG, f = tav().fish, rng = RNG((Math.random() * 4294967296) >>> 0);
-  const me = { name: f ? f.name : "YOU", id: f ? f.id : "clown", me: true, lv: bot ? bot.lv : f ? f.lv : [5, 5, 5], bot };
-  const racers = [me].concat(FP_CREW.map(p => ({ id: p.id === me.id ? p.alt : p.id, name: p.name, p, skill: FP_TUNE.skill + rng.random() * FP_TUNE.spread })));
+function startKart(test, bot, track, mode) { // bot (tests only): a robot drives your fish: { noise, lag, lv }. mode: { cup } or { tt: true }
+  mode = mode || {};
+  const segs = fpTrack(track), len = segs.length * FP.SEG, f = tav().fish, rng = RNG((Math.random() * 4294967296) >>> 0), cup = mode.cup || null;
+  const me = { name: f ? f.name : "YOU", id: f ? f.id : "clown", me: true, lv: bot ? bot.lv : f ? f.lv : [5, 5, 5], bot, look: fpData().eq, laps: [], rec: [] };
+  const skill = cup ? FP_CUP_SKILL[cup.id] : FP_TUNE.skill;
+  let racers = mode.tt ? [me] : [me].concat(FP_CREW.map(p => ({ id: p.id === me.id ? p.alt : p.id, name: p.name, p, skill: skill + rng.random() * FP_TUNE.spread })));
   for (let i = racers.length - 1; i > 1; i--) { const j = 1 + Math.floor(rng.random() * i); [racers[i], racers[j]] = [racers[j], racers[i]]; }   // a shuffled grid behind you
   racers.forEach((r, i) => {
     Object.assign(r, { z: (FP.RACERS - 1 - i) * -FP.SEG * 2.2 + len, x: (i % 2 ? 0.45 : -0.45), speed: 0, lap: 0, done: false, place: i + 1, item: null, roll: 0,
       spin: 0, boost: 0, dir: 0, ink: 0, zap: 0, shield: 0, cols: fpFishColors(r.id), finishT: 0, aiItemT: 2 + Math.random() * 4 });
     if (r.me) r.z = len - FP.SEG * 2.2 * 7.5;            // you start at the back, MK style
   });
+  if (cup && cup.last) racers.forEach(r => { const p = cup.last.indexOf(r.name); r.z = len - FP.SEG * 2.2 * (p + 0.5); r.x = p % 2 ? 0.45 : -0.45; });   // later races: the grid is the last finishing order
   racers.forEach(r => { r.z = ((r.z % len) + len) % len; r.lap = r.z > len / 2 ? -1 : 0; });
-  KART = { test: !!test, track: segs.key, laps: segs.def.laps, segs, len, racers, me, t: 0, phase: "count", ct: 3.6, keys: new Set(), shots: [], mines: [], flash: 0, shake: 0, msg: "", msgT: 0, touch: null, ink: 0 };
+  if (mode.tt) me.item = "shrimp";
+  KART = { test: !!test, cup, tt: !!mode.tt, shrimps: mode.tt ? 3 : 0, ghost: mode.tt ? fpGhosts()[segs.key] || null : null, track: segs.key, laps: segs.def.laps, segs, len, racers, me, t: 0, phase: "count", ct: 3.6, keys: new Set(), shots: [], mines: [], flash: 0, shake: 0, msg: "", msgT: 0, touch: null, ink: 0 };
   S.state = "kart"; S.overlay = null;
 }
 const fpSeg = z => KART.segs[Math.floor(((z % KART.len) + KART.len) % KART.len / FP.SEG)];
@@ -254,7 +260,7 @@ function fpRollItem(place) {
 function fpUseItem(r) {
   const it = r.item; if (!it || r.roll > 0) return;
   r.item = null;
-  if (it === "shrimp") { r.boost = Math.max(r.boost, 1.4); if (r.me) play("pulse"); }
+  if (it === "shrimp") { r.boost = Math.max(r.boost, 1.4); if (r.me) play("pulse"); if (KART.tt && --KART.shrimps > 0) r.item = "shrimp"; }
   else if (it === "shield") { r.shield = 10; if (r.me) play("chime"); }
   else if (it === "zap") {                                   // EEL ZAP: everyone ahead of you is shocked and slowed
     KART.racers.forEach(o => { if (o !== r && fpDist(o) > fpDist(r)) { if (o.shield > 0) o.shield = 0; else { o.zap = 1.2; o.speed *= 0.7; } } });
@@ -276,8 +282,9 @@ function kartKey(e, down) {
   const c = e.code;
   if (down) KART.keys.add(c); else KART.keys.delete(c);
   if (!down) return;
-  if (c === "Escape" && KART.test) { KART = null; newDive(); return; }
-  if (KART.phase === "done" && ["Space", "Enter"].includes(c)) { startKart(KART.test, null, KART.track); return; }
+  if (c === "Escape") { if (KART.test) { KART = null; newDive(); } else fpExit(); return; }
+  if ((KART.phase === "done" || KART.phase === "cupdone") && ["Space", "Enter"].includes(c)) { fpNext(); return; }
+  if (c === "KeyH" && KART.phase === "race") { fpHorn(); return; }
   if (KART.phase === "done" && KART.test && ["ArrowLeft", "ArrowRight", "KeyA", "KeyD"].includes(c)) {   // the test: try another track
     const i = FP_ORDER.indexOf(KART.track), d = c === "ArrowLeft" || c === "KeyA" ? -1 : 1; startKart(true, null, FP_ORDER[(i + d + FP_ORDER.length) % FP_ORDER.length]); play("tick"); return;
   }
@@ -285,7 +292,7 @@ function kartKey(e, down) {
 }
 function kartTouch(rx, ly, down) {           // touch: hold the left / right side to steer; the bottom-right corner uses your item
   if (!KART) return;
-  if (KART.phase === "done") { if (down) startKart(KART.test, null, KART.track); return; }
+  if (KART.phase === "done" || KART.phase === "cupdone") { if (down) fpNext(); return; }
   if (down && ly > 160 && rx > LW - 44) { fpUseItem(KART.me); return; }
   KART.touch = down ? [rx, ly] : null;
 }
@@ -330,16 +337,20 @@ function kartUpdate(dt) {
     continue_(r, seg, dt);
   }
   if (K.phase !== "count") fpObjects(dt);
-  if (K.phase === "race" && me.done) { K.phase = "done"; K.doneT = K.t; play(me.place === 1 ? "fanfare" : "chime"); }
+  if (K.phase === "race" && me.done) { K.phase = "done"; K.doneT = K.t; play(me.place === 1 ? "fanfare" : "chime"); fpRaceOver(); }
 }
 function continue_(r, seg, dt) {             // move along, count laps, item boxes, bumps
   const K = KART, z0 = r.z;
   r.z += r.speed * dt; r.ink = Math.max(0, r.ink - dt); r.surge = Math.max(0, (r.surge || 0) - dt);
   if (r.me) KART.bumpT = Math.max(0, (KART.bumpT || 0) - dt);
   if (r.roll > 0) { r.roll -= dt; if (r.roll <= 0) r.item = r.rolling; }
+  if (r.me) {                                 // lap times, and a ghost of this lap (sampled every 0.05 s)
+    if (r.lapStart !== undefined) { const i = Math.floor((K.t - r.lapStart) / 0.05); while (r.rec.length <= i) r.rec.push([Math.round(r.z), Math.round(r.x * 100)]); }
+    if (r.z >= K.len) { if (r.lapStart !== undefined) fpLapDone(r, K.t - r.lapStart); r.lapStart = K.t; r.rec = []; }
+  }
   if (r.z >= K.len) { r.z -= K.len; r.lap++; if (r.lap >= K.laps && !r.done) { r.done = true; r.finishT = K.t; if (r.me) { K.msg = "FINISH!"; K.msgT = 3; } } else if (r.me && r.lap === K.laps - 1) { K.msg = "FINAL LAP!"; K.msgT = 2; play("chime"); } }
   const s = fpSeg(r.z);
-  if (s !== fpSeg(z0) || true) for (const b of s.boxes) if (!b.gone && Math.abs(b.x - r.x) < 0.22 && !r.item && !(r.roll > 0)) {
+  if (s !== fpSeg(z0) || true) for (const b of s.boxes) if (!K.tt && !b.gone && Math.abs(b.x - r.x) < 0.22 && !r.item && !(r.roll > 0)) {
     b.gone = 3; r.roll = r.me ? 1.2 : 0.4; r.rolling = fpRollItem(r.place); if (r.me) play("chime");
   }
   for (const o of K.racers) if (o !== r && Math.abs(fpDist(o) - fpDist(r)) < FP.SEG * 0.6 && Math.abs(o.x - r.x) < 0.28) {   // bump
@@ -508,6 +519,11 @@ const fpHex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), pa
 function fpQuad(col, x1, y1, w1, x2, y2, w2) { g.fillStyle = col; g.beginPath(); g.moveTo(x1 - w1, y1 + 1); g.lineTo(x2 - w2, y2); g.lineTo(x2 + w2, y2); g.lineTo(x1 + w1, y1 + 1); g.fill(); }
 function drawKart() {
   const K = KART, me = K.me, t = K.t, len = K.len;
+  K.ghostR = null;
+  if (K.ghost && me.lapStart !== undefined && K.phase === "race") {     // your best lap, replayed
+    const u = (t - me.lapStart) / 0.05, i = Math.floor(u), a = K.ghost[i], b = K.ghost[i + 1] || a;
+    if (a) { let bz = b[0]; if (bz < a[0] - len / 2) bz += len; K.ghostR = { id: me.id, cols: me.cols, look: me.look, yaw: 0, spin: 0, boost: 0, z: lerp(a[0], bz, u - i) % len, x: lerp(a[1], b[1], u - i) / 100 }; }
+  }
   const camZ = (((me.z - FP.CAM_H * FP.DEPTH * 1.6) % len) + len) % len, base = fpSeg(camZ), bp = (((camZ % FP.SEG) + FP.SEG) % FP.SEG) / FP.SEG;
   const camY = lerp(base.p1.y, base.p2.y, bp) + FP.CAM_H, camX = me.x * FP.ROAD;
   const sh = K.shake > 0 ? Math.round(Math.sin(t * 60) * 2) : 0, P = K.segs.def.pal, fogC = P.fog;
@@ -586,6 +602,7 @@ function drawKart() {
     }
     for (const m of K.mines) if (fpSeg(m.z) === s) { const [px, py, w] = at(m.x, 55, 55); disc("#e6c850", px, py - w * 0.6, Math.max(1, w / 2)); if (w > 6) { rect(INK, px - w * 0.2, py - w * 0.7, 2, 2); rect(INK, px + w * 0.1, py - w * 0.7, 2, 2); } }
     for (const u of K.shots) if (fpSeg(u.z) === s) { const [px, py, w] = at(u.x, 45, 45); disc("#b45adc", px, py - w * 0.6, Math.max(1, w / 2)); for (let q = 0; q < 6; q++) rect("#e6b4ff", px + Math.cos(q + t * 9) * w * 0.7, py - w * 0.6 + Math.sin(q + t * 9) * w * 0.7, 1, 1); }
+    if (K.ghostR && fpSeg(K.ghostR.z) === s && K.ghostR.z > me.z - FP.SEG * 0.5) { const [px, py, w0] = at(K.ghostR.x, 90, 90), w = Math.min(w0, 40); if (w > 1) { g.globalAlpha = 0.45; fpKart(K.ghostR, px, py, w, 0.6); g.globalAlpha = 1; } }
     for (const r of K.racers) if (!r.me && fpSeg(r.z) === s && fpDist(r) > fpDist(me) - FP.SEG * 0.5) { const [px, py, w0] = at(r.x, 90, 90), w = Math.min(w0, 40); if (w > 1) { fpKart(r, px, py, w, fog); if (dark) glows.push([px, py - w * 0.2, w * 0.4, "#ff5050"]); } }   // (racers behind you aren't drawn: they'd be between you and the camera)
     g.restore();
   }
@@ -609,28 +626,110 @@ function drawKart() {
   fpHud();
 }
 function fpShadow(x, y, w) { g.fillStyle = "rgba(0,0,0,0.25)"; g.beginPath(); g.ellipse(x, y, w * 0.42, Math.max(1, w * 0.09), 0, 0, 7); g.fill(); }
-// a little shell kart from behind, with the fish riding in it (its real sprite), like a Mario Kart driver
-function fpKart(r, x, y, w, fog) {
-  const [c1, c2] = r.cols, a = DATA.atlas[r.id], yaw = r.spin > 0 ? Math.sin(r.spin * 18) : r.yaw || 0, h = w * 0.42, t = KART.t;
+// ---- kart looks: bodies, paint jobs and trails (sold in the chip shop or won in cups; looks only, never speed)
+const FP_PAINTS = {
+  stock: null, cherry: ["#e63c46", "#a01e2a"], lime: ["#8cdc3c", "#4a9a28"], ocean: ["#3c8cdc", "#1e4e9a"], sunset: ["#ff8c3c", "#c83c78"],
+  midnight: ["#2a2c4e", "#6a6ec0"], bubblegum: ["#ff8cc8", "#fafaff"], chrome: ["#dce6f0", "#8c9aaa"], gold: ["#ffd23c", "#c8961e"],
+};
+function fpLook(r) { const k = r.look || {}; return { body: k.body || "shell", cols: FP_PAINTS[k.paint] || r.cols, paint: k.paint || "stock", trail: k.trail || "bubbles" }; }
+// each body is drawn from behind around (0, 0); fish() draws the rider at a height; h = w * 0.42
+const FP_BODIES = {
+  shell(c1, c2, w, h, t, fish) {
+    fish(-h * 0.55);
+    g.fillStyle = "#e8e0c8"; g.beginPath(); g.ellipse(0, -h * 0.5, w * 0.36, h * 0.18, 0, 0, 7); g.fill();          // the cockpit rim
+    g.fillStyle = c2; g.beginPath(); g.ellipse(0, -h * 0.15, w * 0.46, h * 0.5, 0, Math.PI, 0); g.fill();               // the shell (back half)
+    g.fillStyle = c1; g.fillRect(-w * 0.46, -h * 0.17, w * 0.92, h * 0.42);                                               // the body
+    g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(-w * 0.4, -h * 0.12, w * 0.8, Math.max(1, h * 0.07));
+    g.fillStyle = "#2a2438"; g.fillRect(-w * 0.34, h * 0.08, w * 0.18, h * 0.2); g.fillRect(w * 0.16, h * 0.08, w * 0.18, h * 0.2);   // two bubble jets
+    g.fillStyle = c2; g.beginPath(); g.moveTo(-w * 0.46, -h * 0.1); g.lineTo(-w * 0.6, h * 0.2); g.lineTo(-w * 0.46, h * 0.25); g.fill();
+    g.beginPath(); g.moveTo(w * 0.46, -h * 0.1); g.lineTo(w * 0.6, h * 0.2); g.lineTo(w * 0.46, h * 0.25); g.fill();
+    return [[-w * 0.25, h * 0.18], [w * 0.25, h * 0.18]];                                                                 // where the jets are
+  },
+  sub(c1, c2, w, h, t, fish) {
+    g.fillStyle = c2; g.fillRect(-w * 0.03, -h * 1.75, w * 0.06, h * 0.6); g.fillRect(-w * 0.03, -h * 1.75, w * 0.14, h * 0.12);   // periscope
+    fish(-h * 0.5);
+    g.globalAlpha *= 0.35; g.fillStyle = "#b4f0ff"; g.beginPath(); g.ellipse(0, -h * 0.55, w * 0.34, h * 0.75, 0, Math.PI, 0); g.fill(); g.globalAlpha /= 0.35;   // the glass dome
+    g.fillStyle = "rgba(255,255,255,0.6)"; g.fillRect(-w * 0.2, -h * 1.05, Math.max(1, w * 0.05), h * 0.3);
+    g.fillStyle = c1; g.beginPath(); g.ellipse(0, 0, w * 0.48, h * 0.55, 0, 0, 7); g.fill();                              // the hull
+    g.fillStyle = c2; g.fillRect(-w * 0.48, -h * 0.05, w * 0.96, Math.max(1, h * 0.12));
+    for (const sx of [-1, 1]) { g.fillStyle = "#e8e0c8"; g.beginPath(); g.arc(sx * w * 0.3, -h * 0.05, Math.max(1, w * 0.08), 0, 7); g.fill(); g.fillStyle = "#3c6e8c"; g.beginPath(); g.arc(sx * w * 0.3, -h * 0.05, Math.max(1, w * 0.05), 0, 7); g.fill(); }   // portholes
+    const sp = t * 18; g.fillStyle = "#2a2438"; g.fillRect(-w * 0.04, h * 0.35, w * 0.08, h * 0.25);                      // the propeller
+    g.fillStyle = "#c8c8d2"; g.fillRect(-w * 0.2 * Math.abs(Math.cos(sp)), h * 0.5, w * 0.4 * Math.abs(Math.cos(sp)), Math.max(1, h * 0.1));
+    g.fillStyle = c2; g.beginPath(); g.moveTo(-w * 0.4, h * 0.1); g.lineTo(-w * 0.62, h * 0.35); g.lineTo(-w * 0.35, h * 0.35); g.fill(); g.beginPath(); g.moveTo(w * 0.4, h * 0.1); g.lineTo(w * 0.62, h * 0.35); g.lineTo(w * 0.35, h * 0.35); g.fill();
+    return [[0, h * 0.55]];
+  },
+  bathtub(c1, c2, w, h, t, fish) {
+    fish(-h * 0.45);
+    g.fillStyle = "#fafaff"; for (let q = 0; q < 7; q++) { g.beginPath(); g.arc(-w * 0.4 + q * w * 0.13, -h * 0.42 + Math.sin(t * 3 + q) * h * 0.04, w * 0.08, 0, 7); g.fill(); }   // foam
+    g.fillStyle = "#f0f0f6"; g.beginPath(); g.moveTo(-w * 0.52, -h * 0.4); g.lineTo(w * 0.52, -h * 0.4); g.lineTo(w * 0.44, h * 0.3); g.lineTo(-w * 0.44, h * 0.3); g.fill();   // the tub
+    g.fillStyle = "#c8c8d6"; g.fillRect(-w * 0.52, -h * 0.42, w * 1.04, Math.max(1, h * 0.1));
+    g.fillStyle = c1; g.fillRect(-w * 0.47, -h * 0.05, w * 0.94, Math.max(1, h * 0.14));                                 // a painted stripe
+    g.fillStyle = "#d2aa3c"; for (const sx of [-0.38, 0.38]) { g.fillRect(w * sx - w * 0.05, h * 0.3, w * 0.1, h * 0.22); g.fillRect(w * sx - w * 0.08, h * 0.46, w * 0.16, h * 0.08); }   // claw feet
+    g.fillStyle = "#ffd232"; g.beginPath(); g.arc(w * 0.38, -h * 0.55, w * 0.07, 0, 7); g.fill(); g.beginPath(); g.arc(w * 0.44, -h * 0.68, w * 0.05, 0, 7); g.fill(); g.fillStyle = "#ff8c32"; g.fillRect(w * 0.47, -h * 0.68, w * 0.04, w * 0.02);   // rubber duck
+    return [[0, h * 0.35]];
+  },
+  turtle(c1, c2, w, h, t, fish) {
+    const pad = Math.sin(t * 8) * h * 0.15;
+    g.fillStyle = "#64b464"; g.beginPath(); g.ellipse(-w * 0.52, h * 0.05 + pad, w * 0.16, h * 0.1, -0.5, 0, 7); g.fill(); g.beginPath(); g.ellipse(w * 0.52, h * 0.05 - pad, w * 0.16, h * 0.1, 0.5, 0, 7); g.fill();   // flippers
+    g.beginPath(); g.ellipse(0, h * 0.45, w * 0.06, h * 0.12, 0, 0, 7); g.fill();                                         // tail
+    g.fillStyle = c2; g.beginPath(); g.ellipse(0, 0, w * 0.5, h * 0.6, 0, Math.PI, 0); g.fill(); g.fillRect(-w * 0.5, -1, w, h * 0.3);   // the shell
+    g.fillStyle = c1; for (const [px, py] of [[0, -0.32], [-0.26, -0.12], [0.26, -0.12], [-0.13, 0.08], [0.13, 0.08]]) { g.beginPath(); g.ellipse(w * px, h * py, w * 0.11, h * 0.13, 0, 0, 7); g.fill(); }   // plates
+    g.fillStyle = "#e6dcb4"; g.fillRect(-w * 0.5, h * 0.24, w, Math.max(1, h * 0.08));
+    fish(-h * 0.5);
+    return [[-w * 0.3, h * 0.3], [w * 0.3, h * 0.3]];
+  },
+  chest(c1, c2, w, h, t, fish) {
+    g.fillStyle = "#6e4628"; g.fillRect(-w * 0.46, -h * 1.15, w * 0.92, h * 0.6); g.fillStyle = "#ffd23c"; g.fillRect(-w * 0.46, -h * 1.15, w * 0.92, Math.max(1, h * 0.08));   // the open lid behind
+    fish(-h * 0.5);
+    for (let q = 0; q < 5; q++) { g.fillStyle = q % 2 ? "#ffd23c" : "#ffe68c"; g.beginPath(); g.arc(-w * 0.34 + q * w * 0.17, -h * 0.45, w * 0.07, 0, 7); g.fill(); }   // gold heaped up
+    g.fillStyle = "#8c5a32"; g.fillRect(-w * 0.48, -h * 0.45, w * 0.96, h * 0.85);                                       // the chest
+    g.fillStyle = "#6e4628"; for (let q = 1; q < 3; q++) g.fillRect(-w * 0.48, -h * 0.45 + q * h * 0.28, w * 0.96, 1);
+    g.fillStyle = "#ffd23c"; g.fillRect(-w * 0.4, -h * 0.45, w * 0.08, h * 0.85); g.fillRect(w * 0.32, -h * 0.45, w * 0.08, h * 0.85); g.fillRect(-w * 0.07, -h * 0.2, w * 0.14, h * 0.2);   // bands and lock
+    if (Math.floor(t * 3) % 4 === 0) { g.fillStyle = "#fffbe6"; g.fillRect(w * 0.2, -h * 0.6, 2, 2); }
+    return [[-w * 0.25, h * 0.4], [w * 0.25, h * 0.4]];
+  },
+  maw(c1, c2, w, h, t, fish) {
+    for (const sx of [-1, 1]) { const sw = Math.sin(t * 2 + sx) * w * 0.05; g.fillStyle = "#b43c5a"; g.fillRect(sx * w * 0.32 + sw, -h * 1.3, Math.max(1, w * 0.05), h * 0.8); g.fillStyle = "#f0e6dc"; g.beginPath(); g.arc(sx * w * 0.33 + sw, -h * 1.35, w * 0.09, 0, 7); g.fill(); g.fillStyle = "#1a0a10"; g.beginPath(); g.arc(sx * w * 0.33 + sw, -h * 1.33, w * 0.04, 0, 7); g.fill(); }   // eye stalks
+    g.fillStyle = "#5a0e22"; g.beginPath(); g.ellipse(0, -h * 0.35, w * 0.4, h * 0.35, 0, 0, 7); g.fill();               // the throat
+    fish(-h * 0.45);
+    g.fillStyle = "#c84664"; g.beginPath(); g.ellipse(0, 0, w * 0.5, h * 0.55, 0, 0, Math.PI); g.fill(); g.fillRect(-w * 0.5, -h * 0.35, w * 0.1, h * 0.4); g.fillRect(w * 0.4, -h * 0.35, w * 0.1, h * 0.4);   // the lower jaw
+    g.fillStyle = "#f0e6c8"; for (let q = 0; q < 6; q++) { const tx = -w * 0.38 + q * w * 0.152; g.beginPath(); g.moveTo(tx, -h * 0.05); g.lineTo(tx + w * 0.07, -h * 0.05); g.lineTo(tx + w * 0.035, -h * 0.32); g.fill(); }   // teeth
+    g.fillStyle = "#a02846"; g.fillRect(-w * 0.3, h * 0.25, w * 0.6, Math.max(1, h * 0.06));
+    if (Math.floor(t * 2) % 3 === 0) { g.fillStyle = "#e05a78"; g.fillRect(-w * 0.2, h * 0.45 + (t * 20 % 6), Math.max(1, w * 0.04), Math.max(1, w * 0.05)); }   // a drip
+    return [[-w * 0.2, h * 0.4], [w * 0.2, h * 0.4]];
+  },
+};
+const FP_TRAILS = {                          // what comes out the back: [colours, shape]
+  bubbles: [["#c8f0ff"], "dot"], sparkle: [["#ffe68c", "#fafaff"], "star"], ink: [["#1e1a2e", "#3c3c5a"], "puff"],
+  flame: [["#ff5a28", "#ffb43c", "#ffe68c"], "flame"], rainbow: [["#ff5050", "#ffb43c", "#ffe650", "#64dc64", "#50a0ff", "#b46eff"], "dot"], coins: [["#ffd23c", "#ffe68c"], "coin"],
+};
+function fpTrail(kind, boost, x, y, w, t, jets) {
+  const [cols, shape] = FP_TRAILS[kind] || FP_TRAILS.bubbles, n = shape === "puff" ? 4 : 3;
+  if (shape === "flame") { for (const [jx, jy] of jets) { const L = w * (0.22 + Math.random() * 0.12) * (boost ? 1.5 : 1), fw = Math.max(1, w * 0.09); rect(cols[0], x + jx - fw / 2, y + jy, fw, L); rect(cols[1], x + jx - fw / 3, y + jy, fw * 0.66, L * 0.7); rect(cols[2], x + jx - fw / 6, y + jy, Math.max(1, fw / 3), L * 0.4); } return; }
+  for (const [jx, jy] of jets) for (let q = 0; q < n; q++) {
+    const u = (t * 3 + q / n + w) % 1, px = x + jx + Math.sin(q * 7 + t * 9) * w * 0.04, py = y + jy + u * w * 0.35, c = boost && kind === "bubbles" ? "#ffe08c" : cols[(q + Math.floor(t * 6)) % cols.length];
+    if (shape === "dot") rect(c, px, py, Math.max(1, w * 0.04), Math.max(1, w * 0.04));
+    else if (shape === "star") { rect(c, px - w * 0.04, py, w * 0.08 + 1, 1); rect(c, px, py - w * 0.04, 1, w * 0.08 + 1); }
+    else if (shape === "coin") { g.fillStyle = c; g.beginPath(); g.ellipse(px, py, Math.max(1, w * 0.04 * Math.abs(Math.cos(t * 8 + q))), Math.max(1, w * 0.04), 0, 0, 7); g.fill(); }
+    else { g.globalAlpha = 0.8 * (1 - u); g.fillStyle = c; g.beginPath(); g.arc(px, py, Math.max(1, w * (0.04 + u * 0.08)), 0, 7); g.fill(); g.globalAlpha = 1; }
+  }
+}
+function fpKart(r, x, y, w, fog) {           // a kart from behind, with the fish riding in it (its real sprite), like a Mario Kart driver
+  const L = fpLook(r), [c1, c2] = L.cols, a = DATA.atlas[r.id], yaw = r.spin > 0 ? Math.sin(r.spin * 18) : r.yaw || 0, h = w * 0.42, t = KART ? KART.t : performance.now() / 1000;
   fpShadow(x, y, w);
   g.save(); if (fog > 0.05) g.globalAlpha = 1 - fog * 0.5;
-  g.translate(x, y - h * 0.15); g.rotate(yaw * 0.22);
-  const fk = Math.min(w * 0.85 / a[2], h * 1.5 / a[3]), fw = a[2] * fk, fh = a[3] * fk, face = yaw > 0.05 ? 1 : yaw < -0.05 ? -1 : (r.face || 1);   // the fish, sitting in
+  g.translate(x, y - h * 0.15); g.rotate(yaw * 0.22 + (r.tilt || 0));
+  const fk = Math.min(w * 0.85 / a[2], h * 1.5 / a[3]), fw = a[2] * fk, fh = a[3] * fk, face = yaw > 0.05 ? 1 : yaw < -0.05 ? -1 : (r.face || 1);
   r.face = face;
-  g.save(); g.translate(yaw * w * 0.06, -h * 0.55 + Math.sin(t * 7 + w) * w * 0.015); g.scale(face, 1);
-  g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(-fw / 2), Math.round(-fh), Math.round(fw), Math.round(fh)); g.restore();
-  g.fillStyle = "#e8e0c8"; g.beginPath(); g.ellipse(0, -h * 0.5, w * 0.36, h * 0.18, 0, 0, 7); g.fill();          // the cockpit rim
-  g.fillStyle = c2; g.beginPath(); g.ellipse(0, -h * 0.15, w * 0.46, h * 0.5, 0, Math.PI, 0); g.fill();               // the shell (back half)
-  g.fillStyle = c1; g.fillRect(-w * 0.46, -h * 0.17, w * 0.92, h * 0.42);                                               // the body
-  g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(-w * 0.4, -h * 0.12, w * 0.8, Math.max(1, h * 0.07));            // a shine
-  g.fillStyle = "#2a2438"; g.fillRect(-w * 0.34, h * 0.08, w * 0.18, h * 0.2); g.fillRect(w * 0.16, h * 0.08, w * 0.18, h * 0.2);   // two bubble jets
-  if (w > 10) { g.fillStyle = r.boost > 0 ? "#ffe08c" : "#8ce6ff"; g.fillRect(-w * 0.3, h * 0.12, w * 0.1, h * 0.12); g.fillRect(w * 0.2, h * 0.12, w * 0.1, h * 0.12); }
-  g.fillStyle = c2; g.beginPath(); g.moveTo(-w * 0.46, -h * 0.1); g.lineTo(-w * 0.6, h * 0.2); g.lineTo(-w * 0.46, h * 0.25); g.fill();   // little fins
-  g.beginPath(); g.moveTo(w * 0.46, -h * 0.1); g.lineTo(w * 0.6, h * 0.2); g.lineTo(w * 0.46, h * 0.25); g.fill();
+  const fish = fy => { g.save(); g.translate(yaw * w * 0.06, fy + Math.sin(t * 7 + w) * w * 0.015 - (r.hop || 0) * h * 0.5); g.scale(face, 1); g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(-fw / 2), Math.round(-fh), Math.round(fw), Math.round(fh)); g.restore(); };
+  const jets = (FP_BODIES[L.body] || FP_BODIES.shell)(c1, c2, w, h, t, fish);
+  if ((L.paint === "chrome" || L.paint === "gold") && w > 8) { const sx = ((t * 0.8) % 1.6 - 0.3) * w; g.globalAlpha *= 0.5; g.fillStyle = "#ffffff"; g.fillRect(-w * 0.5 + sx, -h * 0.4, Math.max(1, w * 0.06), h * 0.8); g.globalAlpha = 1; }   // a shine sweeping across
+  if (w > 10 && L.body === "shell") { g.fillStyle = r.boost > 0 ? "#ffe08c" : "#8ce6ff"; g.fillRect(-w * 0.3, h * 0.12, w * 0.1, h * 0.12); g.fillRect(w * 0.2, h * 0.12, w * 0.1, h * 0.12); }
   g.restore(); g.globalAlpha = 1;
   if (r.shield > 0) { g.globalAlpha = 0.35 + Math.sin(t * 6) * 0.1; g.strokeStyle = "#8ce6ff"; g.lineWidth = Math.max(1, w * 0.04); g.beginPath(); g.ellipse(x, y - h * 0.6, w * 0.62, h * 1.25, 0, 0, 7); g.stroke(); g.globalAlpha = 1; }   // shell shield bubble
   if (r.zap > 0 && w > 4 && Math.floor(t * 20) % 2) rect("#ffe650", x - w * 0.3 + Math.random() * w * 0.6, y - h * 1.2, 1, Math.max(2, h * 0.5));
-  if (w > 8) for (let q = 0; q < 3; q++) { const u = (t * 3 + q / 3 + w) % 1; rect(r.boost > 0 ? "#ffe08c" : "#c8f0ff", x + (q - 1) * w * 0.25, y + u * w * 0.25, 1, 1); }   // the bubble trail
+  if (w > 8) fpTrail(L.trail, r.boost > 0, x, y - h * 0.15, w, t, jets);
+  if (r.me && r.look && r.look.plate === "plate" && w >= 24) { const s = (r.name || "").slice(0, 6), pw = s.length * 6 + 3; rect("#fafaff", x - pw / 2, y + 1, pw, 9); outline(x - pw / 2, y + 1, pw, 9, "#2a2438"); text(s, x + 1, y + 5, 1, "#2a2438", "center", null); }
 }
 const ORD = n => n + (n === 1 ? "ST" : n === 2 ? "ND" : n === 3 ? "RD" : "TH");
 function fpTime(s) { const m = Math.floor(s / 60), r = s - m * 60; return m + ":" + (r < 10 ? "0" : "") + r.toFixed(2); }
@@ -644,23 +743,31 @@ function fpHud() {
   const pl = me.place, col = pl === 1 ? GOLD : pl <= 3 ? "#c8d2f0" : ORANGE;
   text(pl, 14, LH - 20, 3, col, "center"); text(ORD(pl).slice(-2), 26, LH - 22, 1, col, "left");
   if (me.speed > 0) { const sp = Math.round(me.speed / FP.MAX * 100); text(sp + " KN", LW - 4, LH - 8, 1, me.boost > 0 ? ORANGE : "#c8f0ff", "right", null); }
-  const mapH = fpMinimap();
-  K.racers.slice().sort((a, b) => a.place - b.place).forEach((r, i) => {                 // the running order, under the map
+  const over = K.phase === "done" || K.phase === "cupdone", mapH = over ? 0 : fpMinimap();
+  if (K.tt && !over) {                                            // time trial: your laps and your record, under the map
+    const best = fpData().best[K.track], y0 = 20 + mapH;
+    if (LW >= 200) { text("BEST " + (best ? best.toFixed(2) : "-"), LW - 4, y0, 1, GOLD, "right", null); me.laps.forEach((lt, i) => text("LAP " + (i + 1) + " " + lt.toFixed(2), LW - 4, y0 + 10 + i * 9, 1, best && lt <= best + 0.001 ? GOLD : WHITE, "right", null)); }
+    if (K.ghost && LW >= 200) text("GHOST ON", LW - 4, y0 + 42, 1, "#8c96c8", "right", null);
+  }
+  if (!K.tt && !over) K.racers.slice().sort((a, b) => a.place - b.place).forEach((r, i) => {                 // the running order, under the map
     if (LW < 200) return;
     const y = 20 + mapH + i * 9; rect(r.me ? "#1e285a" : "rgba(0,0,0,0.3)", LW - 62, y - 4, 58, 8);
     text(i + 1, LW - 58, y, 1, r.me ? GOLD : GREY, "left", null); text(r.name.slice(0, 7), LW - 50, y, 1, r.me ? GOLD : WHITE, "left", null);
   });
-  if (K.phase === "count" && LW >= 300) {                       // who you're racing, and how they drive
+  if (K.cup) text("RACE " + (K.cup.i + 1) + "/3", 4, 18, 1, "#8c96c8", "left", null);
+  if (K.tt) text("TIME TRIAL", 4, 18, 1, "#8c96c8", "left", null);
+  if (K.phase === "count" && LW >= 300 && !K.tt) {                       // who you're racing, and how they drive
     g.globalAlpha = 0.8; rect(INK, 4, 30, 112, 82); g.globalAlpha = 1; outline(4, 30, 112, 82, "#5a6496");
     text("THE FIELD", 60, 37, 1, GOLD, "center", null);
     K.racers.filter(r => r.p).forEach((r, i) => { text(r.name, 8, 47 + i * 9, 1, WHITE, "left", null); text(r.p.style, 112, 47 + i * 9, 1, "#8c96c8", "right", null); });
   }
-  if (K.phase === "count") { const cup = FP_CUPS.find(c => c.tracks.includes(K.track)); text(K.segs.def.name, LW / 2, 44, 1, GOLD, "center"); if (cup) text(cup.name + " " + (cup.tracks.indexOf(K.track) + 1) + "/3", LW / 2, 54, 1, "#8c96c8", "center", null); }
+  if (K.phase === "count") { const cup = FP_CUPS.find(c => c.tracks.includes(K.track)); text(K.segs.def.name, LW / 2, 44, 1, GOLD, "center"); if (K.tt) text("TIME TRIAL", LW / 2, 54, 1, "#8c96c8", "center", null); else if (cup) text(cup.name + " " + (cup.tracks.indexOf(K.track) + 1) + "/3", LW / 2, 54, 1, "#8c96c8", "center", null); }
   if (K.phase === "count") { const n = Math.ceil(K.ct - 0.6); text(n > 0 ? String(n) : "GO!", LW / 2, 80, 4, n > 0 ? WHITE : LIME, "center"); }
   else if (K.msgT > 0 && K.phase === "race") text(K.msg, LW / 2, 70, 2, GOLD, "center");
   if (K.test && K.phase !== "done") text(KEYS ? "TEST  ESC: QUIT" : "TEST", 4, 18, 1, GREY, "left", null);
-  if (K.phase !== "done" && K.t < 12) (KEYS ? ["W: GAS   S: BRAKE   A D: STEER", "SPACE: USE ITEM", "HIT THE ORANGE PADS FOR A BOOST"] : ["HOLD A SIDE TO STEER"]).forEach((l, i) => text(l, LW / 2, 104 + i * 10, 1, WHITE, "center", null));
+  if (K.phase === "race" && K.t < 12) (KEYS ? ["W: GAS   S: BRAKE   A D: STEER", "SPACE: USE ITEM   H: HORN", "HIT THE ORANGE PADS FOR A BOOST"] : ["HOLD A SIDE TO STEER"]).forEach((l, i) => text(l, LW / 2, 104 + i * 10, 1, WHITE, "center", null));
   if (K.phase === "done") fpResults();
+  if (K.phase === "cupdone") fpCupResults();
 }
 function fpMinimap() {                       // the track from above, with everyone on it -> height used
   const K = KART, pts = K.segs.map, wide = LW >= 300, sz = wide ? 58 : LW >= 160 ? 34 : 28, x0 = LW - sz - 4, y0 = wide ? 14 : 26, t = K.t;
@@ -684,15 +791,291 @@ function fpItemIcon(k, x, y) {
   else { disc("#b45adc", x, y, 5); for (let q = 0; q < 8; q++) rect("#e6b4ff", x + Math.cos(q * 0.8) * 7, y + Math.sin(q * 0.8) * 7, 1, 1); }
 }
 function fpResults() {
-  const K = KART, order = K.racers.slice().sort((a, b) => (a.done && b.done ? a.finishT - b.finishT : b.done - a.done || fpDist(b) - fpDist(a))), w = 150, x = LW / 2 - w / 2;
+  const K = KART, order = fpOrder(), w = 150, x = LW / 2 - w / 2, t = K.t, mePl = order.indexOf(K.me) + 1, f = tav().fish;
   g.globalAlpha = 0.88; rect(INK, x, 30, w, 140); g.globalAlpha = 1; outline(x, 30, w, 140, GOLD);
-  text(K.me.place === 1 ? "YOU WIN!" : ORD(K.me.place) + " PLACE", LW / 2, 40, 2, K.me.place === 1 ? GOLD : WHITE, "center");
-  order.forEach((r, i) => { const y = 58 + i * 12; text(ORD(i + 1), x + 8, y, 1, i < 3 ? GOLD : GREY, "left", null); fitDraw(atlas, r.id, x + 44, y, 18, 9, 1); text(r.name.slice(0, 9), x + 56, y, 1, r.me ? GOLD : WHITE, "left", null); if (r.p && w > 140 && LW >= 300) text(r.p.style, x + w + 6, y, 1, "#7a86b4", "left", null); if (r.done) text(fpTime(r.finishT - 3.6), x + w - 6, y, 1, "#c8d2f0", "right", null); });
+  if (K.tt) {                                                     // time trial: the laps
+    const best = fpData().best[K.track];
+    text(K.newBest ? "NEW RECORD!" : "TIME TRIAL", LW / 2, 40, 2, K.newBest ? GOLD : WHITE, "center");
+    K.me.laps.forEach((lt, i) => text("LAP " + (i + 1) + "   " + lt.toFixed(2), LW / 2, 64 + i * 12, 1, best && lt <= best + 0.001 ? GOLD : WHITE, "center", null));
+    text("TOTAL " + fpTime(K.me.finishT - 3.6), LW / 2, 108, 1, "#c8d2f0", "center", null);
+    text("BEST LAP " + (best ? best.toFixed(2) : "-"), LW / 2, 122, 1, GOLD, "center", null);
+    if (K.track === "kelp") text("ON THE TAVERN BOARD", LW / 2, 134, 1, CYAN, "center", null);
+  } else {
+    text(mePl === 1 ? "YOU WIN!" : ORD(mePl) + " PLACE", LW / 2, 40, 2, mePl === 1 ? GOLD : WHITE, "center");
+    order.forEach((r, i) => {
+      const y = 58 + i * 12; text(ORD(i + 1), x + 8, y, 1, i < 3 ? GOLD : GREY, "left", null); fitDraw(atlas, r.id, x + 44, y, 18, 9, 1); text(r.name.slice(0, 9), x + 56, y, 1, r.me ? GOLD : WHITE, "left", null);
+      if (K.cup) text("+" + FP_POINTS[i], x + w - 6, y, 1, CHIP, "right", null);
+      else { if (r.p && LW >= 300) text(r.p.style, x + w + 6, y, 1, "#7a86b4", "left", null); if (r.done) text(fpTime(r.finishT - 3.6), x + w - 6, y, 1, "#c8d2f0", "right", null); }
+    });
+    if (K.cup && LW >= 300) { text("STANDINGS", x + w + 40, 46, 1, GOLD, "center", null); fpCupStandings().forEach(([r, p], i) => { text(r.name.slice(0, 7), x + w + 6, 58 + i * 12, 1, r.me ? GOLD : WHITE, "left", null); text(p, x + w + 74, 58 + i * 12, 1, CHIP, "right", null); }); }
+  }
+  if (LW >= 300 && f && !K.test && (K.tt || mePl <= 3)) { const pose = fpData().eq.pose || "wave"; rect("#2a3466", x - 70, 140, 52, 10); rect("#3c4a8a", x - 70, 140, 52, 2); fpPose(pose, Object.assign({}, K.me, { shield: 0, zap: 0, spin: 0 }), x - 44, 140, 44, t, 1); }   // your victory pose
   if (K.test) text((KEYS ? "A D: TRACK   " : "") + K.segs.def.name, LW / 2, 182, 1, "#8c96c8", "center", null);
-  if (Math.floor(K.t * 2) % 2) text(KEYS ? "SPACE: RACE AGAIN" + (K.test ? "  ESC: QUIT" : "") : "TAP TO RACE AGAIN", LW / 2, 162, 1, WHITE, "center", null);
+  const nxt = K.test || K.tt ? "RACE AGAIN" : K.cup && K.cup.i < 2 ? "NEXT RACE" : K.cup ? "CUP RESULTS" : "CONTINUE";
+  if (Math.floor(t * 2) % 2) text((KEYS ? "SPACE: " : "TAP: ") + nxt, LW / 2, 162, 1, WHITE, "center", null);
+  if (KEYS) text("ESC: " + (K.test ? "QUIT" : "BACK TO THE PIT"), LW / 2, 174, 1, GREY, "center", null);
+}
+function fpCupResults() {                    // after the third race: standings, your medal, what you won
+  const K = KART, e = K.cupEnd, w = 170, x = LW / 2 - w / 2, cup = FP_CUPS.find(c => c.id === K.cup.id);
+  g.globalAlpha = 0.9; rect(INK, x, 20, w, 160); g.globalAlpha = 1; outline(x, 20, w, 160, FP_MEDAL_COL[e.medal] === "#5a6496" ? GOLD : FP_MEDAL_COL[e.medal]);
+  text(cup.name, LW / 2, 28, 1, GOLD, "center", null);
+  text(e.medal ? FP_MEDALS[e.medal] + "!" : ORD(e.pos + 1) + " OVERALL", LW / 2, 42, 2, e.medal ? FP_MEDAL_COL[e.medal] : WHITE, "center");
+  e.st.forEach(([r, p], i) => { const y = 60 + i * 10; text(ORD(i + 1), x + 8, y, 1, i < 3 ? FP_MEDAL_COL[3 - i] : GREY, "left", null); text(r.name.slice(0, 10), x + 34, y, 1, r.me ? GOLD : WHITE, "left", null); text(p, x + w - 8, y, 1, CHIP, "right", null); });
+  const lines = [];
+  if (e.chips) lines.push(["+" + e.chips + " CHIPS" + (e.wasNew ? "" : " (REPEAT)"), CHIP]);
+  e.got.forEach(n => lines.push(["NEW: " + n, GOLD]));
+  if (e.opened) lines.push([e.opened === "???" ? "SOMETHING OPENED..." : e.opened + " OPEN", CYAN]);
+  lines.slice(0, 4).forEach(([l, c], i) => text(l.slice(0, 27), LW / 2, 144 + i * 9, 1, c, "center", null));
+  if (Math.floor(K.t * 2) % 2) text(KEYS ? "SPACE: BACK TO THE PIT" : "TAP: BACK TO THE PIT", LW / 2, 188, 1, WHITE, "center", null);
+  K.t += 0;                                                       // (the race clock keeps running for the blink)
 }
 
-window.FPX = { FP_TUNE, FP_CREW, FP_TRACKS, FP_CUPS, FP_ORDER, get K() { return KART; }, startKart, FP, fpDist, fpTrack, kartUpdate,
+
+// ---- the career: cups, time trials, looks, and THE PIT (a garage off the tavern). Built Nov 18, 2026.
+// Saved in tav().fp: { cups: {cupId: best medal 1-3}, best: {track: best time-trial lap, s}, own: ["body.sub", ...],
+// eq: {body, paint, trail, pose, horn, plate}, races, wins, v }. Ghost laps live in their own localStorage key (too big
+// for save codes). Nothing here changes a dive's score: looks are looks, and racing pays chips.
+const FP_CUP_SKILL = { minnow: 0.985, reef: 0.995, deep: 1.005, abyss: 1.015 };     // the AI gets harder each cup
+const FP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
+const FP_MEDALS = ["-", "BRONZE", "SILVER", "GOLD"], FP_MEDAL_COL = ["#5a6496", "#d28c50", "#c8d2f0", "#ffd23c"];
+const FP_FIRST_CHIPS = [0, 100, 250, 500], FP_AGAIN_CHIPS = [0, 10, 15, 30];   // a new best medal pays the difference; repeats pay a little
+const FP_CATS = [["body", "BODY"], ["paint", "PAINT"], ["trail", "TRAIL"], ["pose", "POSE"], ["horn", "HORN"], ["plate", "PLATE"]];
+// [id, name, price in chips (0 = free, null = won, not sold), won by (cup id, or "all" for gold in every cup)]
+const FP_LOOKS = {
+  body: [["shell", "SHELL KART", 0], ["sub", "MINI SUB", 1500], ["bathtub", "BATHTUB", 2000], ["turtle", "TURTLE SHELL", null, "minnow"], ["chest", "TREASURE CHEST", null, "reef"], ["maw", "MAW KART", null, "abyss"]],
+  paint: [["stock", "STOCK", 0], ["cherry", "CHERRY", 400], ["lime", "LIME", 400], ["ocean", "OCEAN", 400], ["sunset", "SUNSET", 400], ["midnight", "MIDNIGHT", 400], ["bubblegum", "BUBBLEGUM", 400], ["chrome", "CHROME", null, "deep"], ["gold", "GOLD", null, "all"]],
+  trail: [["bubbles", "BUBBLES", 0], ["sparkle", "SPARKLE", 800], ["ink", "INK", 800], ["flame", "FLAME", null, "deep"], ["coins", "COINS", null, "reef"], ["rainbow", "RAINBOW", null, "all"]],
+  pose: [["wave", "FIN WAVE", 0], ["spin", "SPIN", 600], ["hop", "HOP", 600], ["fireworks", "FIREWORKS", 1200], ["golden", "GOLDEN FIN", null, "all"]],
+  horn: [["honk", "HONK", 0], ["squeak", "SQUEAK", 300], ["foghorn", "FOGHORN", 300], ["kazoo", "KAZOO", 300], ["whale", "WHALE SONG", null, "all"]],
+  plate: [["none", "NO PLATE", 0], ["plate", "NAMEPLATE", 200]],
+};
+const FP_CUP_TITLE = { minnow: "minnowcup", reef: "reefcup", deep: "deepcup", abyss: "abysscup" };
+const FP_WHO = { minnow: "MINNOW CUP GOLD", reef: "REEF CUP GOLD", deep: "DEEP CUP GOLD", abyss: "ABYSS CUP GOLD", all: "GOLD IN EVERY CUP" };
+Object.assign(SOUNDS, {                       // the horns (H in a race)
+  fp_honk: [[330, 0.12, "square", 0.25], [330, 0.16, "square", 0.25, 0, 0.16]], fp_squeak: [[900, 0.08, "triangle", 0.3, 1400], [1300, 0.1, "triangle", 0.3, 800, 0.09]],
+  fp_foghorn: [[90, 0.7, "sawtooth", 0.25, 80]], fp_kazoo: [[420, 0.12, "sawtooth", 0.18, 520], [520, 0.2, "sawtooth", 0.18, 380, 0.12]],
+  fp_whale: [[180, 0.6, "sine", 0.35, 320], [320, 0.8, "sine", 0.3, 140, 0.55]],
+});
+function fpData() {
+  const q = tav();
+  q.fp = Object.assign({ cups: {}, best: {}, own: [], eq: {}, races: 0, wins: 0 }, q.fp || {});
+  if (!q.fp.v) { q.fp.v = 1; q.stats.fast = 0; }               // stats.fast used to be a derby time; it's a lap time now
+  return q.fp;
+}
+const fpItem = key => { const [c, id] = key.split("."); return (FP_LOOKS[c] || []).find(e => e[0] === id); };
+const fpOwns = key => { const it = fpItem(key); return !!it && (it[2] === 0 || fpData().own.includes(key)); };
+const fpCupOpen = i => { const c = fpData().cups; return i === 0 || (i < 3 ? (c[FP_CUPS[i - 1].id] || 0) >= 1 : (c.deep || 0) >= 3); };   // bronze opens the next; the Abyss needs Deep gold
+const fpTrackOpen = k => FP_CUPS.some((c, i) => fpCupOpen(i) && c.tracks.includes(k));
+const fpAllGold = () => FP_CUPS.every(c => (fpData().cups[c.id] || 0) >= 3);
+function fpGhosts() { try { return JSON.parse(localStorage.getItem("reeldeep_ghosts") || "{}"); } catch (e) { return {}; } }
+function fpSaveGhost(track, rec) { try { const g0 = fpGhosts(); g0[track] = rec; localStorage.setItem("reeldeep_ghosts", JSON.stringify(g0)); } catch (e) { /* no room: fine */ } }
+function fpHorn() { const h = (KART && KART.me.look && KART.me.look.horn) || "honk"; play("fp_" + h); }
+
+function fpLapDone(r, lt) {                  // you finished a lap: time trials keep records (and Kelp Circuit's goes on the tavern board)
+  const K = KART;
+  r.laps.push(lt);
+  if (!K.tt) return;
+  const d = fpData(), best = d.best[K.track];
+  if (!best || lt < best) {
+    d.best[K.track] = +lt.toFixed(2); fpSaveGhost(K.track, r.rec); K.newBest = true;
+    K.msg = "NEW BEST LAP!"; K.msgT = 2; play("fanfare");
+    if (K.track === "kelp") { tav().stats.fast = Math.round(lt * 100); tav().postedAt = 0; tavPost(); }
+    saveStore();
+  }
+}
+function fpOrder() { return KART.racers.slice().sort((a, b) => (a.done && b.done ? a.finishT - b.finishT : b.done - a.done || fpDist(b) - fpDist(a))); }
+function fpRaceOver() {                      // the race just ended for you
+  const K = KART, f = tav().fish, d = fpData();
+  if (K.test) return;
+  if (K.cup) {
+    const order = fpOrder();
+    order.forEach((r, i) => { K.cup.pts[r.name] = (K.cup.pts[r.name] || 0) + FP_POINTS[i]; });
+    K.cup.gain = order.map((r, i) => FP_POINTS[i]); K.cup.last = order.map(r => r.name);
+    d.races++; if (order[0] === K.me) { d.wins++; if (f) f.wins++; }
+    if (f) f.races++;
+    saveStore();
+  }
+}
+function fpCupStandings() { const c = KART.cup; return KART.racers.map(r => [r, c.pts[r.name] || 0]).sort((a, b) => b[1] - a[1] || c.last.indexOf(a[0].name) - c.last.indexOf(b[0].name)); }
+function fpCupEnd() {                        // the third race is done: medal, chips, rewards
+  const K = KART, c = K.cup, d = fpData(), st = fpCupStandings(), pos = st.findIndex(e => e[0] === K.me), medal = pos < 3 ? 3 - pos : 0;
+  const prev = d.cups[c.id] || 0, got = [];
+  let chips = 0;
+  if (medal > prev) { chips = FP_FIRST_CHIPS[medal] - FP_FIRST_CHIPS[prev]; d.cups[c.id] = medal; } else chips = FP_AGAIN_CHIPS[medal];
+  if (medal === 3) {
+    for (const [cat, list] of Object.entries(FP_LOOKS)) for (const it of list) if (it[3] === c.id && !d.own.includes(cat + "." + it[0])) { d.own.push(cat + "." + it[0]); got.push(it[1]); }
+    if (award(FP_CUP_TITLE[c.id])) got.push("TITLE: " + titleName(FP_CUP_TITLE[c.id]));
+    if (fpAllGold()) {
+      for (const [cat, list] of Object.entries(FP_LOOKS)) for (const it of list) if (it[3] === "all" && !d.own.includes(cat + "." + it[0])) { d.own.push(cat + "." + it[0]); got.push(it[1]); }
+      if (award("finlegend")) got.push("TITLE: FIN PRIX LEGEND");
+    }
+  }
+  if (chips) addChips(chips);
+  K.cupEnd = { st, pos, medal, chips, got, wasNew: medal > prev, opened: medal >= 1 && !prev && FP_CUPS.findIndex(x => x.id === c.id) < 2 ? FP_CUPS[FP_CUPS.findIndex(x => x.id === c.id) + 1].name : medal === 3 && c.id === "deep" && prev < 3 ? "???" : null };
+  K.phase = "cupdone"; play(medal === 3 ? "fanfare" : medal ? "chime" : "miss");
+  saveStore();
+}
+function fpNext() {                          // Space / tap after a race
+  const K = KART;
+  if (K.test) { startKart(true, null, K.track); return; }
+  if (K.tt) { startKart(false, null, K.track, { tt: true }); return; }
+  if (K.cup && K.phase === "done") {
+    const cup = FP_CUPS.find(x => x.id === K.cup.id);
+    if (K.cup.i < 2) startKart(false, null, cup.tracks[K.cup.i + 1], { cup: Object.assign({}, K.cup, { i: K.cup.i + 1 }) });
+    else fpCupEnd();
+    return;
+  }
+  fpExit();
+}
+function fpExit() { KART = null; newDive(); S.overlay = "pit"; play("back"); }
+function fpStartCup(i) { const c = FP_CUPS[i]; startKart(false, null, c.tracks[0], { cup: { id: c.id, i: 0, pts: {}, last: null } }); }
+
+// ---- THE PIT
+let PIT = { tab: "cups", cup: 0, track: "kelp", cat: 0, sel: 0 };
+function pitOpen(tab) { fpData(); if (tab) PIT.tab = tab; PIT.sel = 0; openOverlay("pit"); }
+const PIT_TABS = [["cups", "CUPS", "CUPS"], ["trial", "LAPS", "TIME TRIAL"], ["garage", "KART", "GARAGE"], ["train", "GYM", "TRAINING"]];
+function pitGeo() { const wide = wideMenus(); return { wide, X: wide ? WX() : OX, W: wide ? 348 : 120 }; }
+function pitHits() {                         // [id, x, y, w, h, value] in screen coordinates
+  const { wide, X, W } = pitGeo(), h = [], tw = W / 4;
+  if (!tav().fish) return h;
+  PIT_TABS.forEach(([id], i) => h.push(["tab", X + i * tw, 16, tw - 2, 12, id]));
+  if (PIT.tab === "cups") {
+    FP_CUPS.forEach((c, i) => h.push(["cup", X, 34 + i * (wide ? 30 : 27), wide ? 200 : W, wide ? 27 : 24, i]));
+    h.push(["race", wide ? X + 214 : X + 20, wide ? 140 : 156, wide ? 134 : 80, 16, 0]);
+  } else if (PIT.tab === "trial") {
+    FP_ORDER.forEach((k, i) => h.push(wide ? ["track", X + (i % 2) * 176, 34 + Math.floor(i / 2) * 16, 172, 14, k] : ["track", X, 32 + i * 11, W, 10, k]));
+    h.push(["race", wide ? X + 107 : X + 20, wide ? 154 : 166, wide ? 134 : 80, 15, 0]);
+  } else if (PIT.tab === "garage") {
+    if (wide) FP_CATS.forEach((c, i) => h.push(["cat", X + i * 58, 31, 56, 12, i]));
+    else { h.push(["catp", X, 31, 20, 12, -1]); h.push(["catp", X + W - 20, 31, 20, 12, 1]); }
+    FP_LOOKS[FP_CATS[PIT.cat][0]].forEach((it, i) => h.push(["look", X, 48 + i * (wide ? 14 : 11), wide ? 170 : W, wide ? 13 : 10, i]));
+    h.push(["act", wide ? X + 214 : X + 20, wide ? 152 : 170, wide ? 134 : 80, 15, 0]);
+  } else h.push(["gym", wide ? X + 214 : X + 20, wide ? 150 : 166, wide ? 134 : 80, 15, 0]);
+  return h;
+}
+function pitLookState(cat, i) {              // -> [button label, colour, note]
+  const it = FP_LOOKS[cat][i], key = cat + "." + it[0], d = fpData(), on = (d.eq[cat] || FP_LOOKS[cat][0][0]) === it[0];
+  if (on) return ["EQUIPPED", GREY, cat === "horn" ? "TAP TO HEAR IT" : "YOURS"];
+  if (fpOwns(key)) return ["EQUIP", CHIP, "YOURS"];
+  if (it[2] === null) return ["WIN IT", GOLD, FP_WHO[it[3]]];
+  return ["BUY " + it[2], tav().chips >= it[2] ? GOLD : GREY, it[2] + " CHIPS"];
+}
+function pitAct(id, v) {
+  const d = fpData();
+  if (id === "tab") { PIT.tab = v; PIT.sel = 0; play("tick"); }
+  else if (id === "cup") { if (PIT.cup === v && fpCupOpen(v)) fpStartCup(v); else { PIT.cup = v; play(fpCupOpen(v) ? "tick" : "miss"); } }
+  else if (id === "race" && PIT.tab === "cups") { if (fpCupOpen(PIT.cup)) fpStartCup(PIT.cup); else play("miss"); }
+  else if (id === "track") { if (!fpTrackOpen(v)) { play("miss"); return; } if (PIT.track === v) startKart(false, null, v, { tt: true }); else { PIT.track = v; play("tick"); } }
+  else if (id === "race") { if (fpTrackOpen(PIT.track)) startKart(false, null, PIT.track, { tt: true }); else play("miss"); }
+  else if (id === "cat") { PIT.cat = v; PIT.sel = 0; play("tick"); }
+  else if (id === "catp") { PIT.cat = (PIT.cat + v + FP_CATS.length) % FP_CATS.length; PIT.sel = 0; play("tick"); }
+  else if (id === "look") { if (PIT.sel === v) pitAct("act"); else { PIT.sel = v; play("tick"); if (FP_CATS[PIT.cat][0] === "horn") play("fp_" + FP_LOOKS.horn[v][0]); } }
+  else if (id === "act") {
+    const cat = FP_CATS[PIT.cat][0], it = FP_LOOKS[cat][PIT.sel], key = cat + "." + it[0];
+    if (fpOwns(key)) { d.eq[cat] = it[0]; play(cat === "horn" ? "fp_" + it[0] : "select"); }
+    else if (it[2] && tav().chips >= it[2]) { addChips(-it[2]); d.own.push(key); d.eq[cat] = it[0]; play("fanfare"); }
+    else play("miss");
+    saveStore();
+  } else if (id === "gym") { TAV.fishBack = "pit"; openOverlay("myfish"); }
+}
+function pitTap(rx, ly) {
+  if (ly > 186) { closeOverlay(); return; }
+  const h = hitAt(pitHits(), rx, ly);
+  if (h) pitAct(h[0], h[5]);
+}
+function pitKey(dir) { const i = PIT_TABS.findIndex(t => t[0] === PIT.tab); PIT.tab = PIT_TABS[(i + dir + 4) % 4][0]; PIT.sel = 0; play("tick"); }
+function pitBg(X, W) {
+  rect("#16161e", -4, 0, LW + 8, LH);
+  for (let x = -((T * 6) % 24); x < LW + 24; x += 24) { rect("#1c1c26", x, 0, 12, LH); }
+  rect("#26262f", -4, 176, LW + 8, 24); for (let x = 0; x < LW; x += 16) rect(x % 32 ? "#ffd23c" : "#1a1a1a", x, 176, 16, 3);   // the hazard stripe on the floor
+}
+function pitKartPreview(x, y, w, look, pose) {
+  const f = tav().fish, r = { id: f.id, name: f.name, me: true, cols: fpFishColors(f.id), look, yaw: 0, spin: 0, boost: 0 };
+  fpPose(pose || "", r, x, y, w, T, 0);
+}
+function drawPit() {
+  const { wide, X, W } = pitGeo(), d = fpData(), f = tav().fish, cx = X + W / 2;
+  pitBg(X, W);
+  text("THE PIT", wide ? X : cx, 7, 1, ORANGE, wide ? "left" : "center", null);
+  if (wide) chipsAt(X + W, 7, "right");
+  if (!f) {
+    ["YOU NEED A RACER.", "THE CHIP SHOP SELLS", "DERBY FISH:", "200 CHIPS"].forEach((l, i) => text(l, cx, 70 + i * 12, 1, i === 3 ? GOLD : WHITE, "center", null));
+    closeLine ? closeLine("TAP HERE TO GO BACK") : text("TAP HERE TO GO BACK", cx, 194, 1, WHITE, "center", null); return;
+  }
+  const hits = pitHits();
+  for (const [id, x, y, w, h, v] of hits) {
+    if (id === "tab") { const on = PIT.tab === v, t = PIT_TABS.find(q => q[0] === v); rect(on ? "#3a2a14" : "#20202a", x, y, w, h); outline(x, y, w, h, on ? ORANGE : "#3c3c4a"); text(wide ? t[2] : t[1], x + w / 2, y + 6, 1, on ? ORANGE : GREY, "center", null); }
+    else if (id === "cup") {
+      const c = FP_CUPS[v], open = fpCupOpen(v), md = d.cups[c.id] || 0, sel = PIT.cup === v, hidden = c.secret && !open;
+      rect(sel ? "#2a2a3c" : "#1c1c26", x, y, w, h); outline(x, y, w, h, sel ? WHITE : "#3c3c4a");
+      text(hidden ? "???" : c.name, x + 4, y + 6, 1, open ? WHITE : GREY, "left", null);
+      disc(FP_MEDAL_COL[md], x + w - 9, y + 8, 4); if (md) text(FP_MEDALS[md][0], x + w - 9, y + 8, 1, INK, "center", null);
+      const short = k => FP_TRACKS[k].name.replace(/^THE /, "").split(" ")[0];
+      const sub = hidden ? (wide ? "WIN DEEP CUP GOLD" : "???") : !open ? (wide ? "BRONZE IN " + FP_CUPS[v - 1].name.replace(" CUP", "") + " FIRST" : "LOCKED") : c.tracks.map(short).join(wide ? " / " : " ");
+      text(sub.slice(0, wide ? 32 : 18), x + 4, y + (wide ? 18 : 17), 1, open ? "#8c96c8" : "#5a5a6e", "left", null);
+    }
+    else if (id === "track") {
+      const open = fpTrackOpen(v), sel = PIT.track === v, best = d.best[v];
+      rect(sel ? "#2a2a3c" : "#1c1c26", x, y, w, h); if (sel) outline(x, y, w, h, WHITE);
+      text(open ? FP_TRACKS[v].name.slice(0, 14) : "???", x + 3, y + h / 2, 1, open ? (v === "kelp" ? CYAN : WHITE) : "#5a5a6e", "left", null);
+      if (open && best) text(best.toFixed(2), x + w - 3, y + h / 2, 1, GOLD, "right", null);
+    }
+    else if (id === "cat") { const on = PIT.cat === v; rect(on ? "#3a2a14" : "#20202a", x, y, w, h); outline(x, y, w, h, on ? ORANGE : "#3c3c4a"); text(FP_CATS[v][1], x + w / 2, y + 6, 1, on ? ORANGE : GREY, "center", null); }
+    else if (id === "catp") text(v < 0 ? "<" : ">", x + w / 2, y + 6, 1, ORANGE, "center", null);
+    else if (id === "look") {
+      const cat = FP_CATS[PIT.cat][0], it = FP_LOOKS[cat][v], key = cat + "." + it[0], own = fpOwns(key), on = (d.eq[cat] || FP_LOOKS[cat][0][0]) === it[0], sel = PIT.sel === v;
+      rect(sel ? "#2a2a3c" : "#1c1c26", x, y, w, h); if (sel) outline(x, y, w, h, WHITE);
+      text(it[1].slice(0, wide ? 16 : 14), x + 3, y + h / 2, 1, on ? ORANGE : own ? WHITE : it[2] === null ? GOLD : "#a0a0b4", "left", null);
+      text(on ? "ON" : own ? "" : it[2] === null ? "*" : it[2], x + w - 3, y + h / 2, 1, on ? ORANGE : it[2] === null ? GOLD : CHIP, "right", null);
+    }
+  }
+  if (PIT.tab === "cups") {
+    const c = FP_CUPS[PIT.cup], open = fpCupOpen(PIT.cup), md = d.cups[c.id] || 0;
+    const rw = Object.values(FP_LOOKS).flatMap(l => l.filter(it => it[3] === c.id).map(it => it[1]));
+    if (wide) {
+      const px = X + 214; rect("#1c1c26", px, 34, 134, 100); outline(px, 34, 134, 100, "#3c3c4a");
+      text(c.secret && !open ? "???" : c.name, px + 67, 42, 1, GOLD, "center", null);
+      text("BEST: " + FP_MEDALS[md], px + 67, 54, 1, FP_MEDAL_COL[md], "center", null);
+      text("GOLD WINS:", px + 67, 70, 1, "#8c96c8", "center", null);
+      (c.secret && !open ? ["???"] : rw.concat([titleName(FP_CUP_TITLE[c.id])])).forEach((n, i) => text(n, px + 67, 80 + i * 10, 1, WHITE, "center", null));
+      text("3 RACES. POINTS 10-8-6-5-4-3-2-1", X + 100, 160, 1, "#8c96c8", "center", null);
+    } else text(open ? "GOLD: " + (rw[0] || "") : "LOCKED", cx, 146, 1, open ? GOLD : GREY, "center", null);
+    const [, bx, by, bw, bh] = hits.find(q => q[0] === "race"); btn(bx, by, bw, bh, open ? "START CUP" : "LOCKED", open ? ORANGE : GREY);
+  } else if (PIT.tab === "trial") {
+    if (wide) { text("3 SHRIMP, NO RIVALS. RACE YOUR BEST-LAP GHOST", cx, 134, 1, "#8c96c8", "center", null); text("KELP CIRCUIT LAPS GO ON THE TAVERN BOARD", cx, 144, 1, CYAN, "center", null); }
+    const [, bx, by, bw, bh] = hits.find(q => q[0] === "race"), ok = fpTrackOpen(PIT.track); btn(bx, by, bw, bh, ok ? "TIME TRIAL" : "LOCKED", ok ? ORANGE : GREY);
+  } else if (PIT.tab === "garage") {
+    const cat = FP_CATS[PIT.cat][0], it = FP_LOOKS[cat][PIT.sel], [lab, col, note] = pitLookState(cat, PIT.sel), look = Object.assign({}, d.eq, { [cat]: it[0] });
+    if (!wide) text(FP_CATS[PIT.cat][1], cx, 37, 1, ORANGE, "center", null);
+    if (wide) { const px = X + 214; rect("#1c1c26", px, 48, 134, 98); outline(px, 48, 134, 98, "#3c3c4a"); pitKartPreview(px + 67, 120, 60, look, cat === "pose" ? it[0] : ""); text(it[1], px + 67, 56, 1, WHITE, "center", null); text(note, px + 67, 138, 1, col, "center", null); }
+    else { pitKartPreview(X + 100, 160, 28, look, cat === "pose" ? it[0] : ""); text(note.slice(0, 13), X + 2, 156, 1, col, "left", null); }
+    const [, bx, by, bw, bh] = hits.find(q => q[0] === "act"); btn(bx, by, bw, bh, lab, col);
+  } else {
+    fitDraw(atlas, f.id, cx, 52, wide ? 80 : 50, 30, wide ? 2 : 1);
+    text(f.name, cx, 74, 1, GOLD, "center", null);
+    (wide ? ["SPEED: TOP SPEED", "STAMINA: PICK-UP, HITS", "BURST: BOOST POWER"] : ["SPEED", "STAMINA", "BURST"]).forEach((l, i) => { text(l, wide ? cx - 80 : X + 2, 92 + i * 16, 1, WHITE, "left", null); for (let k = 0; k < 10; k++) rect(k < f.lv[i] ? CHIP : "#3c2a1e", (wide ? cx - 80 : X + 2) + k * 7, 100 + i * 16, 6, 3); });
+    text(d.races + " RACES  " + d.wins + " WINS", cx, 144, 1, "#8c96c8", "center", null);
+    const [, bx, by, bw, bh] = hits.find(q => q[0] === "gym"); btn(bx, by, bw, bh, "TRAIN", ORANGE);
+  }
+  if (!wide) chipsLine ? (g.save(), g.translate(OX, 0), chipsLine(185), g.restore()) : 0;
+  closeLine("TAP HERE TO GO BACK");
+}
+WIDE.pit = { draw: drawPit, tap: pitTap, key: pitKey };
+
+// ---- victory poses (the podium after a race, and the garage)
+function fpPose(kind, r, x, y, w, t, stand) {
+  const h = w * 0.42; r.tilt = 0; r.hop = 0; r.yaw = 0;
+  if (kind === "wave") r.tilt = Math.sin(t * 6) * 0.25;
+  else if (kind === "spin") { r.yaw = Math.sin(t * 5); r.face = r.yaw > 0 ? 1 : -1; }
+  else if (kind === "hop") { r.hop = Math.abs(Math.sin(t * 4)) * 1.2; y -= Math.abs(Math.sin(t * 4)) * w * 0.2; }
+  fpKart(r, x, y, w, 0);
+  if (kind === "wave") rect("#ffb46e", x + w * 0.35, y - h * 1.6 + Math.sin(t * 12) * w * 0.06, Math.max(1, w * 0.07), Math.max(2, w * 0.15));
+  if (kind === "fireworks" || kind === "golden") for (let q = 0; q < 3; q++) { const u = (t * 0.7 + q / 3) % 1, fx = x + (q - 1) * w * 0.5, fy = y - w * (1 + u * 0.4); for (let k = 0; k < 8; k++) rect(["#ff5a5a", "#ffe650", "#78dcff"][q], fx + Math.cos(k * 0.8) * u * w * 0.3, fy + Math.sin(k * 0.8) * u * w * 0.3, 1, 1); }
+  if (kind === "golden") { const cw = Math.max(6, w * 0.35); rect("#ffd23c", x - cw / 2, y - h * 2.6, cw, cw * 0.35); for (let q = 0; q < 3; q++) rect("#ffd23c", x - cw / 2 + q * cw * 0.42, y - h * 2.6 - cw * 0.3, Math.max(1, cw * 0.16), cw * 0.3); }
+  r.tilt = 0; r.hop = 0;
+}
+
+window.FPX = { fpData, PIT, pitOpen, pitHits, pitAct, fpStartCup, fpNext, fpExit, FP_LOOKS, get KART() { return KART; }, FP_TUNE, FP_CREW, FP_TRACKS, FP_CUPS, FP_ORDER, get K() { return KART; }, startKart, FP, fpDist, fpTrack, kartUpdate,
   race(bot, track) {                        // simulate one whole race with a robot driving: -> stats
     startKart(true, bot, track); const K = KART; let off = 0, n = 0;
     while (!K.me.done && K.t < 400) { kartUpdate(1 / 60); K.racers.forEach(r => { if (!r.me) { n++; if (Math.abs(r.x) > 1) off++; } }); }
