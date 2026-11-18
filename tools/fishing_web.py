@@ -92,13 +92,18 @@ SPECIES = [
     ("coel", "COELACANTH", 9, (90, 120), 14, 1, None, False),
     ("pearl", "GIANT PEARL", 9, (460, 520), 0, 0, None, True), ("ancient", "THE ANCIENT ONE", 9, (560, 660), 14, 0, None, True),
 ]
-SPECIES += [('tarpon', 'SILVER KING', 0, (64, 80), 36, 0, None, True), ('kelpie', 'THE KELPIE', 1, (100, 125), 10, 0, None, True), ('moby', 'PALE WHALE', 2, (150, 185), 14, 0, None, True), ('phantom', 'PHANTOM EEL', 3, (150, 185), 30, 0, None, True), ('dread', 'DREAD ANGLER', 4, (230, 280), 14, 0, None, True), ('needle', 'NEEDLEFISH', 0, (2, 4), 38, 3, None, False), ('wrasse', 'WRASSE', 1, (4, 7), 18, 3, None, False), ('bonito', 'BONITO', 2, (9, 13), 36, 3, None, False), ('wolf', 'WOLFFISH', 3, (14, 20), 16, 2, None, False), ('lizard', 'LIZARDFISH', 4, (9, 13), 30, 3, None, False), ('cavefish', 'BLIND CAVEFISH', 5, (12, 18), 20, 4, None, False), ('prism', 'PRISM TETRA', 5, (8, 12), 30, 4, None, False), ('geode', 'GEODE CRAB', 5, (14, 20), 8, 3, None, False), ('shard', 'SHARDFIN', 5, (22, 30), 26, 3, None, False), ('glasseel', 'GLASS EEL', 5, (18, 26), 28, 3, None, False), ('quartz', 'QUARTZ PUFFER', 5, (16, 22), 10, 3, None, False), ('opal', 'OPAL RAY', 5, (28, 38), 16, 2, None, False), ('glimmer', 'GLIMMER SQUID', 5, (20, 28), 22, 2, None, False), ('amethyst', 'AMETHYST BASS', 5, (26, 36), 18, 3, None, False), ('diamond', 'DIAMONDBACK', 5, (300, 360), 26, 0, None, True), ('serpent', 'PRISM SERPENT', 5, (320, 380), 34, 0, None, True), ('yeti', 'YETI CRAB', 6, (18, 26), 8, 4, None, False), ('shrimp', 'VENT SHRIMP', 6, (10, 16), 14, 4, None, False), ('magma', 'MAGMA EEL', 6, (30, 42), 30, 3, None, False), ('cinder', 'CINDERFISH', 6, (22, 30), 26, 4, None, False), ('sulfur', 'SULFUR SNAPPER', 6, (26, 36), 20, 3, None, False), ('scald', 'SCALD RAY', 6, (34, 46), 16, 2, None, False), ('ash', 'ASH GULPER', 6, (38, 52), 16, 2, None, False), ('embers', 'EMBER SQUID', 6, (28, 38), 24, 3, None, False), ('ironsnail', 'IRON SNAIL', 6, (16, 24), 6, 2, None, False), ('phoenix', 'PHOENIX FISH', 6, (380, 450), 30, 0, None, True), ('magmaw', 'MAGMAW', 6, (400, 480), 18, 0, None, True), ('hagfish', 'HAGFISH', 7, (24, 34), 22, 4, None, False), ('boneeater', 'BONE EATER', 7, (18, 26), 12, 4, None, False), ('ratfish', 'RATFISH', 7, (28, 38), 24, 3, None, False), ('skull', 'SKULLFISH', 7, (34, 46), 20, 3, None, False), ('grenadier', 'GRENADIER', 7, (36, 50), 22, 3, None, False), ('spider', 'SPIDER CRAB', 7, (30, 42), 8, 2, None, False), ('cusk', 'CUSK EEL', 7, (30, 40), 26, 3, None, False), ('lamprey', 'LAMPREY', 7, (24, 32), 32, 3, None, False), ('sleeper', 'SLEEPER SHARK', 7, (80, 110), 12, 1, None, False), ('megalodon', 'MEGALODON', 7, (480, 560), 24, 0, None, True), ('reaper', 'THE REAPER', 7, (460, 540), 30, 0, None, True), ('snailfish', 'HADAL SNAILFISH', 8, (30, 42), 14, 4, None, False), ('amphipod', 'GIANT AMPHIPOD', 8, (24, 34), 10, 4, None, False), ('faceless', 'FACELESS CUSK', 8, (40, 54), 18, 3, None, False), ('bigfin', 'BIGFIN SQUID', 8, (54, 72), 14, 2, None, False), ('telescope', 'TELESCOPEFISH', 8, (34, 46), 26, 3, None, False), ('barreleye', 'BARRELEYE', 8, (30, 40), 20, 3, None, False), ('swallower', 'BLACK SWALLOWER', 8, (44, 58), 22, 3, None, False), ('loosejaw', 'STOPLIGHT JAW', 8, (38, 50), 30, 3, None, False), ('frill', 'FRILLED SHARK', 8, (90, 120), 16, 1, None, False), ('trueking', 'THE KRAKEN', 8, (580, 680), 10, 0, None, True), ('abyssal', 'ABYSSAL KING', 8, (600, 700), 22, 0, None, True), ('poop', 'SHIT FISH', 0, (1, 1), 16, 0, None, False)]
+SPECIES += [('tarpon', 'SILVER KING', 0, (64, 80), 36, 0, None, True), ('kelpie', 'THE KELPIE', 1, (100, 125), 10, 0, None, True), ('moby', 'PALE WHALE', 2, (150, 185), 14, 0, None, True), ('phantom', 'PHANTOM EEL', 3, (150, 185), 30, 0, None, True), ('dread', 'DREAD ANGLER', 4, (230, 280), 14, 0, None, True), ('needle', 'NEEDLEFISH', 0, (2, 4), 38, 3, None, False), ('wrasse', 'WRASSE', 1, (4, 7), 18, 3, None, False), ('bonito', 'BONITO', 2, (9, 13), 36, 3, None, False), ('wolf', 'WOLFFISH', 3, (14, 20), 16, 2, None, False), ('lizard', 'LIZARDFISH', 4, (9, 13), 30, 3, None, False), ('cavefish', 'BLIND CAVEFISH', 5, (12, 18), 20, 4, None, False), ('prism', 'PRISM TETRA', 5, (8, 12), 30, 4, None, False), ('geode', 'GEODE CRAB', 5, (14, 20), 8, 3, None, False), ('shard', 'SHARDFIN', 5, (22, 30), 26, 3, None, False), ('glasseel', 'GLASS EEL', 5, (18, 26), 28, 3, None, False), ('quartz', 'QUARTZ PUFFER', 5, (16, 22), 10, 3, None, False), ('opal', 'OPAL RAY', 5, (28, 38), 16, 2, None, False), ('glimmer', 'GLIMMER SQUID', 5, (20, 28), 22, 2, None, False), ('amethyst', 'AMETHYST BASS', 5, (26, 36), 18, 3, None, False), ('diamond', 'DIAMONDBACK', 5, (300, 360), 26, 0, None, True), ('serpent', 'PRISM SERPENT', 5, (320, 380), 34, 0, None, True), ('yeti', 'YETI CRAB', 6, (18, 26), 8, 4, None, False), ('shrimp', 'VENT SHRIMP', 6, (10, 16), 14, 4, None, False), ('magma', 'MAGMA EEL', 6, (30, 42), 30, 3, None, False), ('cinder', 'CINDERFISH', 6, (22, 30), 26, 4, None, False), ('sulfur', 'SULFUR SNAPPER', 6, (26, 36), 20, 3, None, False), ('scald', 'SCALD RAY', 6, (34, 46), 16, 2, None, False), ('ash', 'ASH GULPER', 6, (38, 52), 16, 2, None, False), ('embers', 'EMBER SQUID', 6, (28, 38), 24, 3, None, False), ('ironsnail', 'IRON SNAIL', 6, (16, 24), 6, 2, None, False), ('phoenix', 'PHOENIX FISH', 6, (380, 450), 30, 0, None, True), ('magmaw', 'MAGMAW', 6, (400, 480), 18, 0, None, True), ('hagfish', 'HAGFISH', 7, (24, 34), 22, 4, None, False), ('boneeater', 'BONE EATER', 7, (18, 26), 12, 4, None, False), ('ratfish', 'RATFISH', 7, (28, 38), 24, 3, None, False), ('skull', 'SKULLFISH', 7, (34, 46), 20, 3, None, False), ('grenadier', 'GRENADIER', 7, (36, 50), 22, 3, None, False), ('spider', 'SPIDER CRAB', 7, (30, 42), 8, 2, None, False), ('cusk', 'CUSK EEL', 7, (30, 40), 26, 3, None, False), ('lamprey', 'LAMPREY', 7, (24, 32), 32, 3, None, False), ('sleeper', 'SLEEPER SHARK', 7, (80, 110), 12, 1, None, False), ('megalodon', 'MEGALODON', 7, (480, 560), 24, 0, None, True), ('reaper', 'THE REAPER', 7, (460, 540), 30, 0, None, True), ('snailfish', 'HADAL SNAILFISH', 8, (30, 42), 14, 4, None, False), ('amphipod', 'GIANT AMPHIPOD', 8, (24, 34), 10, 4, None, False), ('faceless', 'FACELESS CUSK', 8, (40, 54), 18, 3, None, False), ('bigfin', 'BIGFIN SQUID', 8, (54, 72), 14, 2, None, False), ('telescope', 'TELESCOPEFISH', 8, (34, 46), 26, 3, None, False), ('barreleye', 'BARRELEYE', 8, (30, 40), 20, 3, None, False), ('swallower', 'BLACK SWALLOWER', 8, (44, 58), 22, 3, None, False), ('loosejaw', 'STOPLIGHT JAW', 8, (38, 50), 30, 3, None, False), ('frill', 'FRILLED SHARK', 8, (90, 120), 16, 1, None, False), ('trueking', 'THE KRAKEN', 8, (580, 680), 10, 0, None, True), ('abyssal', 'ABYSSAL KING', 8, (600, 700), 22, 0, None, True), ('poop', 'BROWN TROUT', 0, (1, 1), 16, 0, None, False)]
 # Secret catches, never in the log, only placed by events (pool weight 0): the golden boot, the full-moon werewolf, the St. Patrick's lucky fish
 SPECIES += [('gboot', 'GOLDEN BOOT', 3, (1, 1), 0, 0, None, False), ('werewolf', 'WEREWOLF FISH', 2, (44, 60), 20, 0, None, False), ('lucky', 'LUCKY GOLDFISH', 0, (7, 11), 24, 0, None, False)]
+# Sharks (Nov 18, 2026): touch one anywhere but its back half and it bites. Appended so nothing above moves.
+SPECIES += [('blacktip', 'BLACKTIP SHARK', 0, (12, 18), 30, 1, None, False), ('leopard', 'LEOPARD SHARK', 1, (16, 24), 16, 1, None, False),
+            ('mako', 'MAKO SHARK', 2, (30, 42), 46, 1, None, False), ('hammer', 'HAMMERHEAD', 3, (34, 46), 22, 1, None, False),
+            ('goblin', 'GOBLIN SHARK', 4, (40, 54), 14, 1, None, False), ('lshark', 'LANTERN SHARK', 5, (8, 12), 26, 1, None, False)]
+SHARKS = ("blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "sleeper", "frill", "megalodon")
 SPEC = {s[0]: s for s in SPECIES}
 JUNK = ("boot", "anchor")                       # a pulse clears these out of the way
 FIXED = ("chest", "pearl", "tripod", "gboot")   # these never move (and a pulse leaves them be)
-GLOWS = ("angler", "jelly", "lantern", "levi", "viper", "chest", "dragon", "hatchet", "pearl", "ancient", "colossal", "vampire", "emerald")
+GLOWS = ("angler", "jelly", "lantern", "levi", "viper", "chest", "dragon", "hatchet", "pearl", "ancient", "colossal", "vampire", "emerald", "lshark")
 JELLY_CHANCE = [0.0, 0.07, 0.09, 0.11, 0.13, 0.11, 0.13, 0.12, 0.14, 0.0]
 PER_CHUNK = [(1, 2), (1, 2), (1, 2), (1, 2), (2, 2), (1, 2), (2, 2), (2, 2), (2, 2), (1, 2)]
 CHUNK = [(1, 2), (1, 2), (1, 2), (1, 2), (2, 2), (1, 2)]
@@ -328,6 +333,12 @@ class Art:
             "gboot": lambda: outlined(pg, from_rows(pg, BOOT, {"b": (255, 206, 60), "d": (200, 140, 30), "k": (255, 250, 200)})),
             "werewolf": lambda: self.spikes(F(16, 8, (112, 98, 90), (176, 158, 140), (78, 68, 62), "teeth", WHITE)),
             "lucky": lambda: F(10, 6, (255, 204, 50), (255, 240, 160), (60, 180, 80), "spots", (70, 200, 90)),
+            "blacktip": lambda: F(22, 6, (130, 142, 156), (236, 240, 246), (34, 36, 46), "teeth", WHITE, fin_h=5),
+            "leopard": lambda: F(24, 6, (176, 154, 112), (238, 228, 204), (130, 108, 76), "spots", (64, 50, 38), fin_h=4),
+            "mako": lambda: F(26, 7, (54, 86, 170), (230, 236, 248), (36, 60, 130), "teeth", WHITE, tail=8, fin_h=5),
+            "hammer": lambda: self.hammer(F(28, 7, (118, 128, 140), (226, 230, 236), (84, 92, 104), fin_h=6)),
+            "goblin": lambda: self.snout(F(30, 7, (222, 160, 170), (244, 204, 210), (186, 118, 136), "teeth", WHITE, fin_h=4)),
+            "lshark": lambda: F(14, 5, (36, 40, 66), (64, 72, 112), (26, 28, 50), "glow", (130, 210, 255), fin_h=3),
         })
         assert set(mk) == set(SPEC), set(SPEC) ^ set(mk)
         self.big = {}
@@ -414,6 +425,21 @@ class Art:
         w, h = s.get_size()
         for dy in (0, 2):
             s.fill(INK, (w - 4, h // 2 + dy, 4, 1))
+        return s
+
+    def hammer(self, s):                       # the hammerhead's wide head: a bar across the nose with an eye at each end
+        s = self._extend(s, right=2)
+        w, h = s.get_size()
+        mid = h // 2 + 2
+        s.fill(INK, (w - 4, mid - 6, 4, 11)); s.fill((118, 128, 140), (w - 3, mid - 5, 2, 9))
+        s.set_at((w - 2, mid - 5), WHITE); s.set_at((w - 2, mid + 3), WHITE)
+        return s
+
+    def snout(self, s):                        # the goblin shark's long flat nose
+        s = self._extend(s, right=5)
+        w, h = s.get_size()
+        mid = h // 2
+        s.fill(INK, (w - 7, mid - 2, 7, 3)); s.fill((240, 184, 192), (w - 7, mid - 1, 6, 1))
         return s
 
     def bill(self, s):

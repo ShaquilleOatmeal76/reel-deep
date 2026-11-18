@@ -170,20 +170,22 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
   tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "",
-    stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} } };   // the Rusty Hook
+    stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {} },   // the Rusty Hook
+  ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" } };   // counters for titles (Nov 18, 2026): sharks caught, fish lost to sharks, fish released, stings, ghosts caught, bounty days
 try {
   const old = JSON.parse(localStorage.getItem("reeldeep") || "{}");
-  store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}), flip: Object.assign(store.flip, old.flip || {}) });
+  store = Object.assign(store, old, { own: Object.assign(store.own, old.own || {}), eq: Object.assign(store.eq, old.eq || {}), sec: Object.assign(store.sec, old.sec || {}), tav: Object.assign(store.tav, old.tav || {}), flip: Object.assign(store.flip, old.flip || {}), ach: Object.assign(store.ach, old.ach || {}) });
   store.tav.stats = Object.assign({ stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, store.tav.stats);
   if (!old.dives) store.dives = Math.max(store.dives || 0, Math.floor(Object.values(store.log).reduce((a, e) => a + (e.n || 0), 0) / 3));   // dives from before they were counted, roughly
 } catch (e) { /* private window: play without saving */ }
 function saveStore() { try { localStorage.setItem("reeldeep", JSON.stringify(store)); } catch (e) { /* ignore */ } }
+const SHARKS = ["blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "sleeper", "frill", "megalodon"];   // touch one anywhere but its back half and it bites
 const HIDDEN = ["poop", "gboot", "werewolf", "lucky"];                // the mythic and the secret catches never show in the log
 const LOGGED = SPECIES.filter(s => !HIDDEN.includes(s[0]));
 
 // ------------------------------------------------------------------ secrets
 // Secret rewards live on the Secrets page only, never in the shop. They are appended past the shop's items:
-const SHOP_N = { flag: 12, flair: 20, boat: 18, line: 14, hat: 26, pet: 14, trail: 12 };   // how many of each list the shop sells; anything after is a secret or Bestiary reward
+const SHOP_N = { flag: 12, flair: 20, boat: 18, line: 14, hat: 26, pet: 14, trail: 12, hook: 14 };   // how many of each list the shop sells; anything after is a secret or Bestiary reward
 // [id, name, what it was, reward: [kind, index] or ["title", id] or null]
 const SECRETS = [
   ["bottle", "MESSAGE IN A BOTTLE", "FISHED A BOTTLE OUT OF THE SEA", ["flag", 12]],
@@ -191,7 +193,7 @@ const SECRETS = [
   ["konami", "THE CODE", "UP UP DOWN DOWN...", ["flair", 20]],
   ["eclipse", "ECLIPSE", "WORE OUT THE SKY", ["flag", 14]],
   ["poke", "MAN OVERBOARD", "POKED YOUR SAILOR TOO MUCH", ["title", "soggy"]],
-  ["mythic", "THE UNLOGGED FISH", "CAUGHT THE SHIT FISH", ["title", "mythic"]],
+  ["mythic", "THE UNLOGGED FISH", "CAUGHT THE BROWN TROUT", ["title", "mythic"]],
   ["baiter", "THE RECIPE", "MINNOW, SQUID, SHRIMP", ["title", "baiter"]],
   ["friday", "FRIDAY 4:59", "THE FISH PARTIED EARLY", null],
   ["ghost", "THE WITCHING HOURS", "MET THE GHOST FISH", null],
@@ -230,7 +232,7 @@ const BOTTLES = [
   ["AT 4:59 ON A FRIDAY THE FISH START CELEBRATING EARLY.", "any"],
   ["AFTER MIDNIGHT, NOT EVERY FISH IS ALIVE.", "any"],
   ["WHEN THE MOON IS FULL, ONE FISH GROWS FUR.", "any"],
-  ["MINNOW, SQUID, SHRIMP. EVERY GOOD BAITER KNOWS THE RECIPE.", "any"],
+  ["MINNOW, SQUID, SHRIMP. EVERY GOOD ANGLER KNOWS THE RECIPE.", "any"],
   ["THERE IS A FISH NO LOG WILL ADMIT TO. YOU WILL SMELL IT FIRST.", "any"],
   ["SOMETHING SLEEPS UNDER THE FLOOR. IT ONLY WAKES FOR AN EMPTY HOOK.", "any"],
   ["THE BIG EYE HATES BEING PULSED. KNOCK AND RUN.", "any"],
@@ -288,13 +290,16 @@ const LINES = [["WHITE LINE", 0, "#ecf0fa"], ["CYAN LINE", 400, "#5ae6ff"], ["PI
   ["RED LINE", 400, "#f05050"], ["ORANGE LINE", 400, "#ffa046"], ["VIOLET LINE", 500, "#b48cff"], ["SILVER LINE", 800, "#c8d2e6"], ["SHADOW LINE", 900, "#3c3450"],
   ["FIRE LINE", 3000, "@fire"], ["ICE LINE", 2500, "@ice"], ["SPARKLE LINE", 4000, "@sparkle"],
   ["BILE LINE", 0, "@bile"], ["VEIN LINE", 0, "@vein"],         // Bestiary rewards, never sold
-  ["CHIP LINE", 0, "@chip"]];                                    // the Rusty Hook's, for chips
+  ["CHIP LINE", 0, "@chip"],                                     // the Rusty Hook's, for chips
+  ["JACKPOT LINE", 0, "@jackpot"], ["DICE LINE", 0, "@dice"]];     // the Rusty Hook's Jackpot and High Stakes sets (Nov 18, 2026)
 const TRAILS = [["BUBBLES", 0, ["#c8ecff"]], ["GOLD DUST", 1000, ["#ffd246", "#fff0a0"]], ["PINK FIZZ", 1000, ["#ff8cd2", "#ffd2f0"]], ["EMBERS", 1500, ["#ff965a", "#ffdc5a"]],
   ["STARDUST", 2000, ["#ffffff", "#5ae6ff", "#c8a0ff"]], ["RAINBOW FIZZ", 4000, ["#f05050", "#ffa046", "#ffd246", "#82f082", "#5ae6ff", "#c8a0ff"]],
   ["TOXIC", 1200, ["#82f082", "#c8ff5a", "#46c846"]], ["DEEP BLUE", 1000, ["#3c78ff", "#5ae6ff"]], ["CANDY", 1500, ["#ff8cd2", "#ffffff", "#5ae6ff"]],
   ["SHADOW", 1500, ["#3c3450", "#6e5a96"]], ["CONFETTI", 3000, ["#f05050", "#ffd246", "#5ae6ff", "#82f082", "#ff8cd2"]], ["GOLDEN RAIN", 5000, ["#ffd246", "#ffffff", "#ffb428"]],
-  ["CHIP SPRAY", 0, ["#f05050", "#fafaff", "#ffd246"]]];          // the Rusty Hook's, for chips
-const price = (names, list) => names.map((n, i) => [n, list[i]]);
+  ["CHIP SPRAY", 0, ["#f05050", "#fafaff", "#ffd246"]],           // the Rusty Hook's, for chips
+  ["CHERRY FIZZ", 0, ["#e63246", "#ff6e78", "#46c846", "#ffd246"]], ["TUMBLING DICE", 0, ["#fafaff", "#ffffff", "#e63246"]]];   // Jackpot and High Stakes sets
+const PRICE_CAP = 5000;                                  // Nov 18, 2026: nothing costs more than this (was up to 8,000)
+const price = (names, list) => names.map((n, i) => [n, Math.min(PRICE_CAP, list[i])]);
 // Prices are set so the good stuff takes weeks of regular play, not an afternoon.
 const SHOP = [
   ["CHARACTER", "char", price(DATA.chars, [0, 500, 500, 1200, 1500, 1800, 1200, 1000, 2000, 1500, 1800, 1800, 6000, 4000, 3500, 2500, 2500, 3000, 4500, 3000, 6000, 5000])],
@@ -302,7 +307,7 @@ const SHOP = [
   ["BOAT", "boat", price(DATA.boats.slice(0, SHOP_N.boat), [0, 700, 700, 1000, 1800, 1500, 4000, 8000, 1500, 1500, 3000, 2500, 5000, 3500, 4000, 3000, 2000, 4500])],
   ["PET", "pet", price(DATA.pets.slice(0, SHOP_N.pet), [0, 1500, 1500, 2500, 2500, 3000, 3000, 2000, 2500, 5000, 1800, 7000, 6000, 4500])],
   ["FLAG", "flag", price(DATA.flags.slice(0, SHOP_N.flag), [0, 600, 1500, 1200, 1500, 3000, 1500, 2000, 2500, 2000, 1500, 4000])],
-  ["HOOK", "hook", price(DATA.hooks, [0, 1200, 900, 1500, 1100, 1800, 2500, 1500, 5000, 3000, 2000, 2500, 1500, 3500])],
+  ["HOOK", "hook", price(DATA.hooks.slice(0, SHOP_N.hook), [0, 1200, 900, 1500, 1100, 1800, 2500, 1500, 5000, 3000, 2000, 2500, 1500, 3500])],
   ["LINE", "line", LINES.slice(0, SHOP_N.line).map(l => [l[0], l[1]])],
   ["BUBBLE TRAIL", "trail", TRAILS.slice(0, SHOP_N.trail).map(l => [l[0], l[1]])],
   ["FISH FLAIR", "flair", price(DATA.flair.slice(0, SHOP_N.flair), [0, 1200, 1500, 4000, 1000, 2000, 1800, 3000, 2500, 1200, 1500, 1000, 2000, 1200, 1800, 1500, 3500, 2500, 2000, 6000])],
@@ -312,14 +317,19 @@ const ZONE_TITLES = ["BEACH BUM", "KELP KEEPER", "TWILIGHT RANGER", "WRECK DIVER
 const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat(ZONES.map((z, i) => ["zone" + i, ZONE_TITLES[i], "LOG ALL OF " + z[0]]))
   .concat([["floor", "BOTTOM FEEDER", "TOUCH THE SEA FLOOR"], ["legends", "LEGEND HUNTER", "LOG EVERY LEGENDARY"], ["trophies", "TROPHY ROOM", "A TROPHY OF EVERY FISH"],
-    ["all", "COMPLETIONIST", "LOG EVERY SPECIES"], ["baiter", "MASTER BAITER", null], ["mythic", "HOLY CRAP", null], ["soggy", "SOGGY", null],
+    ["all", "COMPLETIONIST", "LOG EVERY SPECIES"], ["baiter", "BAIT MASTER", null], ["mythic", "HOLY CRAP", null], ["soggy", "SOGGY", null],
     ["roller", "HIGH ROLLER", "1,000 TAVERN CHIPS"], ["shark", "CARD SHARK", "WIN 25 HANDS OF 21"], ["derbyking", "DERBY KING", "WIN 10 DERBY BETS"],
     ["longshot", "LONG SHOT", "WIN A X8 DIVE BET"], ["regular", "REGULAR", "TAKE FREE CHIPS 14 DAYS"],
     ["wakeup", "WAKE-UP CALL", "BEAT THE SLEEPER"], ["otherside", "THE OTHER SIDE", "BEAT THE GAME"]])
   .concat(["GAP KEEPER", "TOOTH FAIRY", "MARROW MINER", "BLISTER POPPER", "EYE SPY", "LAMPLIGHTER", "GHOST DECKHAND", "SHADOW BOXER", "KNOT TIER", "MIRROR MIRROR"]
     .map((n, i) => ["fzone" + i, n, "FILL " + DATA.flip.zones[i][0]]))
   .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY"], ["bestiary", "BESTIARY KEEPER", "FILL THE BESTIARY"], ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS"]])
-  .concat([["pegleg", "PEG LEG", "HIT X25 IN PLINKO"], ["calledit", "CALLED IT", "HIT A DERBY TRIFECTA"]]);
+  .concat([["pegleg", "PEG LEG", "HIT X25 IN PLINKO"], ["calledit", "CALLED IT", "HIT A DERBY TRIFECTA"]])
+  .concat([["jaws", "JAWS", "CATCH ALL 9 SHARKS"], ["tailgater", "TAILGATER", "CATCH 25 SHARKS"], ["sharkbait", "SHARK BAIT", "LOSE 10 FISH TO SHARKS"],   // Nov 18, 2026
+    ["release", "CATCH AND RELEASE", "LET 50 FISH GO"], ["hattrick", "HAT TRICK", "3 TROPHIES ON ONE HOOK"], ["maxed", "MAXED OUT", "HIT THE X5 BONUS CAP"],
+    ["heavy", "HEAVYWEIGHT", "A 1,000 LB HAUL"], ["emptyhand", "EMPTY HANDED", "TOUCH FLOOR, EMPTY HOOK"], ["bountyhunter", "BOUNTY HUNTER", "BOUNTY FISH ON 7 DAYS"],
+    ["jellylegs", "JELLY LEGS", "GET STUNG 25 TIMES"], ["lifer", "LIFER", "FINISH 500 DIVES"], ["nightowl", "NIGHT OWL", "CATCH 10 GHOST FISH"],
+    ["topdog", "TOP DOG", "#1 ON THE DAILY BOARD"], ["jackpot", "JACKPOT", "X100 ON A SCRATCH CARD"], ["photo", "PHOTO FINISH", "WIN ON A PHOTO FINISH"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -335,6 +345,19 @@ function checkTitles(dive) {                               // -> names of titles
   const ids = dive.catch.map(c => c[0]);
   tryFor("baiter", ["minnow", "squid", "shrimp"].every(b => ids.includes(b)));      // three classic baits on one hook
   tryFor("mythic", ids.includes("poop"));
+  const A = store.ach;
+  tryFor("jaws", SHARKS.every(id => store.log[id]));
+  tryFor("tailgater", A.sharks >= 25);
+  tryFor("sharkbait", A.bit >= 10);
+  tryFor("release", A.rel >= 50);
+  tryFor("hattrick", dive.catch.length === 3 && dive.catch.every(c => c[2]));
+  tryFor("maxed", dive.mult >= 5);
+  tryFor("heavy", dive.base >= 1000);
+  tryFor("emptyhand", !!dive.emptyFloor);
+  tryFor("bountyhunter", A.bounty >= 7);
+  tryFor("jellylegs", A.stung >= 25);
+  tryFor("lifer", store.dives + 1 >= 500);                   // counted before this dive is added
+  tryFor("nightowl", A.ghosts >= 10);
   return got;
 }
 
@@ -387,7 +410,7 @@ function progressTasks(dive) {                             // -> [text, coins] f
 function dayString(d) { d = d || new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function timeOfDay() { const h = new Date().getHours(); return h >= 5 && h < 11 ? "MORNING" : h >= 11 && h < 17 ? "DAY" : h >= 17 && h < 21 ? "DUSK" : "NIGHT"; }
 function todaysBounty() {                              // one ordinary species is worth triple today, the same one for everybody
-  const d = new Date(), pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && s[2] <= 6 && s[5] >= 2).map(s => s[0]);
+  const d = new Date(), pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && s[2] <= 6 && s[5] >= 2 && !SHARKS.includes(s[0])).map(s => s[0]);   // sharks are left out so adding them didn't change the bounty
   return RNG((d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 7 + 1).choice(pool);
 }
 // The weather follows the clock, the same for everybody, so refreshing can't reroll it. Storms were whole clock hours,
@@ -426,6 +449,8 @@ const LB = {                                             // two lists in the dat
       this.note = a.ok && b.ok ? "" : "UPDATE THE DATABASE RULES";
     } catch (e) { this.status = "CAN'T REACH THE SCORES"; return; }
     await this.load();
+    const top = !pre && this.today && this.today[0];
+    if (top && top.n === name && top.s === score && award("topdog")) { saveStore(); if (S) S.popups.push(["NEW TITLE: TOP DOG", 5, GOLD]); }
   },
 };
 function packHaul(h, bottom) { return h.rows.map(r => r[0] + ":" + r[1] + (r[3] ? ":T" : "")).join(",") + "|" + h.mult + "|" + (bottom ? 1 : 0); }
@@ -473,6 +498,7 @@ function noteEvents() {                                 // the first time a play
 function setState(st, msg) { S.state = st; S.stT = 0; S.msg = msg || null; }
 
 function cast() {                                        // the lure is chosen: stock the ocean for it and drop the hook
+  if (!lureOK(S.lure)) S.lure = 0;
   const L = LURES[S.lure];
   [S.sink, S.steerK, S.pulses, S.trophyK, S.legendK, S.pull] = L.slice(3);
   store.lure = S.lure; saveStore();
@@ -579,7 +605,8 @@ function say(key, txt, col, secs) { if (!S.said.has(key)) { S.said.add(key); S.p
 
 function pulse() {                                       // scatter everything near the hook
   if (S.state === "boss") { bossPulse(); return; }
-  if (S.state === "flip") { flipPulse(); return; }
+  if (S.state === "flip") { if (LURES[S.lure][0] !== "angler") flipPulse(); return; }   // the Angler's Hook can't stun anything over there
+  if (LURES[S.lure][0] === "angler") { release(); return; }
   if (!["down", "rise"].includes(S.state) || S.pulses <= 0) return;
   S.pulsed = true;                                         // for the NO PULSES dive bet
   if (!S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; startBoss(false); return; }   // knock on the eye with an empty hook
@@ -595,6 +622,27 @@ function pulse() {                                       // scatter everything n
   }
 }
 
+// The Angler's Hook (Nov 18, 2026, replaced the Heavy Sinker): no pulse. Its button lets the last fish caught go, twice a
+// dive, even after the hook fills (the line goes back down). With an empty hook it still wakes the Sleeper and knocks on the crack.
+function release() {
+  const live = ["down", "rise"].includes(S.state), full = S.fullUp && ["turn", "up"].includes(S.state);
+  if (S.pulses <= 0 || !(live || full)) return;
+  if (live && !S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; S.pulsed = true; startBoss(false); return; }
+  if (live && store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) { knockCrack(); if (S.state === "flip" || S.toFlip) { S.pulses--; S.pulsed = true; } return; }
+  if (!S.catch.length) { play("miss"); return; }
+  const c = S.catch.pop();
+  if (c.rise) S.riseN = Math.max(0, (S.riseN || 0) - 1);
+  S.pulses--; S.pulsed = true; S.immune = Math.max(S.immune, 0.8);
+  store.ach.rel++; saveStore();
+  splash(S.hx, S.hy, 8, "#c8ecff"); play("plop");
+  S.popups.push(["LET IT GO: " + SPEC[c[0]][1], 2.0, CYAN]);
+  if (full) { S.fullUp = false; setState(S.resume || "down"); }
+}
+const lureOK = i => !(LURES[i][0] === "angler" && tav().bet && tav().bet.k === "nopulse");   // the NO PULSES bet greys out the Angler's Hook
+const betBlocked = k => k === "nopulse" && LURES[S.lure][0] === "angler";                   // ...and the other way round
+function pickLure(i, dir) {                                // choose a lure, skipping one that's greyed out
+  for (let n = 0; n < LURES.length; n++, i = (i + (dir || 1) + LURES.length) % LURES.length) if (lureOK(i)) { S.lure = i; play("tick"); return; }
+}
 function steer(dt) {
   const speed = 118 * S.steerK;
   if (S.touchX !== null) S.hx += clamp(S.touchX - S.hx, -speed * dt, speed * dt);
@@ -645,7 +693,8 @@ function hookCheck() {                                   // whatever the hook is
     if (f.gh === 1) { f.gh = 2; say("ghost", "IT WENT RIGHT THROUGH!", "#dcf0ff"); continue; }
     if (f.gh === 2) continue;
     const legend = f.id !== "jelly" && SPEC[f.id][7];
-    if (f.id === "jelly") { play("zap"); S.flash = 0.2; S.rising = false; S.stung = true; setState("turn", "ZAPPED!"); }     // dive over; you keep what's hooked
+    if (f.id === "jelly") { play("zap"); S.flash = 0.2; S.rising = false; S.stung = true; S.fullUp = false; store.ach.stung++; setState("turn", "ZAPPED!"); }     // dive over; you keep what's hooked
+    else if (SHARKS.includes(f.id) && !fromBehind(f)) sharkBite(i, f);
     else if (legend && S.catch.some(c => SPEC[c[0]][7])) {
       if (C.FIXED.includes(f.id)) continue;
       scare(f, f.x + 10 >= S.hx ? 1 : -1, 2.0, true);
@@ -654,6 +703,26 @@ function hookCheck() {                                   // whatever the hook is
     } else if (legend || f.tr) startFight(i, f);
     else land(i, f);
     break;
+  }
+}
+const facesRight = f => (f.fl ? f.fl[0] > 0 : f.v >= 0) !== !!EV.fools;    // which way a fish's head points (as drawn)
+function fromBehind(f) {                                   // is the hook on the back half of this fish?
+  const r = fishRect(f), cx = r[0] + r[2] / 2;
+  return (S.hx - cx) * (facesRight(f) ? 1 : -1) < 0;
+}
+function sharkBite(i, f) {                                 // a shark met head-on: it takes your last fish, or with nothing to take, ends the dive
+  S.flash = 0.25; S.immune = 1.0; play("zap");
+  scare(f, facesRight(f) ? 1 : -1, 1.6, true);
+  if (S.catch.length) {
+    const c = S.catch.pop();
+    if (c.rise) S.riseN = Math.max(0, (S.riseN || 0) - 1);
+    store.ach.bit++; S.bitten = (S.bitten || 0) + 1; saveStore();
+    splash(S.hx, S.hy, 8, "#ff6a5a");
+    S.popups.push(["CHOMP!", 2.0, RED], ["IT TOOK YOUR " + SPEC[c[0]][1], 2.4, RED]);
+  } else {
+    S.rising = false; S.fullUp = false; S.chomped = true;
+    splash(S.hx, S.hy, 10, "#ff6a5a");
+    setState("turn", "CHOMP!");
   }
 }
 function bottleXY(bt, cam, t) { return [Math.floor(bt.x + Math.sin(t * 0.9) * 3), Math.floor(bt.y - cam + Math.sin(t * 2) * 1.5) - 4]; }
@@ -711,6 +780,7 @@ function update(dt) {
     hookCheck();
     if (S.state === "down" && S.hy >= C.BOTTOM_M * M) {
       S.hy = C.BOTTOM_M * M; S.bottom = true; play("chime");
+      if (!S.catch.length) S.emptyFloor = true;
       S.rising = S.catch.length < C.CAPACITY;            // room left on the hook: ride up slowly and keep fishing
       setState("turn", "TOUCHED BOTTOM!");
     }
@@ -759,7 +829,9 @@ function update(dt) {
 function land(i, f) {
   removeFish(i, f);
   S.catch.push([f.id, f.lb, f.tr, Math.floor(S.hy / M)]);
-  if (S.resume === "rise") S.riseN = (S.riseN || 0) + 1;  // caught on the slow ride up from the floor
+  if (S.resume === "rise") { S.riseN = (S.riseN || 0) + 1; S.catch[S.catch.length - 1].rise = true; }  // caught on the slow ride up from the floor
+  if (SHARKS.includes(f.id)) store.ach.sharks++;
+  if (f.gh) store.ach.ghosts++;
   catchSound(S.catch.length - 1);
   splash(S.hx, S.hy, 6, "#c8ecff");
   const legend = SPEC[f.id][7];
@@ -769,7 +841,7 @@ function land(i, f) {
   else if (f.id === "poop") { S.flash = 0.5; S.popups.push(["MYTHIC!", 3, "#c8a0ff"], ["WHAT IS THAT?!", 3, "#c8a0ff"]); play("fanfare"); }
   else if (legend) { S.flash = 0.35; S.popups.push(["LEGENDARY!", 2.4, LEGEND], [SPEC[f.id][1], 2.4, LEGEND]); play("fanfare"); }
   else if (f.tr) { S.flash = 0.25; S.popups.push(["TROPHY " + SPEC[f.id][1] + "!", 2.2, TROPHY]); play("chime"); }
-  if (S.catch.length >= C.CAPACITY) setState("turn", "FULL HOOK");
+  if (S.catch.length >= C.CAPACITY) { S.fullUp = true; setState("turn", "FULL HOOK"); }   // fullUp: the Angler's Hook can still let one go
   else {
     if (!legend && !f.tr) S.popups.push(["HOOKED " + S.catch.length + "/" + C.CAPACITY, 1.0, GOLD]);
     if (S.state !== S.resume) setState(S.resume);
@@ -827,6 +899,7 @@ const SHORT = { "TROPHY CASE": "TROPHIES", "3 OF A KIND": "TRIPLE", "DEEP TRIO":
 function beginHaul() {
   const rows = [];
   let newN = 0, recN = 0;
+  if (S.catch.some(c => c[0] === S.bounty) && store.ach.bday !== dayString()) { store.ach.bounty++; store.ach.bday = dayString(); }
   for (const [fid, lb, tr] of S.catch) {
     const hot = fid === S.bounty;
     let tag = hot ? "X" + C.BOUNTY_X : "";
@@ -857,10 +930,10 @@ function beginHaul() {
   if (sets.length) { const long = sets.map(s => s[1]).join("+"), short = sets.map(s => SHORT[s[1]]).join("+"); extra.push([(sets.length === 1 ? long : short.length <= 13 ? short : sets.length + " BONUSES") + " X" + mult, LIME]); }
   if (S.bossWon) extra.push(["THE SLEEPER SLEEPS", "#c8a0ff"]);
   if (S.bottom) extra.push(["SEA FLOOR +" + C.BOTTOM_BONUS, CYAN]);
-  const dive = { total, mult, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty, newN, recN,
+  const dive = { total, mult, base, emptyFloor: !!S.emptyFloor, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty, newN, recN,
     stung: !!S.stung, pulsed: !!S.pulsed, riseN: S.riseN || 0, last: tav().hist.length ? tav().hist[tav().hist.length - 1][0] : null,
     best: store.best, board: LB.url && LB.today ? LB.today.map(e => e.s).sort((a, b) => b - a) : null };
-  let coins = total > 0 ? Math.floor(total / 25) + 1 : 0;
+  let coins = total > 0 ? Math.floor(total / 20) + 1 : 0;   // /20 since Nov 18, 2026 (was /25)
   if (ids.includes("poop")) coins += 500;
   store.coins += coins;
   if (coins) extra.push(["+" + coins + " COINS +" + (2 + (S.reached >= 600 ? 3 : 0) + (S.bottom ? 5 : 0)) + " CHIPS", GOLD]);
@@ -1016,7 +1089,7 @@ function startFlip(test, end) {
   const L = (end ? FLIP_Z[FLIP_Z.length - 1][2] : DATA.flip.crossing) * M, Lu = LURES[S.lure];
   const seed = (Math.random() * 4294967296) >>> 0, rng = RNG(seed);
   if (!test) { store.sec.crack = true; saveStore(); }       // you've been through it
-  FLIP = { test, end, seed, mode: "in", mt: 0, f: test === 2 ? L - 260 : 0, L, rng, chunks: {}, special: [], catch: [], pulses: Lu[5], ring: null, scare: null, scared: false,
+  FLIP = { test, end, seed, mode: "in", mt: 0, f: test === 2 ? L - 260 : 0, L, rng, chunks: {}, special: [], catch: [], pulses: Lu[0] === "angler" ? 0 : Lu[5], ring: null, scare: null, scared: false,
     zone: -1, sx: LW / 2, wet: 2, gone: new Set(), fight: null, safe: 0, flick: 1, flickT: 4, dim: 0, rise: 0 };
   S.sink = Lu[3]; S.steerK = Lu[4]; S.hx = LW / 2; syncKeys(); S.touchX = null; S.overlay = null; S.popups = [];
   FLIP_Z.slice(0, end ? FLIP_Z.length : 3).forEach((z, zi) => DATA.flip.species.filter(s => s[2] === zi && s[6]).forEach(s => {   // legendaries: each might be out there
@@ -1139,7 +1212,7 @@ function flipUpdate(dt) {
   const m = F.f / M, z = flipZoneAt(m);
   if (z !== F.zone && (F.end || z < 3)) {
     F.zone = z; S.popups = S.popups.filter(p => !FLIP_Z.some(q => q[0] === p[0])); S.popups.push([FLIP_Z[z][0], 2.6, "#ff8ca0"]);
-    if (F.end && F.zone > 0) F.pulses = Math.min(LURES[S.lure][5], F.pulses + 1);   // each new zone gives back one pulse
+    if (F.end && F.zone > 0 && LURES[S.lure][0] !== "angler") F.pulses = Math.min(LURES[S.lure][5], F.pulses + 1);   // each new zone gives back one pulse
   }
   if (!F.scared && F.f > F.L * 0.5) { F.scared = true; F.scare = 0; play("thunder", 0.8); SOUNDS.roar = [[70, 1.8, "sawtooth", 0.4, 30], [48, 2, "square", 0.25, 25, 0.2]]; play("roar"); }   // something huge passes behind you
   if (F.scare !== null) { F.scare += dt; if (F.scare > 5) F.scare = null; }
@@ -1383,8 +1456,10 @@ function drawFlip() {
     const left = Math.max(0, Math.round((flipTop() - F.f) / M));
     text(left ? left + " M TO GO" : "CATCH YOURSELF", LW / 2, 8, 1, "#ff8ca0", "center");
     text("CATCH " + F.catch.length + "/" + C.CAPACITY, LW / 2, 18, 1, "#e6b4be", "center", null);
-    box(2, 176, 36, 22, F.pulses ? "#ff8ca0" : "#5a3a46"); text("PULSE", 20, 183, 1, F.pulses ? "#ff8ca0" : "#7a5a66", "center", null);
-    for (let k = 0; k < F.pulses; k++) rect("#ff8ca0", 8 + k * 9, 190, 6, 3);
+    if (LURES[S.lure][0] !== "angler") {                    // the Angler's Hook has no pulse over here
+      box(2, 176, 36, 22, F.pulses ? "#ff8ca0" : "#5a3a46"); text("PULSE", 20, 183, 1, F.pulses ? "#ff8ca0" : "#7a5a66", "center", null);
+      for (let k = 0; k < F.pulses; k++) rect("#ff8ca0", 8 + k * 9, 190, 6, 3);
+    }
     if (F.test) { text("TEST", LW - 4, KEYS ? 182 : 192, 1, GREY, "right", null); if (KEYS) text("ESC: QUIT", LW - 4, 192, 1, GREY, "right", null); }
     if (F.fight) { g.save(); g.translate(OX, 0); drawFightBox(F.fight, FSPEC[F.fight.c.id][1], FSPEC[F.fight.c.id][6]); g.restore(); }
     S.popups.slice(-2).forEach((p, i) => { const tw = textW(p[0], 1); box(Math.floor(LW / 2 - tw / 2) - 4, 32 + i * 13, tw + 8, 11, p[2]); text(p[0], LW / 2, 37 + i * 13, 1, p[2], "center", null); });
@@ -1396,7 +1471,7 @@ const CREDITS = [["DIRECTED BY", "A VERY PATIENT FOX"], ["LEAD FISH WRANGLER", "
   ["HOOK SHARPENING", "THE GOLD HOOK, WHO INSISTED"], ["CATERING", "WHATEVER THE GULPER DIDN'T EAT"], ["LEGAL COUNSEL", "THE KRAKEN'S LAWYERS (EIGHT OF THEM)"],
   ["WEATHER", "THE STORM, ON A PART-TIME BASIS"], ["QUALITY ASSURANCE", "EVERYONE WHO GOT ZAPPED"], ["ALARM CLOCK FOR THE SLEEPER", "YOU. IT IS STILL UPSET."],
   ["MOST CAUGHT FISH", "THE MINNOW, UNWILLINGLY"], ["WARDROBE", "THE PENGUIN WHO KEEPS BUYING HATS"], ["SPECIAL THANKS", "THE RUBBER DUCK, FOR LISTENING"],
-  ["BOOT CONSULTANT", "THE GOLDEN BOOT, STILL MISSING ITS PAIR"], ["APPEARING COURTESY OF NOBODY WHO WILL ADMIT IT", "THE SHIT FISH"],
+  ["BOOT CONSULTANT", "THE GOLDEN BOOT, STILL MISSING ITS PAIR"], ["APPEARING COURTESY OF NOBODY WHO WILL ADMIT IT", "THE BROWN TROUT"],
   ["DISCLAIMER", "NO BOOTS WERE HARMED. ONE BOOT WAS HARMED."]];
 let CRED = null;
 function creditLines() {                                       // [text, colour, gap after]
@@ -1762,7 +1837,7 @@ function draw() {
     const hx = Math.floor(S.hx), hy = Math.floor(S.hy - cam), lid = LURES[S.lure][0];
     if (EV.fools) { const [hw, hh] = sprSize("hook" + store.eq.hook); g.save(); g.translate(hx - 1 + hw, hy - 4 + hh); g.rotate(Math.PI); spr("hook" + store.eq.hook, 0, 0); g.restore(); }
     else spr("hook" + store.eq.hook, hx - 1, hy - 4);
-    if (lid === "sinker") disc("#969caa", hx, hy - 7, 2);
+    if (lid === "angler") { rect("#c8ecff", hx - 2, hy - 8, 5, 1); rect("#c8ecff", hx - 2, hy - 8, 1, 2); rect("#c8ecff", hx + 2, hy - 8, 1, 2); }
     else if (lid === "glow") disc(Math.floor(t * 6) % 2 ? "#fffa96" : "#ffdc5a", hx, hy - 6, 2);
     else if (lid === "sonar") rect(CYAN, hx - 1, hy - 8, 3, 2);
     S.catch.forEach(([fid, , tr], i) => {                // the bunch dangles nose-up
@@ -1829,7 +1904,7 @@ function draw() {
 // A betting side game with its own currency, tavern chips. Chips and coins never convert, and nothing chips buy
 // changes your score. The tavern opens after a player's 20th dive; betting on a dive works from the start.
 const CHIP = "#5ad2a0", WOOD = "#7a5232", FELT = "#0e4a2e";
-const TAV_OPEN_AT = 20, DAILY_CHIPS = 50, MAX_STAKE = 50, EDGE = 0.95;     // the house keeps about 5% over time
+const TAV_OPEN_AT = 20, DAILY_CHIPS = 50, MAX_STAKE = 75, EDGE = 0.95;     // the house keeps about 5% over time
 const tav = () => store.tav;
 const tavOpen = () => store.dives >= TAV_OPEN_AT;
 let TAV = { say: "WHAT'LL IT BE?", c21: null, derby: null, bet: null, shopSel: 0, songSel: 0, board: 0, boards: {}, story: 0, ticker: 0 };
@@ -1971,7 +2046,7 @@ function openBet() {
 }
 function placeBet() {
   const b = TAV.bet, q = tav(), [k, , pays] = b.opts[b.sel];
-  if (q.chips < b.stake || b.stake < 5) { play("miss"); return; }
+  if (q.chips < b.stake || b.stake < 5 || betBlocked(k)) { play("miss"); return; }
   q.chips -= b.stake; q.bet = { k, stake: b.stake, pays, line: betLine(), cast: false };
   saveStore(); play("select"); S.overlay = null;
 }
@@ -2072,7 +2147,7 @@ const SONGS = [
   ["LIGHTHOUSE", 100, "", 120, "C5 - G4 - E4 - G4 - C5 - D5 - E5 - - - D5 - B4 - G4 - B4 - D5 - C5 - - - -", "C3 - G2 - C3 - G2 - A2 - E2 - A2 - E2 - G2 - D2 - G2 - D2 - C3 - G2 - C3 - -"],
   ["BILGE RAT", 100, "", 160, "E4 E4 - G4 - E4 D4 - C4 C4 - E4 - C4 B3 - A3 - C4 - E4 - G4 - F4 E4 D4 - C4 - - -", "A2 - E3 - A2 - E3 - A2 - E3 - A2 - E3 - F2 - C3 - G2 - D3 - A2 - E3 - A2 - - -"],
   ["FIRST LEGEND", null, "LAND YOUR FIRST LEGENDARY", 132, "C5 - E5 - G5 - C6 - - - G5 - C6 - - - - - E5 - F5 - G5 - A5 - G5 - E5 - C5 - - -", "C3 - G2 - C3 - G2 - E3 - G2 - C3 - - - F2 - C3 - G2 - D3 - C3 - G2 - C3 - - -"],
-  ["BAITER'S BOOGIE", null, "EARN MASTER BAITER", 140, "C4 - E4 G4 A4 - G4 E4 C4 - E4 G4 A4 - G4 - F4 - A4 C5 D5 - C5 A4 G4 - E4 C4 D4 - C4 -", "C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 F2 F3 F2 F3 F2 F3 F2 F3 G2 G3 G2 G3 C2 C3 C2 -"],
+  ["BAIT MASTER BOOGIE", null, "EARN BAIT MASTER", 140, "C4 - E4 G4 A4 - G4 E4 C4 - E4 G4 A4 - G4 - F4 - A4 C5 D5 - C5 A4 G4 - E4 C4 D4 - C4 -", "C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 C2 C3 F2 F3 F2 F3 F2 F3 F2 F3 G2 G3 G2 G3 C2 C3 C2 -"],
   ["FULL LOG", null, "LOG EVERY SPECIES", 120, "G4 - C5 - E5 - G5 - - - E5 - G5 - - - A5 - G5 - E5 - C5 - D5 - E5 - C5 - - - - -", "C3 - - - G2 - - - C3 - - - E3 - - - F2 - - - G2 - - - C3 - - - - - - -"],
   ["LULLABY", null, "PUT THE SLEEPER BACK TO SLEEP", 72, "E4 - G4 - B4 - - - A4 - G4 - E4 - - - D4 - E4 - G4 - - - D4 - E4 - - - - -", "E2 - - - B2 - - - C3 - - - G2 - - - A2 - - - E2 - - - B1 - - - E2 - - -"],
   ["CREDITS THEME", null, "CATCH YOURSELF", 108, "C5 - E5 - G5 - - - E5 - D5 - C5 - A4 - - - G4 - A4 - C5 - D5 - E5 - D5 - C5 - - - - -", "C3 - G2 - A2 - E2 - F2 - C3 - G2 - - - F2 - C3 - G2 - D3 - C3 - G2 - C3 - - -"],,
@@ -2105,12 +2180,18 @@ const SHOP_ROWS = [
   ["pchips", "POKER CHIPS", 400, "FISH FLAIR"],
   ["chipline", "CHIP LINE", 350, "A FISHING LINE"],
   ["spray", "CHIP SPRAY", 350, "A BUBBLE TRAIL"],
+  ["chiphook", "CHIP HOOK", 400, "A HOOK. MATCHES THE CHIPS"],
+  ["jpline", "JACKPOT LINE", 1500, "JACKPOT SET: A LINE"], ["jphook", "LUCKY 7 HOOK", 1200, "JACKPOT SET: A HOOK"],
+  ["jptrail", "CHERRY FIZZ", 2000, "JACKPOT SET: BUBBLES"], ["jpflair", "777", 2500, "JACKPOT SET: FISH FLAIR"],
+  ["hsline", "DICE LINE", 1500, "HIGH STAKES: A LINE"], ["hshook", "DICE HOOK", 1200, "HIGH STAKES: A HOOK"],
+  ["hstrail", "TUMBLING DICE", 2000, "HIGH STAKES: BUBBLES"], ["hsflair", "CARD SUITS", 2500, "HIGH STAKES: FISH FLAIR"],
   ["carve", "CARVE INITIALS", 100, "INTO THE TAVERN WALL"],
   ["map", "TREASURE MAP", 60, "WHERE THIS WEEK'S GOLD BOOT HIDES"],
   ["magnet", "BOTTLE MAGNET", 120, "MORE BOTTLES, 3 DIVES"],
   ["rumour", "RUMOUR", 150, "A BOTTLE YOU HAVEN'T FOUND"],
 ];
-const TAV_COSM = { cap: ["hat", 26], cat: ["pet", 14], tub: ["boat", 19], ace: ["flag", 15], pchips: ["flair", 21], chipline: ["line", 16], spray: ["trail", 12] };   // past SHOP_N: never sold for coins
+const TAV_COSM = { cap: ["hat", 26], cat: ["pet", 14], tub: ["boat", 19], ace: ["flag", 15], pchips: ["flair", 21], chipline: ["line", 16], spray: ["trail", 12],
+  chiphook: ["hook", 14], jpline: ["line", 17], jphook: ["hook", 15], jptrail: ["trail", 13], jpflair: ["flair", 22], hsline: ["line", 18], hshook: ["hook", 16], hstrail: ["trail", 14], hsflair: ["flair", 23] };   // past SHOP_N: never sold for coins
 const rumourPrice = () => Math.min(400, 150 + 50 * (tav().rumours || 0));
 function shopRowState(i) {                                  // -> [label shown, price or null, note]
   const q = tav(), [id, lab, price, note] = SHOP_ROWS[i], cm = TAV_COSM[id];
@@ -2178,7 +2259,7 @@ function gossip() {
 }
 // ---- the scratch card: 9 squares, three alike wins. Prizes are set so it pays back about 95%.
 // Bigger prizes since Nov 17, 2026 (top was X20): wins are a bit rarer (20% of cards) but the golden boot pays X500.
-const SCRATCH = [["boot", 0, 0], ["minnow", 2, 0.15], ["clown", 5, 0.04], ["shark", 20, 0.0075], ["megalodon", 100, 0.002], ["gboot", 500, 0.0002]];   // [species, pays x, chance it's the winner]
+const SCRATCH = [["boot", 0, 0], ["minnow", 2, 0.15], ["clown", 5, 0.04], ["blacktip", 20, 0.0075], ["megalodon", 100, 0.002], ["gboot", 500, 0.0002]];   // [species, pays x, chance it's the winner]
 function scratchNew() {
   const syms = SCRATCH.filter(s => DATA.atlas[s[0]]), r = Math.random();
   let acc = 0, win = -1;
@@ -2200,7 +2281,7 @@ function scratchTap(lx, ly) {
   else if (ly >= 136 && ly < 152) { sc.open = sc.open.map(() => true); play("tick"); }
   if (sc.open.every(o => o)) {
     sc.paid = true;
-    if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay, "win"); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); }
+    if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay, "win"); if (sc.syms[sc.win][1] >= 100) tavAward("jackpot"); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); }
     else { sc.msg = "NO LUCK"; play("miss"); }
     saveStore();
   }
@@ -2521,15 +2602,16 @@ function drawBet() {                                         // betting on the n
   chipsLine(20);
   b.opts.forEach(([, lab, pays], i) => {
     const y = 29 + i * 17, sel = i === b.sel;
-    box(4, y, 112, 15, sel ? CHIP : "#2a4a3c"); text(lab, 8, y + 7, 1, sel ? WHITE : "#a0c8b4", "left", null); text("X" + pays, 112, y + 7, 1, sel ? GOLD : "#8a9a6a", "right", null);
+    const off = betBlocked(b.opts[i][0]);
+    box(4, y, 112, 15, sel ? CHIP : "#2a4a3c"); text(lab, 8, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null); text("X" + pays, 112, y + 7, 1, off ? "#4a5a50" : sel ? GOLD : "#8a9a6a", "right", null);
   });
   text(b.opts[b.sel][3] || "STAKE", 60, 120, 1, b.opts[b.sel][0] === "under" ? ORANGE : "#c8e6d2", "center", null);
   box(22, 126, 16, 15, CHIP); text("-", 30, 133, 1, CHIP, "center", null);
   text(b.stake, 60, 133, 2, WHITE, "center");
   box(82, 126, 16, 15, CHIP); text("+", 90, 133, 1, CHIP, "center", null);
   text("MAX " + MAX_STAKE + "  WIN " + Math.floor(b.stake * b.opts[b.sel][2]), 60, 148, 1, GREY, "center", null);
-  const ok = tav().chips >= b.stake && b.stake >= 5;
-  box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
+  const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk;
+  box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
   text("NEW BETS EVERY DIVE", 60, 180, 1, "#5a8a74", "center", null);
   text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
   g.restore();
@@ -2551,7 +2633,7 @@ function drawChipShop() {
   box(4, 134, 112, 34, GOLD);
   wrap(note, 18).slice(0, 2).forEach((l, i) => text(l, 60, 141 + i * 9, 1, "#e8dcc4", "center", null));
   const sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid], opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox);
-  const lab = opens ? "TAP AGAIN TO OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAP AGAIN: TAKE OFF" : "TAP AGAIN: PUT ON") : price === null ? (sid === "story" && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? "TAP AGAIN: BUY " : "NEEDS ") + price;
+  const lab = opens ? "TAP AGAIN TO OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAP AGAIN: TAKE OFF" : "TAP AGAIN: PUT ON") : price === null ? (sid === "story" && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? (price >= 1000 ? "TAP TO BUY " : "TAP AGAIN: BUY ") : "NEEDS ") + price;   // 4-digit prices need the shorter line
   if (lab) text(sid === "dream" && price !== null && tav().chips >= price ? "DREAM FOR " + price : lab, 60, 160, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
   g.restore();
@@ -2773,6 +2855,8 @@ function lineCol(i) {
   if (c === "@fire") return "hsl(" + Math.floor(18 + 22 * Math.sin(T * 9 + i * 0.8)) + ",100%," + Math.floor(55 + 10 * Math.sin(T * 13 + i)) + "%)";
   if (c === "@ice") return (i + Math.floor(T * 6)) % 4 ? "#bfeaff" : "#ffffff";
   if (c === "@vein") return (i + Math.floor(T * 9)) % 6 === 0 ? "#ff5a6e" : (i + Math.floor(T * 9)) % 6 === 1 ? "#d23246" : "#8c1e32";   // a pulse runs down it
+  if (c === "@jackpot") return (i + Math.floor(T * 6)) % 5 === 0 ? "#fff6c8" : (i * 3 + Math.floor(T * 3)) % 11 === 0 ? "#e63246" : "#ffd246";   // gold, with coins flashing down it
+  if (c === "@dice") return (i + Math.floor(T * 3)) % 3 === 2 ? "#1a1628" : "#fafaff";       // white with black pips
   if (c === "@chip") return (i + Math.floor(T * 4)) % 4 < 2 ? "#f05050" : "#fafaff";
   if (c === "@bile") return (i * 3 + Math.floor(T * 5)) % 7 === 0 ? "#e6ff8c" : "#7cb43c";
   return (i * 7 + Math.floor(T * 10)) % 9 === 0 ? "#ffd246" : (i + Math.floor(T * 4)) % 5 === 0 ? "#ffffff" : "#a0a8c8";      // sparkle
@@ -2840,7 +2924,7 @@ const KEYS = window.matchMedia && window.matchMedia("(hover: hover) and (pointer
 function lureIcon(i, x, y) {
   const lid = LURES[i][0], t = T;
   spr("hook" + store.eq.hook, x - 1, y - 1);
-  if (lid === "sinker") { disc("#969caa", x, y - 5, 3); rect(WHITE, x - 1, y - 6, 1, 1); }
+  if (lid === "angler") { rect("#c8ecff", x - 3, y - 7, 7, 1); rect("#c8ecff", x - 3, y - 7, 1, 3); rect("#c8ecff", x + 3, y - 7, 1, 3); }   // a little open clasp: it lets go
   else if (lid === "glow") { disc("#ffec78", x, y - 5, 3); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + t; rect("#fffabe", x + Math.cos(a) * 6, y - 5 + Math.sin(a) * 6, 1, 1); } }
   else if (lid === "sonar") [3, 6].forEach(r => ring(CYAN, x, y - 3, r + Math.floor(t * 3) % 2));
   else rect("#e65046", x - 1, y - 6, 3, 3);
@@ -2865,8 +2949,10 @@ function drawHud() {
       const x = 6 + i * 27, sel = i === S.lure;
       rect(sel ? "#1e285a" : INK, x, 96, 26, 28);
       g.fillStyle = sel ? GOLD : "#5a6496"; g.fillRect(x, 96, 26, 1); g.fillRect(x, 123, 26, 1); g.fillRect(x, 96, 1, 28); g.fillRect(x + 25, 96, 1, 28);
+      if (!lureOK(i)) g.globalAlpha = 0.3;                 // greyed out by the NO PULSES bet
       lureIcon(i, x + 13, 107);
       for (let k = 0; k < Lu[5]; k++) rect(CYAN, x + 13 - Lu[5] * 3 + k * 6 + 1, 118, 4, 3);
+      g.globalAlpha = 1;
     });
     text(LURES[S.lure][1], 60, 131, 1, GOLD, "center");
     const on = Math.floor(t * 2.5) % 2;
@@ -2892,9 +2978,10 @@ function drawHud() {
     const my = gy + Math.floor(S.hy / M / C.MAX_M * gh);
     poly(WHITE, [[gx - 6, my - 3], [gx - 2, my], [gx - 6, my + 3]]);
     if (tav().map === weekString()) { const by = gy + Math.floor(bootDepth() / C.MAX_M * gh); rect(GOLD, gx - 3, by - 1, 2, 3); }   // the treasure map's mark
-    if (st === "down" || st === "rise") {                // the pulse button
+    const ang = LURES[S.lure][0] === "angler";
+    if (st === "down" || st === "rise" || (ang && S.fullUp && (st === "up" || st === "turn"))) {   // the pulse button (DROP on the Angler's Hook, which still works on a full hook)
       const have = S.pulses > 0, n = LURES[S.lure][5];
-      box(2 - OX, 176, 36, 22, have ? CYAN : "#505678"); text("PULSE", 20 - OX, 183, 1, have ? CYAN : "#6e7496", "center", null);
+      box(2 - OX, 176, 36, 22, have ? CYAN : "#505678"); text(ang ? "DROP" : "PULSE", 20 - OX, 183, 1, have ? CYAN : "#6e7496", "center", null);
       for (let k = 0; k < n; k++) rect(k < S.pulses ? CYAN : "#3c4264", 20 - OX - n * 4 + k * 8 + 1, 190, 6, 3);
       if (st === "down") { box(2 - OX, 2, 12, 10); text("<", 8 - OX, 7, 1, WHITE, "center", null); }
     }
@@ -3742,9 +3829,9 @@ function drawBetWide() {
   text("BET ON YOUR DIVE", x0, 8, 1, CHIP, "left", null);
   chipsAt(x0 + 348, 8, "right");
   for (const [id, x, y, w, h, v] of betWideHits()) {
-    if (id === "opt") { const [k, lab, pays, desc] = b.opts[v], sel = v === b.sel; box(x, y, w, h, sel ? CHIP : "#2a4a3c"); text(lab, x + 6, y + 7, 1, sel ? WHITE : "#a0c8b4", "left", null); text(desc || "", x + 6, y + 17, 1, k === "under" ? ORANGE : sel ? "#c8e6d2" : "#5a8a74", "left", null); text("X" + pays, x + w - 6, y + 12, 1, sel ? GOLD : "#8a9a6a", "right", null); }
+    if (id === "opt") { const [k, lab, pays, desc] = b.opts[v], sel = v === b.sel, off = betBlocked(k); box(x, y, w, h, sel ? CHIP : "#2a4a3c"); text(lab, x + 6, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null); text(desc || "", x + 6, y + 17, 1, k === "under" ? ORANGE : sel ? "#c8e6d2" : "#5a8a74", "left", null); text("X" + pays, x + w - 6, y + 12, 1, sel ? GOLD : "#8a9a6a", "right", null); }
     else if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
-    else { const ok = tav().chips >= b.stake && b.stake >= 5; btn(x, y, w, h, ok ? "PLACE BET" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
+    else { const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk; btn(x, y, w, h, ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
   }
   text("STAKE", px + 59, 48, 1, "#a0c8b4", "center", null);
   text(b.stake, px + 59, 69, 2, WHITE, "center");
@@ -3841,7 +3928,7 @@ function scratchTapWide(rx, ly) {
     if (id === "cell") { sc.open[v] = true; play("tick"); } else { sc.open = sc.open.map(() => true); play("tick"); }
     if (sc.open.every(o => o)) {
       sc.paid = true;
-      if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay, "win"); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); } else { sc.msg = "NO LUCK"; play("miss"); }
+      if (sc.win >= 0) { const pay = 5 * sc.syms[sc.win][1]; addChips(pay, "win"); if (sc.syms[sc.win][1] >= 100) tavAward("jackpot"); sc.msg = "WIN " + pay + " CHIPS!"; play("fanfare"); } else { sc.msg = "NO LUCK"; play("miss"); }
       saveStore();
     }
   }, () => { S.overlay = "chipshop"; play("back"); });
@@ -3953,7 +4040,7 @@ function titleWideHits() {
   return h;
 }
 function titleWideAct(id, v) {
-  if (id === "lure") { S.lure = v; play("tick"); }
+  if (id === "lure") { if (lureOK(v)) { S.lure = v; play("tick"); } else play("miss"); }
   else if (id === "cast") cast();
   else if (id === "bet") openBet();
   else { const m = TITLE_WIDE_BAR[v][2]; S.overlay = m; S.scoreSel = -1; if (m === "scores") LB.load(); play("select"); }
@@ -3970,8 +4057,10 @@ function drawTitleWide() {
     if (id === "lure") {
       const Lu = LURES[v], sel = v === S.lure;
       rect(sel ? "#1e285a" : INK, x, y, w, h); outline(x, y, w, h, sel ? GOLD : "#5a6496");
+      if (!lureOK(v)) g.globalAlpha = 0.3;                 // greyed out by the NO PULSES bet
       lureIcon(v, x + w / 2, y + 11);
       for (let k = 0; k < Lu[5]; k++) rect(CYAN, x + w / 2 - Lu[5] * 3 + k * 6 + 1, y + 22, 4, 3);
+      g.globalAlpha = 1;
     } else if (id === "cast") { box(x, y, w, h, on ? WHITE : CYAN); text("CAST", x + w / 2, y + 11, 2, on ? WHITE : CYAN, "center"); }
     else if (id === "bet") {
       const b = tav().bet, bt = b && !b.cast ? betLabel(b) + ": " + b.stake : "", bl = bt || "PLACE A BET", lx = x + w / 2 - (textW(bl, 1) >> 1) + 4;
@@ -4112,7 +4201,7 @@ function drawTasks() {
 
 const HELP = [
   ["THE DIVE", ["PICK A LURE, THEN", "CAST.", "", "STEER: DRAG, OR", "A / D / ARROWS.", "", "EVERY FISH YOU", "TOUCH IS HOOKED.", "THE HOOK HOLDS 3.", "", "A JELLYFISH ENDS", "THE DIVE."]],
-  ["YOUR TOOLS", ["PULSE (SHIFT)", "SCATTERS NEARBY", "FISH. LURES GIVE", "1 TO 3 PULSES.", "", "SINKER: FAST DROP", "", "GLOW: MORE BIG", "FISH, BUT PULLS", "EVERYTHING IN", "", "SONAR: 3 PULSES"]],
+  ["YOUR TOOLS", ["PULSE (SHIFT)", "SCATTERS NEARBY", "FISH. LURES GIVE", "1 TO 3 PULSES.", "", "ANGLER: LETS YOUR", "LAST FISH GO, 2X", "", "GLOW: MORE BIG", "FISH, BUT PULLS", "EVERYTHING IN", "", "SONAR: 3 PULSES"]],
   ["BIG FISH", ["TROPHY: A HUGE FISH", "WITH RED SPARKLES.", "", "LEGENDARY: A GOLD", "AURA AND STARS.", "", "BOTH FIGHT. TAP", "(SPACE) ON GREEN", "BEFORE TIME RUNS", "OUT.", "ONE LEGENDARY", "PER HOOK."]],
   ["THE SEA FLOOR", ["REACH THE FLOOR", "FOR +40 LB.", "", "IF YOUR HOOK ISN'T", "FULL, YOU RISE", "SLOWLY AND CAN", "KEEP FISHING", "UNTIL IT IS."]],
   ["TIME FISH", ["SOME FISH ONLY", "COME OUT AT ONE", "TIME OF DAY:", ""].concat(...["MORNING", "DAY", "DUSK", "NIGHT"].map(td => [td + ":", (SPECIES.find(q => q[6] === td) || ["", "-"])[1]]))],
@@ -4317,7 +4406,7 @@ function titleTap(rx, lx, ly) {                            // -> true if the tap
   }
   if (ly < wl) { swipeAt = [rx, ly]; return true; }       // the rest of the sky: swipes and taps there can enter a certain code
   if (ly >= 159 && ly < 173 && lx >= 8 && lx < 106) { openBet(); return true; }
-  if (ly >= 96 && ly < 124 && lx >= 6 && lx < 114) { S.lure = clamp(Math.floor((lx - 6) / 27), 0, LURES.length - 1); play("tick"); return true; }
+  if (ly >= 96 && ly < 124 && lx >= 6 && lx < 114) { const v = clamp(Math.floor((lx - 6) / 27), 0, LURES.length - 1); if (lureOK(v)) { S.lure = v; play("tick"); } else play("miss"); return true; }
   if (ly >= 174 && ly < 192) {
     const b = TITLE_BAR.findIndex(([, , x, w]) => lx >= x - 1 && lx < x + w + 1);
     if (b < 0) return true;
@@ -4334,11 +4423,11 @@ canvas.addEventListener("pointerdown", e => {
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartTouch(rx, ly, true); return; }
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
-  if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) flipPulse(); else S.touchX = rx; return; }
+  if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) { if (LURES[S.lure][0] !== "angler") flipPulse(); } else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
   if (S.state === "title") { if (titleTap(rx, lx, ly)) return; }
   if (S.state === "down" && rx < 16 && ly < 14) { newDive(); return; }          // give up this dive
-  if (["down", "rise"].includes(S.state) && rx < 40 && ly > 172) { pulse(); return; }
+  if ((["down", "rise"].includes(S.state) || (S.fullUp && ["up", "turn"].includes(S.state))) && rx < 40 && ly > 172) { pulse(); return; }
   if (S.state !== "fight") { S.touchX = KON === "mirror" ? LW - rx : rx; S.drift = 0; }
   tapAction();
 });
@@ -4393,7 +4482,7 @@ window.addEventListener("keydown", e => {
     return;
   }
   const dir = keyDir(e);
-  if (dir) { if (S.state === "title") { S.lure = (S.lure + dir + LURES.length) % LURES.length; play("tick"); } }   // steering comes from HELD
+  if (dir) { if (S.state === "title") pickLure((S.lure + dir + LURES.length) % LURES.length, dir); }   // steering comes from HELD
   else if (c === "ShiftLeft" || c === "ShiftRight" || c === "ArrowDown") pulse();
   else if (c === "Space" || c === "Enter" || (c === "ArrowUp" && S.state !== "title")) { tapAction(); }   // Up doesn't cast: it starts a certain code
 });

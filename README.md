@@ -1,7 +1,7 @@
 # Reel Deep
 
 A pixel-art fishing dive that runs in any browser. The ocean fills the whole window: tall on a phone, wide on a computer.
-Ten zones, 1,160 metres down, 123 species to log.
+Ten zones, 1,160 metres down, 129 species to log.
 
 ## How to play
 
@@ -9,6 +9,9 @@ Ten zones, 1,160 metres down, 123 species to log.
 - **Steer** by dragging, or with **A / D** or the **arrow keys**.
 - Every fish you touch goes on the hook, and it only holds **three**.
 - **PULSE** (bottom left, or **Shift**) scatters everything near the hook. The lure decides how many you get.
+  The **Angler's Hook** has no pulse: its **DROP** button lets your last fish go (twice a dive), even once the hook is full.
+- **Sharks bite.** Hook one on its back half and it's yours; touch it anywhere else and it takes your last fish, or,
+  with nothing on the hook, ends the dive.
 - Sparkling **trophies** and gold **legendaries** fight back: tap (or press **Space**) when the marker is on green,
   before the clock runs out. Fast fish, heavy fish, deep fish and slippery fish each fight differently.
 - Only one legendary fits on a hook.
