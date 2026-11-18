@@ -1,7 +1,7 @@
 # FIN PRIX difficulty check: robots drive your fish for N full races each and report win and podium rates.
 # Serve the repo first:  python3 -m http.server 8000   then:  python3 tools/tests/test_finprix.py [races per bot]
 # Bots: sharp (perfect line, maxed fish), good (tiny wobble and lag), sloppy (no drifting, big wobble), rookie (barely
-# trained fish). Kade asked for "super hard": Nov 17, 2026 tuning (with personalities, FP_TUNE.skill 1.01) gave sharp/good ~20-30% wins, sloppy 0%.
+# trained fish). Kade asked for "super hard": Nov 18, 2026 tuning (sharper track, slower, FP_TUNE.skill 0.995) gave sharp/good ~10-40% wins (noisy), podium ~50%, sloppy 0%.
 # Tune FP_TUNE in finprix.js (skill, spread, lead) and re-run after changing the AI or the physics.
 import asyncio, json, sys
 from playwright.async_api import async_playwright
