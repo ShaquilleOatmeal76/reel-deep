@@ -11,6 +11,7 @@ they are here so the fish, cosmetics and ocean can be changed later.
 | `fishing_web.py` | The fish: zones, water colours, every species (name, zone, weight, speed, rarity) and how each sprite is drawn. |
 | `hopper.py` | The base critters (fox, frog, penguin) that the characters are built from. |
 | `arcade_core.py` | Shared helpers: the pixel font and drawing utilities. |
+| `siege_art.py` | Siege of the Deep's art (towers, guardians, the Admiral): writes `../assets/siege.png` and `../siege_art.js`. Needs Pillow (`pip install pillow`). |
 | `tests/` | Browser tests (Playwright) that play the game with a bot and take screenshots. |
 
 Shop prices, tasks, scoring and everything else about how the game plays live in `../game.js`.
