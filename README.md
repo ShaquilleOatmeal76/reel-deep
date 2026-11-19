@@ -93,6 +93,11 @@ Morph Collection.
 that, the Angler's Fish bites off the point at night and the lighthouse shines on the title screen. Island
 achievements earn things you can't buy: six titles, two jukebox songs, the Keeper's Cap, Pickles as a pet, the
 Driftwood Isle flag, Sea Glass flair, the Island Skiff boat, and three FIN PRIX paints from hatchery morphs.
+The shipyard can also **upgrade your shack**: a bigger room, then a kitchen (cook every recipe at home, plus a fridge),
+then a second room to decorate. The **wardrobe** changes your character, hat and pet (your hat and pet show on the
+island), and the **radio** plays any song you own. Topside, Bram drops by the Rusty Hook and your island trophies sit on
+the bar. **Share your aquarium** from its plaque to get a code a friend can use to visit, and post your island to the
+**Best Island board** on the Port's notice board. Both need the database rules below.
 
 ## Save codes
 
