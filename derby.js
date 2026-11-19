@@ -134,7 +134,7 @@ function derbySetType(d, t) { d.type = (t + BET_TYPES.length) % BET_TYPES.length
 function derbyGo() {
   const d = TAV.derby, need = BET_TYPES[d.type][1];
   if (d.picks.length < need) { play("miss"); d.call = "PICK " + need + " FISH FIRST"; return; }
-  if (tav().chips < d.bet || d.bet < 5) { play("miss"); d.call = "NOT ENOUGH CHIPS"; return; }
+  if (tav().chips < d.bet || d.bet < 1) { play("miss"); d.call = "NOT ENOUGH CHIPS"; return; }
   addChips(-d.bet); d.pays = derbyPays(d, d.type, d.picks, d.bet); d.phase = "race"; d.t = 0; d.call = "AND THEY'RE OFF!"; d.first = d.racers.map(() => 0); play("select");
 }
 function derbyCheer() { const d = TAV.derby; d.cheer = Math.min(1, d.cheer + 0.12); if (d.cheer >= 1 && !d.wild) { d.wild = 1.5; d.call = "THE CROWD GOES WILD!"; d.lastSay = d.t; play("fanfare"); } else play("tick"); }
@@ -180,7 +180,7 @@ function derbyFinish(d) {
   const won = d.type === 0 ? o[0] === p[0] : d.type === 1 ? o.slice(0, 2).includes(p[0]) : d.type === 2 ? o.slice(0, 3).includes(p[0])
     : o.slice(0, need).every((x, k) => x === p[k]);
   if (won) {
-    const pay = Math.floor(d.bet * d.pays); addChips(pay, "win"); tav().stats.derbies++;
+    const pay = Math.round(d.bet * d.pays); addChips(pay, "win"); tav().stats.derbies++;
     if (d.pays >= 8) tavAward("longshot");
     if (d.type === 4) tavAward("calledit");
     if (c) tavAward("photo");                                // won on a photo finish
@@ -288,7 +288,7 @@ function derbyWideHits() {
   const x0 = WX(), d = TAV.derby, by = 22 + d.racers.length * derbyLane(d) + 4, h = [];
   if (d.phase !== "pick") return h;
   let tx = x0; BET_TYPES.forEach((b, i) => { const w = b[0].length * 6 + 6; h.push(["type", tx, by, w, 12, i]); tx += w + 4; });
-  h.push(["minus", x0 + 216, by + 46, 20, 18, -1], ["plus", x0 + 276, by + 46, 20, 18, 1], ["max", x0 + 176, by + 46, 36, 18, STAKE_MAX], ["race", x0 + 300, by + 46, 48, 18, 0], ["table", x0, by + 50, 70, 14, 0]);
+  h.push(["minus", x0 + 216, by + 46, 20, 18, -1], ["plus", x0 + 276, by + 46, 20, 18, 1], ["max", x0 + 176, by + 46, 36, 18, STAKE_MAX], ["stakebox", x0 + 237, by + 46, 38, 18, STAKE_TYPE], ["race", x0 + 300, by + 46, 48, 18, 0], ["table", x0, by + 50, 70, 14, 0]);
   return h;
 }
 function drawDerbyWide() {
@@ -299,6 +299,7 @@ function drawDerbyWide() {
       if (id === "type") { const on = v === d.type; rect(on ? "#1e4a7a" : "#0c2a4a", x, y, w, h); outline(x, y, w, h, on ? GOLD : "#3c6a9a"); text(BET_TYPES[v][0], x + w / 2, y + 6, 1, on ? GOLD : "#8cc8f0", "center", null); }
       else if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
       else if (id === "max") btn(x, y, w, h, "MAX", CHIP);
+      else if (id === "stakebox") outline(x, y, w, h, "#1e4a6a");
       else if (id === "race") btn(x, y, w, h, "RACE", d.picks.length >= BET_TYPES[d.type][1] ? GOLD : GREY);
       else btn(x, y, w, h, "STANDINGS", "#8cc8f0");
     }

@@ -28,6 +28,16 @@
   #nameModal .row { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
   #nameModal button { font: inherit; font-size: 15px; letter-spacing: 1px; padding: 9px 16px; background: #060a1e; color: #5ae6ff; border: 2px solid #5ae6ff; cursor: pointer; }
   #nameOk { color: #ffd246 !important; border-color: #ffd246 !important; }
+  #stakeModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 20, .82); }
+  #stakeModal.open { display: flex; }
+  #stakeModal form { background: #1a1628; border: 3px solid #50c896; padding: 20px 22px; text-align: center; color: #fafaff; width: min(300px, 80vw); }
+  #stakeModal h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: 2px; color: #50c896; }
+  #stakeModal p { margin: 0 0 12px; font-size: 13px; color: #96a0c8; }
+  #stakeIn { width: 9ch; font: inherit; font-size: 30px; text-align: center; padding: 6px; background: #060a1e; color: #fafaff; border: 2px solid #fafaff; border-radius: 0; outline: none; }
+  #stakeIn:focus { border-color: #ffd246; }
+  #stakeModal .row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
+  #stakeModal button { font: inherit; font-size: 15px; letter-spacing: 1px; padding: 9px 16px; background: #060a1e; color: #50c896; border: 2px solid #50c896; cursor: pointer; }
+  #stakeOk { color: #ffd246 !important; border-color: #ffd246 !important; }
   #saveModal { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(4, 6, 20, .82); }
   #saveModal.open { display: flex; }
   #saveModal form { background: #1a1628; border: 3px solid #ffd246; padding: 20px 22px; text-align: center; color: #fafaff; width: min(320px, 84vw); }
@@ -54,6 +64,14 @@
     <p>Up to 3 letters, shown on the scoreboard.</p>
     <input id="nameInput" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false">
     <div class="row"><button type="button" id="nameSkip">SKIP</button><button type="button" id="nameOk">SAVE</button></div>
+  </form>
+</div>
+<div id="stakeModal">
+  <form onsubmit="return false">
+    <h2>YOUR BET</h2>
+    <p id="stakeNote">Type any amount.</p>
+    <input id="stakeIn" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off">
+    <div class="row"><button type="button" id="stakeCancel">CANCEL</button><button type="button" id="stakeOk">BET</button><button type="button" id="stakeAll">ALL IN</button></div>
   </form>
 </div>
 <div id="saveModal">
