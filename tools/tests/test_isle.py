@@ -99,9 +99,9 @@ async def main():
         check("weather: first day sunny, some rain in spring", r[0] == "sun" and 2 <= r.count("rain") <= 14, r)
 
         # talking to the shipwright and the raft home
-        await ev("(() => { ISLE.msg = null; isleGo('port', 572, 626); ISLE.dir = 'up'; isleSave().min = 700; })()")
+        await ev("(() => { ISLE.msg = null; isleGo('port', 572, 626); isleSave().min = 700; folkInit(); const st = ISLE.folk.bram; ISLE.px = st.x; ISLE.py = st.y + 12; ISLE.dir = 'up'; st.wait = 30; })()")
         await page.keyboard.press("KeyE")
-        check("the shipwright talks", (await ev("ISLE.msg && ISLE.msg.pages[0]") or "").startswith("'"))
+        check("the shipwright talks", (await ev("ISLE.msg && ISLE.msg.pages[0]") or "").startswith("BRAM: '"))
         await page.keyboard.press("Space")
         await page.wait_for_timeout(300); await page.screenshot(path=OUT + "/dock.png")
 

@@ -2155,3 +2155,457 @@ itemIcon = function (id) {
     pinecone: [[".b.", "bbb", "bbb", ".b."], { b: "#8c5a32" }], bait: [["..rr", ".rr.", "rr.."], { r: "#c86e8c" }], mulch: [[".bb.", "bbbb", "bbbb"], { b: "#5a3c24" }] }[id];
   return R ? pix("icon_" + id, R[0], R[1]) : _itemIcon5(id);
 };
+
+// =====================================================================================================================
+// Part 6: villagers. Twelve people (and a cat) move in as the Port is restored (data in isle_folk.js). Each keeps a daily
+// schedule and walks between places (tile paths in the area you're in; elsewhere they just get there), has friendship
+// hearts (talk once a day, one gift a day, birthdays count triple), story events at 2, 5 and 8 hearts, and a house you can
+// visit. The Villagers screen (menu or V) shows hearts, birthdays and the gifts you've learned they love.
+const HEART = 100, HEART_MAX = 10, FOLK_WALK = 34;
+const FOLK = {}; ISLE_FOLK.forEach((v, i) => { v.i = i; FOLK[v.id] = v; });
+const COT_X = [150, 300, 440, 700, 850, 990];
+const folkHome = v => v.home === null ? null : v.home === "inn" ? "inn_rooms" : "home_" + v.id;
+// places villagers go: [area, x, y]
+const SPOTS = {
+  dock: ["port", 574, 640], dockend: ["port", 616, 738], crate: ["port", 550, 592], porch: ["port", 128, 424], square: ["port", 524, 452],
+  board: ["port", 316, 442], beach: ["port", 330, 540], lane: ["port", 400, 240], well: ["port", 470, 444],
+  storefront: ["port", 400, 422], smokefront: ["port", 970, 422], innfront: ["port", 790, 422], aqua: ["port", 626, 424], yardfront: ["port", 900, 548],
+  garden: ["flats", 470, 352], pools: ["flats", 820, 600], lagoonpier: ["lagoon", 472, 604], lagoonside: ["lagoon", 300, 604], woods: ["woods", 640, 482],
+  innbar: ["innin", 160, 44], aquain: ["aqua", 64, 160],
+};
+const INN_SEATS = [[60, 104], [100, 132], [222, 104], [262, 132], [120, 150], [200, 150], [40, 140], [280, 150], [150, 104], [240, 72], [70, 72], [180, 132]];
+const WORK = { yard: ["yard", "yardfront", "dock"], store: ["store", "storefront", "square"], smoke: ["smoke", "smokefront", "square"], aquain: ["aquarium", "aquain", "aqua"], innbar: ["inn", "innbar", "innfront"] };
+
+// ---- the save: friendship and who has arrived
+const _isleSave6 = isleSave;
+isleSave = function () {
+  const g_ = _isleSave6();
+  if (!g_.folk) { g_.folk = {}; g_.flags = {}; g_.owed = []; }
+  if (!g_.arrived) g_.arrived = { bram: DAYN(g_), pickles: DAYN(g_) };
+  return g_;
+};
+function folkRec(id) { const f = isleSave().folk; return f[id] || (f[id] = { pts: 0, talk: 0, gift: 0, ev: 0, evDay: 0, known: {}, met: 0 }); }
+const hearts = id => Math.floor(folkRec(id).pts / HEART);
+const folkHere = () => ISLE_FOLK.filter(v => isleSave().arrived[v.id]);
+
+// ---- how they look: one body, seven hair styles, any colours
+const NPC_HAIR = {
+  short: [["...hhhhhh...", "..hhhhhhhh..", "..hssssssh.."], ["....hhhhh...", "...hhhhhhh..", "...hhsssss.."]],
+  long: [["...hhhhhh...", "..hhhhhhhh..", "..hssssssh.."], ["....hhhhh...", "...hhhhhhh..", "..hhhsssss.."]],
+  bun: [[".....hh.....", "...hhhhhh...", "..hhhhhhhh..", "..hssssssh.."], [".hh.........", "..hhhhhh....", "...hhhhhhh..", "...hhsssss.."]],
+  bald: [["...ssssss...", "..ssssssss..", "..hssssssh.."], ["....sssss...", "...sssssss..", "...hhsssss.."]],
+  hat: [["...nnnnnn...", ".nnnnnnnnnn.", "..hssssssh.."], ["....nnnnn...", "..nnnnnnnnn.", "...hhsssss.."]],
+  cap: [["...nnnnnn...", "..nnnnnnnn..", "..hssssssh.."], ["....nnnnn...", "...nnnnnnnnn", "...hhsssss.."]],
+  curly: [["..hhhhhhhh..", ".hhhhhhhhhh.", ".hhsssssshh."], ["...hhhhhh...", "..hhhhhhhh..", "..hhhsssss.."]],
+};
+function npcRows(v, view, legs) {
+  const L = v.look, hr = NPC_HAIR[L.hair] || NPC_HAIR.short, long = L.hair === "long", beard = L.beard;
+  let rows;
+  if (view === "side") {
+    rows = hr[1].concat(["...hssssks..", "...hsssssss.", "....ssssm...", "....cccccc..", "....cscccc..", "....cscccc..", "....cccccc..", "....pppppp.."]);
+    const o = rows.length - 8;
+    if (long) for (let j = o; j < o + 5; j++) rows[j] = rows[j].slice(0, 3) + "h" + rows[j].slice(4);
+    if (beard) { rows[o + 1] = "...hsssbbbb."; rows[o + 2] = "....sbbbb..."; }
+    rows = rows.concat(legs ? ["...pp...pp..", "...ff...ff.."] : ["....pp.pp...", "....ff.ff..."]);
+  } else {
+    const face = view === "back"
+      ? ["..hhhhhhhh..", "..hhhhhhhh..", "...ssssss..."]
+      : ["..skssssks..", "..ssssssss..", "...ssmmss..."];
+    rows = hr[0].slice();
+    if (view === "back") rows[rows.length - 1] = L.hair === "bald" ? "..hssssssh.." : "..hhhhhhhh..";
+    rows = rows.concat(face, ["..cccccccc..", ".sccccccccs.", ".sccccccccs.", "..cccccccc..", "..pppppppp.."]);
+    const o = rows.length - 8;
+    if (long) for (let j = o - 1; j < o + 5; j++) rows[j] = "." + "h" + rows[j].slice(2, 10) + "h" + ".";
+    if (long && view === "back") { rows[o + 3] = ".hcchhhhcch."; rows[o + 4] = ".hcchhhhcch."; }
+    if (beard && view === "front") { rows[o + 1] = "..bssssssb.."; rows[o + 2] = "...bbmmbb..."; }
+    rows = rows.concat(legs ? ["...pp..pp...", "...ff..ff..."] : ["..pp....pp..", "..ff....ff.."]);
+  }
+  return rows;
+}
+function npcSprite(v, dir, legs) {
+  if (v.cat) { const key = "npc_cat" + (dir === "left" ? "l" : ""); return ISPR[key] || pix(key, dir === "left" ? CAT_ROWS.map(r => r.split("").reverse().join("")) : CAT_ROWS, v.look.pal); }
+  const view = dir === "down" ? "front" : dir === "up" ? "back" : "side", key = "npc_" + v.id + view + legs + (dir === "left" ? "l" : "");
+  if (ISPR[key]) return ISPR[key];
+  const P_ = v.look.pal, pal = { h: P_.h, s: P_.s, k: "#2c222c", m: shade(P_.s, 0.78), c: P_.c, p: P_.p, f: "#3c2c22", n: P_.n || P_.h, b: P_.b || P_.h };
+  let rows = npcRows(v, view, legs);
+  if (dir === "left") rows = rows.map(r => r.padEnd(12, ".").split("").reverse().join(""));
+  return pix(key, rows, pal);
+}
+function heartIcon(full) { return pix(full ? "heart1" : "heart0", [".r.r.", "rrrrr", "rrrrr", ".rrr.", "..r.."], { r: full ? "#e64a5a" : "#b4a08c" }); }
+
+// ---- areas: the cottages and the inn get insides; everything hangs off the Port
+const hexRGB = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+ISLE_FOLK.forEach(v => {
+  if (typeof v.home !== "number") return;
+  const c = hexRGB(v.look.pal.c);
+  AREAS["home_" + v.id] = { name: v.name + "'S HOUSE", w: 12, h: 10, outdoor: false, wall: [c.map(k => Math.round(k * 0.55 + 40)), c.map(k => Math.round(k * 0.4 + 30))] };
+});
+AREAS.innin = { name: "THE INN", w: 20, h: 12, outdoor: false, door: [9, 10] };
+const LINK = {};                                                // [parent, leave the parent here, arrive here; leave this area here, arrive in the parent here]
+function folkLinks() {
+  if (LINK.flats) return;
+  const edge = (A, e) => { const W = A.w * TS, H = A.h * TS, m = (e.a + e.b) / 2; return e.side === "e" ? [W - 6, m] : e.side === "w" ? [6, m] : e.side === "n" ? [m, 6] : [m, H - 6]; };
+  for (const id of ["flats", "lagoon", "woods"]) {
+    const out = AREAS.port.exits.find(e => e.to === id), back = AREAS[id].exits.find(e => e.to === "port");
+    LINK[id] = { parent: "port", outPt: edge(AREAS.port, out), arriveA: [out.x, out.y], inPt: edge(AREAS[id], back), arriveP: [back.x, back.y] };
+  }
+  ISLE_FOLK.forEach(v => { if (typeof v.home === "number") { const d = [COT_X[v.home] + 24, 228]; LINK["home_" + v.id] = { parent: "port", outPt: d, arriveP: d, inPt: [96, 152], arriveA: [96, 134] }; } });
+  LINK.innin = { parent: "port", outPt: [789, 416], arriveP: [789, 416], inPt: [160, 184], arriveA: [160, 168] };
+  LINK.aqua = { parent: "port", outPt: [598, 416], arriveP: [598, 416], inPt: [160, 184], arriveA: [160, 168] };
+  LINK.inn_rooms = { parent: "innin", outPt: [292, 64], arriveP: [292, 64], inPt: [0, 0], arriveA: [0, 0] };
+}
+function areaChain(a) { const c = [a]; while (LINK[c[c.length - 1]]) c.push(LINK[c[c.length - 1]].parent); return c; }
+function route(a, b) {                                           // the areas you pass through going from a to b
+  const ca = areaChain(a), cb = areaChain(b), common = ca.find(x => cb.includes(x));
+  return ca.slice(0, ca.indexOf(common) + 1).concat(cb.slice(0, cb.indexOf(common)).reverse());
+}
+function hopPts(h, h2) {                                         // leave h at [0], appear in h2 at [1]
+  if (LINK[h2] && LINK[h2].parent === h) return [LINK[h2].outPt, LINK[h2].arriveA];
+  return [LINK[h].inPt, LINK[h].arriveP];
+}
+
+// ---- where each villager wants to be right now
+function spotFor(v, name) {
+  const s = isleSave();
+  if (name === "home") { const h = folkHome(v); return h === "inn_rooms" ? ["inn_rooms", 0, 0] : h ? [h, 64, 96] : SPOTS.porch; }
+  if (name === "work") name = v.work;
+  if (name === "inn") { if (s.rest.inn !== "done") return SPOTS.square; const p = INN_SEATS[v.i % INN_SEATS.length]; return ["innin", p[0], p[1]]; }
+  if (WORK[name]) { const [b, open, closed] = WORK[name]; return SPOTS[s.rest[b] === "done" ? open : closed]; }
+  if (name === "aquain" && s.rest.aquarium !== "done") return SPOTS.aqua;
+  return SPOTS[name] || SPOTS.square;
+}
+function folkTarget(v) {
+  const s = isleSave(), list = (weatherOf(s) === "rain" && v.sched.rain) || v.sched.sun;
+  let cur = list[0][1];
+  for (const [m, p] of list) if (s.min >= m) cur = p;
+  if (v.id === "bram" && cur === "inn" && s.rest.inn !== "done") cur = "dock";
+  const t = spotFor(v, cur), jig = (v.i * 37) % 13 - 6;            // two villagers in one place don't stand on each other
+  return t[0] === "inn_rooms" || cur === "home" || cur === "innbar" || cur === "inn" ? t : [t[0], t[1] + jig, t[2] + ((v.i * 19) % 7) - 3];
+}
+
+// ---- walking: tile paths through the area you're standing in
+function folkGrid() {
+  const M_ = ISLE.map, s = isleSave(), key = s.placed.length + ":" + Object.keys(s.cut).length + ":" + DAYN(s);
+  if (M_.fg && M_.fgk === key) return M_.fg;
+  const G = [];
+  for (let ty = 0; ty < M_.A.h; ty++) { const row = []; for (let tx = 0; tx < M_.A.w; tx++) { const t = M_.tiles[ty][tx]; row.push(t !== "t" && !isleSolidAt(tx * TS + 8, ty * TS + 10) && !isleSolidAt(tx * TS + 3, ty * TS + 10) && !isleSolidAt(tx * TS + 13, ty * TS + 10)); } G.push(row); }
+  M_.fg = G; M_.fgk = key; return G;
+}
+function folkPath(from, to) {
+  const G = folkGrid(), H = G.length, W = G[0].length, tl = p => [clamp(Math.floor(p[0] / TS), 0, W - 1), clamp(Math.floor(p[1] / TS), 0, H - 1)];
+  const [sx, sy] = tl(from); let [gx, gy] = tl(to); const exact = G[gy][gx];
+  const D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  if (!exact) {                                                    // the spot itself is blocked: the nearest open tile
+    const seen = new Set([gx + "," + gy]), q = [[gx, gy]]; let found = null;
+    while (q.length && !found) { const [x, y] = q.shift(); for (const [a, b] of D4) { const nx = x + a, ny = y + b, k = nx + "," + ny; if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen.has(k)) continue; seen.add(k); if (G[ny][nx]) { found = [nx, ny]; break; } q.push([nx, ny]); } }
+    if (!found) return null; [gx, gy] = found;
+  }
+  const prev = new Map([[sx + "," + sy, null]]), q = [[sx, sy]];
+  while (q.length) {
+    const [x, y] = q.shift(); if (x === gx && y === gy) break;
+    for (const [a, b] of D4) { const nx = x + a, ny = y + b, k = nx + "," + ny; if (nx < 0 || ny < 0 || nx >= W || ny >= H || prev.has(k) || !G[ny][nx]) continue; prev.set(k, x + "," + y); q.push([nx, ny]); }
+  }
+  if (!prev.has(gx + "," + gy)) return null;
+  const pts = []; let k = gx + "," + gy;
+  while (k) { const [x, y] = k.split(",").map(Number); pts.unshift([x * TS + 8, y * TS + 10]); k = prev.get(k); }
+  pts.shift();
+  if (exact) pts.push([to[0], to[1]]);
+  return pts;
+}
+function folkPlace(st, area, xy) { st.area = area; st.x = xy[0]; st.y = xy[1]; st.path = null; st.after = null; }
+function folkPlan(v, st, tgt) {
+  folkLinks();
+  const cur = ISLE.map.id, hops = route(st.area, tgt[0]);
+  const walkTo = (pt, after) => { const p = folkPath([st.x, st.y], pt); if (p) { st.path = p; st.after = after; } else { st.path = null; st.after = null; if (after) folkPlace(st, after.area, after.at); else { st.x = pt[0]; st.y = pt[1]; } } };
+  if (st.area === cur) {
+    if (tgt[0] === cur) walkTo([tgt[1], tgt[2]], null);
+    else { const [lv, ar] = hopPts(cur, hops[1]); walkTo(lv, { area: hops[1], at: ar }); }
+    return;
+  }
+  const k = hops.indexOf(cur);
+  if (k <= 0) { folkPlace(st, tgt[0], [tgt[1], tgt[2]]); return; }
+  folkPlace(st, cur, hopPts(hops[k - 1], cur)[1]);                 // they come walking in
+  if (k === hops.length - 1) walkTo([tgt[1], tgt[2]], null);
+  else { const [lv, ar] = hopPts(cur, hops[k + 1]); walkTo(lv, { area: hops[k + 1], at: ar }); }
+}
+function folkInit() {                                              // everyone straight to where they should be (new day, landing)
+  if (!ISLE) return;
+  folkLinks();
+  ISLE.folk = {};
+  for (const v of folkHere()) { const t = folkTarget(v), st = { area: t[0], x: t[1], y: t[2], dir: "down", walk: 0, moving: false, key: t.join(), wait: 0 }; ISLE.folk[v.id] = st; }
+}
+function folkTick(dt) {
+  if (!ISLE.folk) folkInit();
+  for (const v of folkHere()) {
+    let st = ISLE.folk[v.id];
+    if (!st) { folkInit(); st = ISLE.folk[v.id]; }
+    st.heart = st.heart ? (st.heart[0] - dt > 0 ? [st.heart[0] - dt, st.heart[1]] : null) : null;
+    const t = folkTarget(v), key = t.join();
+    if (key !== st.key) { st.key = key; folkPlan(v, st, t); }
+    if (st.wait > 0) { st.wait -= dt; st.moving = false; continue; }
+    if (!st.path || !st.path.length) { st.moving = false; if (st.path && st.after) { const a = st.after; folkPlace(st, a.area, a.at); st.key = null; } else st.path = null; continue; }
+    const [px, py] = st.path[0], dx = px - st.x, dy = py - st.y, d = Math.hypot(dx, dy), step = (v.cat ? 26 : FOLK_WALK) * dt;
+    st.moving = true; st.walk += dt;
+    st.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down");
+    if (d <= step) { st.x = px; st.y = py; st.path.shift(); } else { st.x += dx / d * step; st.y += dy / d * step; }
+  }
+}
+const _isleUpdate6 = isleUpdate;
+isleUpdate = function (dt) {
+  if (ISLE && ISLE.folkUI) return;
+  _isleUpdate6(dt);
+  const I = ISLE;
+  if (I && !I.msg && !I.menu && !I.shop && !I.inv && !I.log && !I.card && !I.list && !I.chest && I.map) folkTick(dt);
+};
+const _startIsland6 = startIsland;
+startIsland = function () { _startIsland6(); folkInit(); folkOwed(); };
+const _isleSleep6 = isleSleep;
+isleSleep = function (passedOut) { _isleSleep6(passedOut); folkInit(); folkOwed(); };
+
+// ---- drawing them
+const _placedSprites6 = placedSprites;
+placedSprites = function (list) {
+  _placedSprites6(list);
+  if (!ISLE.folk) return;
+  for (const v of folkHere()) {
+    const st = ISLE.folk[v.id];
+    if (!st || st.area !== ISLE.map.id) continue;
+    list.push([st.y, { draw(cx, cy) {
+      const legs = st.moving ? Math.floor(st.walk * 6) % 2 : 0, c = npcSprite(v, st.dir, legs), x = Math.round(st.x - cx), y = Math.round(st.y - cy);
+      if (x < -20 || x > IW + 20 || y < -4 || y > IH + 30) return;
+      g.globalAlpha = 0.22; g.fillStyle = "#000"; g.beginPath(); g.ellipse(x, y, v.cat ? 4 : 6, 2, 0, 0, 7); g.fill(); g.globalAlpha = 1;
+      g.drawImage(c, x - (c.width >> 1), y - c.height + 1 - (st.moving && legs ? 1 : 0) - (v.cat && !st.moving && Math.floor(T * 0.7) % 4 === 0 ? 1 : 0));
+      if (st.heart) { const k = 1 - st.heart[0] / 1.4, hc = heartIcon(st.heart[1]); g.globalAlpha = Math.min(1, st.heart[0] * 2); g.drawImage(hc, x - 3, y - c.height - 8 - Math.round(k * 8)); g.globalAlpha = 1; }
+      if (Math.hypot(st.x - ISLE.px, st.y - ISLE.py) < 26 && !ISLE.msg) { const w = textW(v.name, 1) + 4; rect(INK, x - (w >> 1), y - c.height - 9, w, 8); text(v.name, x, y - c.height - 5, 1, WHITE, "center", null); }
+    } }]);
+  }
+};
+
+// ---- talking to them: a pretend object so the usual E / tap handling finds them
+const _objAt6 = objAt;
+objAt = function (x, y) {
+  if (ISLE && ISLE.folk) for (const v of folkHere()) {
+    const st = ISLE.folk[v.id];
+    if (st && st.area === ISLE.map.id && Math.abs(x - st.x) <= 9 && y >= st.y - (v.cat ? 10 : 22) && y <= st.y + 6) return { k: "npc", x: st.x - 8, y: st.y - 14, solid: [2, 8, 12, 8], act: { kind: "npc", id: v.id } };
+  }
+  return _objAt6(x, y);
+};
+const _isleAct56 = isleAct5;
+isleAct5 = function (o) {
+  const a = o.act;
+  if (a.kind === "npc") npcAct(a.id);
+  else if (a.kind === "cottage") cottageAct(a.i);
+  else if (a.kind === "folksay") isleSay(a.text);
+  else _isleAct56(o);
+};
+const isBirthday = v => { const s = isleSave(); return v.birthday[0] === s.season && v.birthday[1] === s.day; };
+const birthdayTxt = v => SEASONS[v.birthday[0]][0] + " " + v.birthday[1];
+function giftTaste(v, id) {
+  const it = ITEMS[id], tag = t => {
+    if (t === "@legend") return (id.startsWith("f_") && FISH[id.slice(2)] && FISH[id.slice(2)].page === "legend") || (id.startsWith("t_") && SPEC[id.slice(2)] && !!SPEC[id.slice(2)][7]);
+    if (t === "@seed") return it.kind === "seed";
+    return t === "@" + it.kind;
+  };
+  for (const k of ["hate", "love", "like"]) if (v.gifts[k].includes(id)) return k;
+  for (const k of ["hate", "love", "like"]) if (v.gifts[k].some(t => t[0] === "@" && tag(t))) return k;
+  if (it.kind === "dish") return "like";
+  if (it.kind === "mat" || it.kind === "seed") return "dislike";
+  return "neutral";
+}
+const GIFT_PTS = { love: 80, like: 45, neutral: 20, dislike: -20, hate: -40 };
+function folkReward(list) {
+  const s = isleSave(), got = [];
+  for (const [id, n] of list || []) {
+    if (id === "sd") { s.sd += n; got.push(n + " SAND DOLLARS"); continue; }
+    const left = invAdd(id, n); if (left) s.owed.push([id, left]);
+    got.push((n > 1 ? n + " X " : "") + ITEMS[id].name);
+  }
+  return got.length ? ["YOU GOT " + got.join(" AND ") + "." + (s.owed.length ? " (YOUR BAG WAS FULL: THE REST WILL BE ON YOUR STEP.)" : "")] : [];
+}
+function folkOwed() {                                               // event gifts that didn't fit in the bag turn up later
+  const s = isleSave(); if (!s.owed || !s.owed.length) return;
+  const keep = [];
+  for (const [id, n] of s.owed) { const left = invAdd(id, n); if (left) keep.push([id, left]); else if (ISLE) toast("+" + n + " " + ITEMS[id].name + " (LEFT ON YOUR STEP)", GOLD); }
+  s.owed = keep;
+}
+function folkEventDue(v, f) { const e = v.events[f.ev]; return e && !e.wake && hearts(v.id) >= e.at && f.evDay !== DAYN(isleSave()) ? e : null; }
+function playEvent(v, f, e) {
+  const s = isleSave();
+  f.ev++; f.evDay = DAYN(s);
+  if (e.flag) s.flags[e.flag] = 1;
+  isleSay(e.pages.concat(folkReward(e.reward)).concat(e.flag === "lightkey" ? ["YOU GOT THE LIGHTHOUSE KEY."] : []));
+  play("fanfare"); saveStore();
+}
+function fortune() {
+  const s = isleSave(), pool = Object.values(FISH).filter(f => !s.log[f.id] && fishOk(f, s) && f.page !== "special");
+  if (!pool.length) return "'THE CARDS ARE QUIET TODAY. NOTHING NEW IS BITING. JUST ENJOY THE SEA, DEAR.'";
+  const f = pool[seeded(DAYN(s) * 7 + 3).randint(0, pool.length - 1)];
+  return "'THE CARDS SAY... A " + f.name + " IS OUT THERE RIGHT NOW. TRY " + whereTxt(f) + ".'";
+}
+function talkLine(v, f) {
+  const s = isleSave(), day = DAYN(s), first = f.talk !== day;
+  if (first) { f.talk = day; f.pts = Math.min(HEART * HEART_MAX, f.pts + 20); }
+  f.n = (f.n || 0) + 1;
+  if (isBirthday(v) && first) return v.cat ? "PICKLES IS WEARING A BIT OF RIBBON SOMEBODY TIED ON HER. IT MUST BE HER BIRTHDAY." : "'IT'S MY BIRTHDAY TODAY, YOU KNOW. NOT THAT I'M MAKING A FUSS.'";
+  if (v.fortune && f.fort !== day) { f.fort = day; return fortune(); }
+  const r = seeded(day * 31 + v.i * 7 + f.n).random();
+  if (weatherOf(s) === "rain" && r < 0.5) return v.rain[(day + f.n) % v.rain.length];
+  if (r < 0.15) return v.seasons[s.season];
+  if (hearts(v.id) >= 5 && r < 0.45) return v.high[(day + f.n) % v.high.length];
+  return v.lines[(day * 3 + f.n + v.i) % v.lines.length];
+}
+const say_ = (v, line) => v.cat ? line : v.name + ": " + line;
+function npcAct(id) {
+  const v = FOLK[id], f = folkRec(id), st = ISLE.folk && ISLE.folk[id], s = isleSave(), day = DAYN(s);
+  f.met = 1;
+  if (st) { st.wait = 4; const dx = ISLE.px - st.x, dy = ISLE.py - st.y; st.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down"); }
+  const e = folkEventDue(v, f);
+  if (e) { if (f.talk !== day) { f.talk = day; f.pts = Math.min(HEART * HEART_MAX, f.pts + 20); } playEvent(v, f, e); return; }
+  const it = held();
+  if (it && ITEMS[it[0]] && ITEMS[it[0]].kind !== "tool" && f.gift !== day)
+    isleSay(["GIVE " + v.name + " THE " + ITEMS[it[0]].name + "?"], { opts: ["GIVE", "TALK"], act: [() => giveGift(v, f), () => { isleSay([say_(v, talkLine(v, f))]); play("tick"); }] });
+  else isleSay([say_(v, talkLine(v, f))]);
+  play("tick");
+}
+function giveGift(v, f) {
+  const s = isleSave(), it = held(); if (!it) return;
+  const id = it[0], taste = giftTaste(v, id), bday = isBirthday(v), d = GIFT_PTS[taste] * (bday && GIFT_PTS[taste] > 0 ? 3 : 1);
+  invUse(s.sel);
+  f.gift = DAYN(s); f.known[id] = taste; f.pts = clamp(f.pts + d, 0, HEART * HEART_MAX);
+  if (f.talk !== f.gift) { f.talk = f.gift; f.pts = Math.min(HEART * HEART_MAX, f.pts + 20); }
+  const generic = v.cat ? { like: "PICKLES SNIFFS IT AND SEEMS PLEASED.", neutral: "PICKLES SNIFFS IT POLITELY, THEN WANDERS OFF.", dislike: "PICKLES FLICKS HER TAIL AT IT." }
+    : { like: "'OH, NICE. THANK YOU.'", neutral: "'THANKS. THAT'S KIND OF YOU.'", dislike: "'...THANKS, I GUESS.'" };
+  const line = taste === "love" ? v.love : taste === "hate" ? v.hate : generic[taste];
+  isleSay((bday && d > 0 && !v.cat ? [say_(v, "'FOR MY BIRTHDAY? YOU REMEMBERED!'")] : []).concat([say_(v, line)]));
+  const st = ISLE.folk && ISLE.folk[v.id]; if (st) st.heart = [1.4, d > 0];
+  play(d > 0 ? (taste === "love" ? "fanfare" : "chime") : "miss"); saveStore();
+}
+
+// ---- move-ins, the cat, birthdays: each morning
+const _newDay56 = newDay5;
+newDay5 = function (s) {
+  _newDay56(s);
+  const day = DAYN(s), max = s.rest.inn === "done" ? 2 : 1;
+  ISLE_FOLK.filter(v => !s.arrived[v.id] && v.arrive(s)).slice(0, max).forEach(v => { s.arrived[v.id] = day; s.news.push(v.arriveText || v.name + " HAS MOVED IN."); });
+  if (s.arrived.pickles) {
+    const h = Math.floor(((s.folk.pickles && s.folk.pickles.pts) || 0) / HEART), r = Math.random();
+    if (h < 6 && s.crate.length && r < 0.25) { const k = Math.floor(Math.random() * s.crate.length), sp = s.crate.splice(k, 1)[0]; s.news.push("PICKLES STOLE A " + SPEC[sp][1] + " FROM THE FISH CRATE. SHE LOOKS VERY PLEASED WITH HERSELF."); }
+    else if (h >= 6 && r < 0.2) { const pick = ["shell", "glass", "starfish", "drift"][Math.floor(Math.random() * 4)]; s.owed.push([pick, 1]); s.news.push("PICKLES LEFT A " + ITEMS[pick].name + " ON YOUR STEP."); }
+  }
+  for (const v of ISLE_FOLK) if (s.arrived[v.id] && v.birthday[0] === s.season && v.birthday[1] === s.day) s.news.push("IT'S " + v.name + "'S BIRTHDAY TODAY.");
+  for (const v of ISLE_FOLK) {                                        // events that happen overnight
+    const f = s.folk[v.id], e = f && v.events[f.ev];
+    if (e && e.wake && Math.floor(f.pts / HEART) >= e.at) { f.ev++; f.evDay = day; s.news.push(...e.pages); for (const [id, n] of e.reward || []) if (id === "sd") s.sd += n; else s.owed.push([id, n]); }
+  }
+};
+
+// ---- the Port: cottages become houses, the old shipwright and cat sprites make way for the real ones
+const _buildArea6 = buildArea;
+buildArea = function (id) {
+  const m = _buildArea6(id);
+  if (id === "port") {
+    m.objs = m.objs.filter(o => o.k !== "wright" && o.k !== "cat");
+    m.objs.forEach(o => { if (/^cot\d$/.test(o.k) && o.y === 176) o.act = { kind: "cottage", i: COT_X.indexOf(o.x), rect: [0, 18, 50, 34] }; });
+  }
+  if (id.startsWith("home_")) m.objs = homeObjects(FOLK[id.slice(5)]);
+  if (id === "innin") m.objs = innObjects();
+  return m;
+};
+const HOME_DECOR = { bram: ["wheel", "anchor"], gus: ["netdecor", "anchor"], margo: ["shelllamp", "plantpot"], jo: ["wbarrel2", "wcrate"], fenn: ["fishbowl", "shelf"], nell: ["palmpot", "fern"] };
+function folkArt() {
+  if (IART.stairs) return;
+  for (const id of ["wheel", "anchor", "netdecor", "shelllamp", "plantpot", "wbarrel2", "wcrate", "fishbowl", "shelf", "palmpot", "fern", "painting", "chart", "bench", "stool", "rug"]) if (PL[id] && PL[id].rows) IART["pl_" + id] = plSprite(id);
+  const P = paintCanvas(32, 26); for (let k = 0; k < 5; k++) { P.rect(k * 5, 20 - k * 4, 32 - k * 5, 4, k % 2 ? "#8c5a32" : "#a06c40"); P.rect(k * 5, 20 - k * 4, 32 - k * 5, 1, "#6e482a"); } IART.stairs = P.c;
+  const B = paintCanvas(96, 18); B.rect(0, 0, 96, 16, INK); B.rect(1, 1, 94, 14, "#8c5a32"); B.rect(1, 1, 94, 4, "#b47e4a"); for (let k = 0; k < 6; k++) B.rect(6 + k * 16, 8, 6, 6, "#6e482a"); IART.bar = B.c;
+  const F = paintCanvas(34, 30); F.rect(0, 0, 34, 28, INK); F.rect(1, 1, 32, 26, "#7a6a64"); F.rect(8, 10, 18, 17, "#2c1e1a"); F.rect(10, 18, 14, 8, "#f08c32"); F.rect(13, 14, 8, 8, "#ffd246"); F.rect(0, 0, 34, 4, "#5a4a46"); IART.fire = F.c;
+}
+const _isleArt6 = isleArt; isleArt = function () { _isleArt6(); folkArt(); };
+function homeObjects(v) {
+  const d = LINK["home_" + v.id] || (folkLinks(), LINK["home_" + v.id]), deco = HOME_DECOR[v.id] || ["plantpot", "shelf"];
+  const o = [{ k: "bed", x: 20, y: 34, solid: [0, 0, 28, 34], act: { kind: "folksay", text: [v.name + "'S BED. VERY NEATLY MADE."] } },
+    { k: "table", x: 120, y: 74, solid: [0, 4, 26, 12] }, { k: "chest", x: 150, y: 30, solid: [0, 0, 18, 13], act: { kind: "folksay", text: ["IT'S NOT YOUR CHEST. BEST LEAVE IT."] } },
+    { k: "door", x: 88, y: 148, solid: null, act: { kind: "door", to: "port", rect: [0, 0, 16, 12], dir: "down", go: { x: d.arriveP[0], y: d.arriveP[1], dir: "down" } } }];
+  deco.forEach((id, k) => { const c = IART["pl_" + id]; if (c) o.push({ k: "pl_" + id, x: (k ? 108 : 66) - (c.width >> 1), y: 44 - c.height, solid: [0, Math.max(0, c.height - 5), c.width, 5] }); });
+  return o;
+}
+function innObjects() {
+  return [{ k: "bar", x: 112, y: 54, solid: [0, 2, 96, 14], act: { kind: "folksay", text: ["THE INN'S BAR. IT SMELLS OF WOODSMOKE AND SOUP."] } },
+    { k: "fire", x: 18, y: 24, solid: [0, 8, 34, 20], act: { kind: "folksay", text: ["A WARM FIRE. YOU COULD SIT HERE ALL NIGHT."] } },
+    { k: "stairs", x: 276, y: 30, solid: [0, 0, 32, 26], act: { kind: "folksay", text: ["THE STAIRS UP TO THE GUEST ROOMS. ROOM THREE'S DOOR IS SHUT TIGHT."] } },
+    { k: "table", x: 70, y: 104, solid: [0, 4, 26, 12] }, { k: "table", x: 230, y: 104, solid: [0, 4, 26, 12] },
+    { k: "pl_bench", x: 66, y: 128, solid: [0, 4, 20, 4] }, { k: "pl_bench", x: 226, y: 128, solid: [0, 4, 20, 4] },
+    { k: "pl_painting", x: 200, y: 14, solid: null, act: { kind: "folksay", text: ["A PAINTING OF THE HARBOUR, FULL OF BOATS."] } },
+    { k: "door", x: 144, y: 180, solid: null, act: { kind: "door", to: "port", rect: [0, 0, 32, 12], dir: "down", go: { x: 789, y: 416, dir: "down" } } }];
+}
+function cottageAct(i) {
+  const v = ISLE_FOLK.find(q => q.home === i && isleSave().arrived[q.id]), s = isleSave();
+  if (!v) { isleSay([["AN EMPTY COTTAGE. THE DOOR IS BOARDED UP.", "AN EMPTY COTTAGE. SOMEONE LEFT A TEAPOT ON THE STEP.", "AN EMPTY COTTAGE. IVY HAS TAKEN THE WINDOWS."][i % 3], "MAYBE SOMEONE WILL MOVE IN ONE DAY."]); return; }
+  if (s.min < 420 || s.min >= 1260) { isleSay([v.name + "'S HOUSE. THE LIGHTS ARE OFF AND THE DOOR IS LOCKED."]); return; }
+  folkLinks(); isleDoor("home_" + v.id, { x: 96, y: 134, dir: "up" });
+}
+const _restoredAct6 = restoredAct;
+restoredAct = function (b) { if (b === "inn") { folkLinks(); isleDoor("innin", { x: 160, y: 168, dir: "up" }); } else _restoredAct6(b); };
+
+// ---- longer messages split into pages that fit the box
+const _isleSay6 = isleSay;
+isleSay = function (pages, choice) {
+  const n = Math.floor((Math.min(IW - 16, 300) - 12) / 6), out = [];
+  for (const p of pages) { const L = wrap(p, n); for (let i = 0; i < L.length; i += 4) out.push(L.slice(i, i + 4).join(" ")); }
+  _isleSay6(out.length ? out : pages, choice);
+};
+
+// ---- the Villagers screen
+ISLE_MENU.splice(ISLE_MENU.length - 1, 0, ["VILLAGERS", () => { ISLE.menu = null; ISLE.folkUI = { sel: 0 }; }]);
+function folkGeo() { const w = Math.min(IW - 12, 330), h = Math.min(IH - 12, 12 * 11 + 52); return [Math.round((IW - w) / 2), Math.round((IH - h) / 2), w, h]; }
+function drawFolkUI() {
+  const [x, y, w, h] = folkGeo(), s = isleSave(), U = ISLE.folkUI, day = DAYN(s), wide = w >= 300;
+  g.globalAlpha = 0.5; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
+  islePanel(x, y, w, h);
+  text("VILLAGERS", x + 8, y + 9, 1, "#b4461e", "left", null);
+  text(folkHere().length + "/" + ISLE_FOLK.length + " ON THE ISLAND", x + w - 8, y + 9, 1, "#8c6c50", "right", null);
+  ISLE_FOLK.forEach((v, i) => {
+    const ry = y + 17 + i * 11, on = i === U.sel, here = s.arrived[v.id], f = s.folk[v.id];
+    if (on) { rect("#f4e4c0", x + 5, ry, w - 10, 10); outline(x + 5, ry, w - 10, 10, "#b4461e"); }
+    if (!here) { text("???", x + 10, ry + 5, 1, "#a08c78", "left", null); return; }
+    text(v.name, x + 10, ry + 5, 1, "#3c2c22", "left", null);
+    const hx = x + (wide ? 92 : 78), n = Math.floor(((f && f.pts) || 0) / HEART);
+    for (let k = 0; k < HEART_MAX; k++) g.drawImage(heartIcon(k < n), hx + k * (wide ? 8 : 7), ry + 1);
+    const dx = hx + HEART_MAX * (wide ? 8 : 7) + 4;
+    rect(f && f.talk === day ? "#5ac85a" : "#d2c0a0", dx, ry + 3, 4, 4);
+    rect(f && f.gift === day ? "#ffbe3c" : "#d2c0a0", dx + 7, ry + 3, 4, 4);
+    if (wide) text(v.role, x + w - 8, ry + 5, 1, "#8c6c50", "right", null);
+  });
+  const v = ISLE_FOLK[U.sel], f = s.folk[v.id];
+  let info;
+  if (!s.arrived[v.id]) info = "SOMEONE MIGHT MOVE IN AS THE ISLAND GROWS.";
+  else {
+    const loves = Object.keys((f && f.known) || {}).filter(k => f.known[k] === "love").map(k => ITEMS[k].name);
+    info = v.role + ". BIRTHDAY: " + birthdayTxt(v) + ". LOVES: " + (loves.length ? loves.join(", ") : "???") + ".";
+  }
+  wrap(info, Math.floor((w - 16) / 6)).slice(0, 2).forEach((l, i) => text(l, x + 8, y + h - 24 + i * 9, 1, "#5a3c28", "left", null));
+  text(wide ? "GREEN: TALKED TODAY   GOLD: GIFT GIVEN   ESC: DONE" : "TAP OUTSIDE TO CLOSE", x + 8, y + h - 6, 1, "#8c6c50", "left", null);
+}
+function folkKey(e) {
+  const c = e.code, U = ISLE.folkUI;
+  if (["Escape", "Tab", "KeyV", "Space", "Enter", "KeyE"].includes(c)) { e.preventDefault(); ISLE.folkUI = null; play("back"); return; }
+  const v = { ArrowUp: -1, KeyW: -1, ArrowDown: 1, KeyS: 1 }[c];
+  if (v) { U.sel = (U.sel + v + ISLE_FOLK.length) % ISLE_FOLK.length; play("tick"); }
+}
+const _isleKey6 = isleKey;
+isleKey = function (e, down) {
+  if (ISLE && down && ISLE.folkUI && !ISLE.msg) { folkKey(e); return; }
+  if (ISLE && down && e.code === "KeyV" && !ISLE.msg && !ISLE.menu && !ISLE.log && !ISLE.list && !ISLE.chest && !ISLE.shop && !ISLE.inv && !ISLE.card && !ISLE.fish) { ISLE.folkUI = { sel: 0 }; play("select"); return; }
+  _isleKey6(e, down);
+};
+const _isleTouch6 = isleTouch;
+isleTouch = function (e) {
+  if (ISLE && ISLE.folkUI && !ISLE.msg) {
+    const [x, y] = islePos(e), [px, py, w, h] = folkGeo(), i = Math.floor((y - py - 17) / 11);
+    if (x < px || x > px + w || y < py || y > py + h) { ISLE.folkUI = null; play("back"); return; }
+    if (i >= 0 && i < ISLE_FOLK.length) { ISLE.folkUI.sel = i; play("tick"); }
+    return;
+  }
+  _isleTouch6(e);
+};
+const _drawIsle6 = drawIsle;
+drawIsle = function () { _drawIsle6(); if (ISLE.folkUI) drawFolkUI(); };
