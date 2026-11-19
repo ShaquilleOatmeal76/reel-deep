@@ -99,6 +99,23 @@ island), and the **radio** plays any song you own. Topside, Bram drops by the Ru
 the bar. **Share your aquarium** from its plaque to get a code a friend can use to visit, and post your island to the
 **Best Island board** on the Port's notice board. Both need the database rules below.
 
+## Siege of the Deep
+
+After 10 dives, red **Flipside spawn** start drifting through the sea, in about one dive in two. Touch one to catch it
+(no hook slot, no weight). **LEAK n/15** shows under your coins. At 15 the **Admiral** moors his iron gunboat next to
+the Rusty Hook. Tap it to open the siege; on a phone, it's **THE SIEGE** in the MORE menu.
+
+It's a tower defense game: the Flipside has overrun the ocean, and you take it back zone by zone from the Shallows down
+to the Floor. That's 11 zones of 3 maps, with a guardian at the end of each zone's third map and the Sleeper waiting at
+the crack. Click a stone pad to build, and click a tower to upgrade it, pick a level-4 specialisation, or sell it
+(**1-7** pick in the menu, **X** sells). Your angler fights on the field in your own look: click the seabed to send them
+there, and use **Q** and **E** for their abilities. The other keys: **N** calls the next wave early (bonus shells),
+**Space** pauses, **Tab** switches speed, **Escape** opens the menu. Stars from each map buy **research**. New towers
+and hero kits open as you reclaim zones. Once a map is won, **Riptide** and **Iron** challenges open on it for badges.
+**Hold the Line** is one endless map a week, the same for everyone, with its own board. Siege rewards come back
+topside: titles, songs, a hat, a pet, a flag, a boat and a FIN PRIX paint. Nothing in the siege changes your score,
+coins or chips.
+
 ## Save codes
 
 Progress lives in your browser. **MORE > SAVE CODE** makes a short code (like `K7QX-M2PD`) that loads your coins, log,
@@ -148,6 +165,7 @@ GitHub Pages only serves files, so the scores live in a free Firebase Realtime D
 
 **Updating from an earlier version:** the rules file has changed. Repeat step 3 with the new `database.rules.json`.
 The latest change adds a `saves` list for save codes. Until the new rules are published, the game hands out long codes instead of short ones.
+Siege of the Deep's **Hold the Line** board needs the `siege` list (Nov 19, 2026). Until the new rules are published, Hold the Line still works but scores aren't shared.
 
 The boards show the top ten scores for today and of all time. Tap a score to see what was on the hook.
 

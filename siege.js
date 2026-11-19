@@ -302,8 +302,8 @@ const GUARD = [
   { hp: 1900, spd: 10, every: 7, name: "GLASS SPIDER QUEEN" }, { hp: 2100, spd: 9, every: 10, name: "THE BOIL" }, { hp: 1500, spd: 8, every: 99, name: "THE OSSUARY" },
   { hp: 2400, spd: 9, every: 9, name: "THE MAW" }, { hp: 3600, spd: 6, every: 7, name: "THE SLEEPER" },
 ];
-function addGuardian(ri) {
-  const z = SG.M.zone, d = GUARD[z], e = addEnemy("crawler", ri);
+function addGuardian(ri, zz) {
+  const z = zz === undefined ? SG.M.zone : zz, d = GUARD[z], e = addEnemy("crawler", ri);
   Object.assign(e, { k: "g" + z, boss: z + 1, hp: Math.round(d.hp * SG.hpK * TUNE.gK), spd: d.spd, arm: z >= 8 ? 0.2 : 0.1, slime: z >= 8 ? 0.2 : 0.1, hull: 10, bounty: 150 + z * 25, fl: "b", gT: d.every * 0.6, lives: z === 8 ? 2 : 0, phase: 1 });
   e.max = e.hp; SG.guard = e;
   siegeTip(d.name + " IS COMING!"); play("growl"); S.shake = 0.6;
@@ -494,11 +494,11 @@ function decoArt(kind, seed, z) {
 function mapIndex(id) { const [z, m] = id.split(".").map(Number); return z * 3 + m; }
 // Difficulty: every map starts from scratch, so most of the climb is wave by wave inside a map, plus a gentle rise map by map.
 const TUNE = { b0: 8, b1: 3.5, b2: 0.15, bD: 0.01, hD: 0.03, hW: 0.025, gK: 0.6 };
-function buildWaves(id, M) {
+function buildWaves(id, M, mult) {
   const D = mapIndex(id), r = seeded(1000 + D), roster = Z_ROSTER[M.zone], out = [];
   const pool = D === 0 ? ["crawler", "runner"] : roster;
   for (let w = 0; w < M.waves; w++) {
-    const budget = (TUNE.b0 + TUNE.b1 * w + TUNE.b2 * w * w) * (1 + TUNE.bD * D * Math.min(1, w / 4)) * (M.ease || 1), groups = [];   // the zone's extra weight comes in over the first four waves
+    const budget = (TUNE.b0 + TUNE.b1 * w + TUNE.b2 * w * w) * (1 + TUNE.bD * D * Math.min(1, w / 4)) * (M.ease || 1) * (mult || 1), groups = [];   // the zone's extra weight comes in over the first four waves
     let left = budget, delay = 0;
     const kinds = w < 2 ? ["crawler"] : pool.filter(k => w >= 3 || E_COST[k] <= 2.4);
     while (left > 1 && groups.length < 4) {
@@ -545,13 +545,17 @@ function startSiege(id, opts) {
   siegeSave(); fleshAtlas();
   const R = mapRoutes(M);
   S.state = "siege"; S.overlay = null;
-  SG = { id, M, R, bg: buildBg(M, R), D: mapIndex(id), test: !!opts.test, waves: buildWaves(id, M), wave: -1, spawn: [], waveT: 0, nextT: 0,
+  const mode = opts.mode || "normal";
+  SG = { id, M, R, bg: buildBg(M, R), D: mapIndex(id), test: !!opts.test, mode, endless: mode === "endless", waves: mode === "endless" ? [] : buildWaves(id, M, mode === "riptide" ? 1.2 : 1), wave: -1, spawn: [], waveT: 0, nextT: 0,
     shells: M.start + (resOn("post", "shells") ? 40 : 0), hull: resOn("post", "hull") ? 23 : 20, hullMax: resOn("post", "hull") ? 23 : 20, towers: M.pads.map(() => null), en: [], shots: [], fx: [], burns: [], pops: [], t: 0, speed: 1, paused: false,
     ring: null, hover: null, result: null, menu: false, tip: null, seenNow: [], kills: 0, leaked: 0, hpK: hpScale(mapIndex(id)), earned: 0 };
   SG.heroXp0 = opts.test ? (opts.xp || 0) : siegeSave().xp;
   SG.hero = newHero(opts.kit !== undefined ? opts.kit : kitNow(), SG.heroXp0);
   siegeResize();
-  siegeTip(M.name + ": CLICK A PAD TO BUILD, THEN START.");
+  if (mode === "riptide") { SG.hull = SG.hullMax = 1; SG.hpK *= 1.3; }
+  if (mode === "iron") SG.iron = ironPair(id);
+  if (mode === "endless") SG.hpK = hpScale(Math.min(SG.D, 12));   // every week's map is about as tough: the map brings its look, layout and twist
+  siegeTip(mode === "riptide" ? "RIPTIDE: TOUGHER WAVES, AND ONE LEAK ENDS IT." : mode === "iron" ? "IRON: ONLY " + SG.iron.map(k => TW[k].name).join(" AND ") + "." : mode === "endless" ? "HOLD THE LINE: HOW MANY WAVES CAN YOU SURVIVE?" : M.name + ": CLICK A PAD TO BUILD, THEN START.");
   play("select");
 }
 function siegeLeave() {
@@ -561,13 +565,16 @@ function siegeTip(s) { SG.tip = { s, t: 6 }; }
 function siegeDone() {                                          // after a map: the campaign (or the boat, from the test link)
   if (SG.test) { siegeLeave(); return; }
   const id = SG.id, [z, m] = id.split(".").map(Number), won = SG.result && SG.result.won, nx = m < 2 ? z + "." + (m + 1) : (z + 1) + ".0";
-  openCampaign(won && SMAPS[nx] && mapOpen(nx) ? nx : id);
+  const endless = SG.endless;
+  openCampaign(won && SG.mode === "normal" && SMAPS[nx] && mapOpen(nx) ? nx : id);
+  if (endless) { SG.camp.tab = "endless"; endlessBoards(); }
 }
-function siegeAgain() { return { test: SG.test, kit: SG.hero ? SG.hero.kit : 0, xp: SG.test ? SG.heroXp0 || 0 : undefined }; }
+function siegeAgain() { return { test: SG.test, kit: SG.hero ? SG.hero.kit : 0, xp: SG.test ? SG.heroXp0 || 0 : undefined, mode: SG.mode }; }
 
 // ---------------------------------------------------------------------------------------------------- the simulation
 function callWave() {
-  if (!SG || SG.result || SG.wave >= SG.waves.length - 1) return;
+  if (!SG || SG.result || (!SG.endless && SG.wave >= SG.waves.length - 1)) return;
+  if (SG.endless && SG.waves.length <= SG.wave + 1) SG.waves.push(endlessWave(SG.wave + 1));
   if (SG.wave >= 0 && SG.nextT > 0) { const bonus = Math.ceil(SG.nextT * 1.5 * (resOn("post", "call") ? 1.5 : 1)); SG.shells += bonus; siegePop(SIW - 70, 30, "+" + bonus, GOLD); }
   SG.wave++; SG.waveT = 0; SG.nextT = 0;
   for (const [k, n, ri, gap, delay] of SG.waves[SG.wave]) for (let i = 0; i < n; i++) SG.spawn.push([delay + i * gap, k, ri]);
@@ -577,7 +584,7 @@ function callWave() {
   play("chime");
 }
 function addEnemy(k, ri, s) {
-  const w = Math.max(0, SG.wave), E = ETYPES[k], hp = Math.round(E[2] * (1 + (SG.hpK - 1) * Math.min(1, w / 4)) * (1 + TUNE.hW * w));
+  const w = Math.max(0, SG.wave), E = ETYPES[k], hp = Math.round(E[2] * (1 + (SG.hpK - 1) * Math.min(1, w / 4)) * (1 + TUNE.hW * w) * (SG.endless && w > 12 ? 1 + (w - 12) * 0.05 : 1));   // Hold the Line keeps climbing
   const e = { k, ri, s: s || 0, hp, max: hp, spd: E[3], arm: E[4], slime: E[5], hull: E[6], bounty: Math.round(E[7] * (1 + 0.02 * SG.D)),   // deeper zones pay more
     fl: E[8], slow: 0, slowT: 0, held: 0, poison: 0, poisonT: 0, x: 0, y: 0, right: true, hitT: 0, grabT: 0, id: Math.random() };
   const [x, y, rt] = atS(SG.R.routes[ri], e.s); e.x = x; e.y = y; e.right = rt;
@@ -625,8 +632,8 @@ function siegeStep(dt) {
   // spawning
   if (G.wave >= 0) {
     G.waveT += dt;
-    while (G.spawn.length && G.spawn[0][0] <= G.waveT) { let [, k, ri] = G.spawn.shift(); if (!doorOpen(ri)) ri = (ri + 1) % G.R.routes.length; if (k === "GUARD") addGuardian(ri); else addEnemy(k, ri); }
-    if (!G.spawn.length && G.wave < G.waves.length - 1) {
+    while (G.spawn.length && G.spawn[0][0] <= G.waveT) { let [, k, ri] = G.spawn.shift(); if (!doorOpen(ri)) ri = (ri + 1) % G.R.routes.length; if (k === "GUARD") addGuardian(ri, G.endless ? Math.min(10, Math.floor((G.wave + 1) / 10) - 1) : undefined); else addEnemy(k, ri); }
+    if (!G.spawn.length && (G.endless || G.wave < G.waves.length - 1)) {
       if (G.nextT <= 0) G.nextT = 25; else { G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 0; callWave(); } }
     }
   }
@@ -679,7 +686,7 @@ function siegeStep(dt) {
   G.pops = G.pops.filter(p => p.t < 1);
   // the end
   if (G.hull <= 0 && !G.result) { G.hull = 0; siegeEnd(false); }
-  else if (!G.result && G.wave === G.waves.length - 1 && !G.spawn.length && !G.en.length) siegeEnd(true);
+  else if (!G.result && !G.endless && G.wave === G.waves.length - 1 && !G.spawn.length && !G.en.length) siegeEnd(true);
 }
 function guarded(t) { return SG.towers.some(o => o && o !== t && TW[o.k].id === "clam" && o.spec === 1 && inRange(o.x, o.y, t.x, t.y, 54)); }
 function boom(x, y, a, d, air) {
@@ -741,12 +748,14 @@ function towerTick(t, dt) {
   }
 }
 function siegeEnd(won) {
-  const G = SG, stars = won ? (G.leaked <= 2 ? 3 : G.leaked <= 10 ? 2 : 1) : 0;
-  G.result = { won, stars, t: 0 };
+  const G = SG, stars = won && G.mode === "normal" ? (G.leaked <= 2 ? 3 : G.leaked <= 10 ? 2 : 1) : 0;
+  G.result = { won, stars, t: 0, mode: G.mode };
+  if (G.endless) endlessDone();
+  if (won && !G.test && (G.mode === "riptide" || G.mode === "iron")) { siegeSave().badges[G.id + (G.mode === "iron" ? "i" : "r")] = 1; G.result.badge = G.mode === "iron" ? "IRON BADGE!" : "RIPTIDE BADGE!"; }
   const xp = Math.round(G.earned * 0.5 + (won ? 60 + 20 * G.D : 0));
   G.result.xp = xp; G.result.lv0 = G.hero ? G.hero.lv : 1; G.result.lv1 = heroLevel(G.heroXp0 + xp);
   if (won && G.id === "10.2") G.result.ending = 1;
-  if (!G.test) { const q = siegeSave(), before = q.done | 0; q.xp += xp; if (won) q.stars[G.id] = Math.max(q.stars[G.id] || 0, stars); q.done = zonesDone(); if (q.done > before) G.result.zone = SZ[q.done - 1].name + " RECLAIMED!"; saveStore(); }
+  if (!G.test) { const q = siegeSave(), before = q.done | 0; q.xp += xp; if (won && G.mode === "normal") q.stars[G.id] = Math.max(q.stars[G.id] || 0, stars); q.done = zonesDone(); if (q.done > before) G.result.zone = SZ[q.done - 1].name + " RECLAIMED!"; saveStore(); }
   if (!G.test) siegeAwards();
   play(won ? "fanfare" : "miss");
 }
@@ -770,7 +779,8 @@ function ringFor(pi) {                                          // the ring menu
   }
   return out;
 }
-function siegeTowersOpen() {                                    // which towers you can build (all of them on the test link)
+function siegeTowersOpen(raw) {                                 // which towers you can build (all of them on the test link)
+  if (SG.iron && !raw) return SG.iron.slice();
   if (SG.test) return TW.map((_, i) => i);
   const done = siegeSave().done | 0;                            // zones reclaimed
   return [0, 1, 2].concat(done >= 1 ? [3] : [], done >= 2 ? [4] : [], done >= 3 ? [5] : [], done >= 5 ? [6] : []);
@@ -887,8 +897,8 @@ function drawPet(H) {
   g.save(); g.translate(Math.round(P.x), 0); if (flip) g.scale(-1, 1);
   g.drawImage(atlas, a[0], a[1], a[2], a[3], -Math.round(a[2] / 2), Math.round(P.y - a[3] - 6 - hop), a[2], a[3]); g.restore();
 }
-const HERO_PANEL = [4, SIH - 31, 128, 27];
-const heroBtn = i => [HERO_PANEL[0] + 26 + i * 50, HERO_PANEL[1] + 15, 46, 10];
+const HERO_PANEL = [4, SIH - 31, 134, 27];
+const heroBtn = i => [HERO_PANEL[0] + 26 + i * 53, HERO_PANEL[1] + 15, 50, 10];
 function drawHeroPanel() {
   const G = SG, H = G.hero; if (!H) return;
   const [x, y, w, h] = HERO_PANEL, d = KITS[H.kit];
@@ -1024,7 +1034,7 @@ function drawDarkness() {
   for (const f of G.fx) if (f.k === "zap" || f.k === "boom") hole(f.tx || f.x, f.ty || f.y, 16);
   g.drawImage(DARKC, 0, 0);
 }
-function siegeCanCall() { return SG && !SG.result && SG.wave < SG.waves.length - 1 && (SG.wave < 0 || (!SG.spawn.length && SG.nextT > 0)); }
+function siegeCanCall() { return SG && !SG.result && (SG.endless || SG.wave < SG.waves.length - 1) && (SG.wave < 0 || (!SG.spawn.length && SG.nextT > 0)); }
 function entryMarkers() {
   const seen = new Set();
   for (const pl of SG.R.routes) {
@@ -1060,7 +1070,7 @@ function drawSiegeHud() {
   heart(9, 8); text(G.hull, 20, 12, 1, WHITE, "left");
   shellIcon(42, 7); text(G.shells, 54, 12, 1, GOLD, "left");
   rect(INK, 94, 4, 70, 15); rect("#0e1a30", 95, 5, 68, 13); outline(95, 5, 68, 13, "#78bee6");
-  text("WAVE " + Math.max(0, G.wave + 1) + "/" + G.waves.length, 129, 12, 1, "#aadcff");
+  text(G.endless ? "WAVE " + Math.max(0, G.wave + 1) : "WAVE " + Math.max(0, G.wave + 1) + "/" + G.waves.length, 129, 12, 1, G.mode === "riptide" ? CYAN : G.mode === "iron" ? "#c8c8d2" : "#aadcff");
   if (siegeCanCall()) { const [x, y, w, h] = SIEGE_HUD.next; siegeBtn(x, y, w, h, G.wave < 0 ? "START" : "NEXT WAVE", RED, "#3c1420"); }
   siegeBtn(...SIEGE_HUD.speed, G.speed === 2 ? "X2" : "X1", G.speed === 2 ? GOLD : null);
   siegeBtn(...SIEGE_HUD.pause, "II", G.paused ? GOLD : null);
@@ -1075,11 +1085,13 @@ function drawResult() {
   const R_ = SG.result, w = 200, h = 96, x = SIW / 2 - w / 2, y = SIH / 2 - h / 2;
   g.globalAlpha = 0.6; rect("#060a1e", 0, 0, SIW, SIH); g.globalAlpha = 1;
   box(x, y, w, h, R_.won ? GOLD : RED);
-  text(R_.ending ? "THE CRACK IS SEALED!" : R_.won ? "ZONE HELD!" : "THE BUOY FELL", SIW / 2, y + 14, R_.ending ? 1 : 2, R_.won ? GOLD : RED);
+  text(R_.ending ? "THE CRACK IS SEALED!" : R_.badge ? R_.badge : SG.endless ? "HELD TO WAVE " + (R_.wave || 0) : R_.won ? "ZONE HELD!" : "THE BUOY FELL", SIW / 2, y + 14, R_.ending ? 1 : 2, R_.won || SG.endless ? GOLD : RED);
   if (R_.ending) text("THE OCEAN IS YOURS AGAIN. THE ADMIRAL SALUTES.", SIW / 2, y - 22, 1, WHITE);
-  if (R_.won) for (let i = 0; i < 3; i++) bigStar(SIW / 2 - 24 + i * 24, y + 40, i < R_.stars);
+  if (SG.endless) { text(SG.test ? "(TEST: NOTHING SAVED)" : "YOUR BEST THIS WEEK: WAVE " + (R_.best || 0), SIW / 2, y + 36, 1, WHITE); if (R_.note) text(R_.note, SIW / 2, y + 46, 1, ORANGE); }
+  else if (R_.won && R_.mode === "normal") for (let i = 0; i < 3; i++) bigStar(SIW / 2 - 24 + i * 24, y + 40, i < R_.stars);
+  else if (R_.won) text("A BADGE FOR " + SG.M.name, SIW / 2, y + 40, 1, WHITE);
   else text("THE FLIPSIDE GOT THROUGH", SIW / 2, y + 40, 1, "#ffc8c8");
-  text("WAVES " + Math.max(0, SG.wave + 1) + "/" + SG.waves.length + "  HULL " + SG.hull + "/" + SG.hullMax + "  +" + R_.xp + " XP", SIW / 2, y + 58, 1, "#c8e6ff");
+  text("WAVES " + Math.max(0, SG.wave + 1) + (SG.endless ? "" : "/" + SG.waves.length) + "  HULL " + SG.hull + "/" + SG.hullMax + "  +" + R_.xp + " XP", SIW / 2, y + 58, 1, "#c8e6ff");
   if (R_.lv1 > R_.lv0 && !SG.test) text("HERO LEVEL " + R_.lv1 + "!", SIW / 2, y + 68, 1, GOLD);
   siegeBtn(x + 16, y + h - 24, 76, 16, "RETRY", null);
   siegeBtn(x + w - 92, y + h - 24, 76, 16, SG.test ? "QUIT" : "CONTINUE", GOLD);
@@ -1202,7 +1214,7 @@ function silhouette(key) {
   SILH[key] = c; return c;
 }
 const CB = { X0: 4, X1: 250, Y0: 22, BH: 27 };                // the zone list on the left
-const CAMP_BTN = { map: [256, 3, 32, 14], research: [290, 3, 54, 14], hero: [346, 3, 34, 14], defend: [262, 178, 112, 20], back: [262, 202, 112, 13], leave: [384, 3, 92, 14] };
+const CAMP_BTN = { map: [256, 3, 30, 14], research: [288, 3, 54, 14], hero: [344, 3, 32, 14], endless: [378, 3, 50, 14], defend: [262, 178, 112, 20], back: [262, 202, 112, 13], leave: [430, 3, 46, 14] };
 function campRows() {                                           // visible zone rows: [z, y]
   const C = SG.camp, out = [];
   for (let z = 0; z < 11; z++) { const y = CB.Y0 + z * CB.BH - C.scroll; if (y > CB.Y0 - CB.BH && y < SIH) out.push([z, y]); }
@@ -1235,13 +1247,14 @@ function drawCampaign() {
     if (won) text("OK", gx + 22, y + 18, 1, LIME, "left");
   }
   g.restore();
-  text("SIEGE OF THE DEEP", CB.X0 + 2, 12, 1, GOLD, "left");
-  text("STARS " + starsTotal() + "/99", CB.X1 - 2, 12, 1, "#aadcff", "right");
+  text("THE SIEGE", CB.X0 + 2, 12, 1, GOLD, "left");
+  text("STARS " + starsTotal() + "/99  BADGES " + Object.keys(q.badges).length + "/66", CB.X1 - 2, 12, 1, "#aadcff", "right");
   // the right-hand panel
-  for (const k of ["map", "research", "hero"]) { const [x, y, w, h] = CAMP_BTN[k]; siegeBtn(x, y, w, h, k.toUpperCase(), C.tab === k ? GOLD : null); }
-  siegeBtn(...CAMP_BTN.leave, "BACK TO BOAT", null);
+  for (const k of ["map", "research", "hero", "endless"]) { const [x, y, w, h] = CAMP_BTN[k]; siegeBtn(x, y, w, h, k.toUpperCase(), C.tab === k ? GOLD : null); }
+  siegeBtn(...CAMP_BTN.leave, "LEAVE", null);
   if (C.tab === "map") drawCampMap();
   else if (C.tab === "research") drawResearch();
+  else if (C.tab === "endless") drawEndlessTab();
   else drawHeroTab();
   if (C.msg) { const w = textW(C.msg.s, 1) + 14; g.globalAlpha = Math.min(1, C.msg.t); box(SIW / 2 - w / 2, SIH - 22, w, 16, GOLD); text(C.msg.s, SIW / 2, SIH - 14, 1, WHITE); g.globalAlpha = 1; }
 }
@@ -1258,6 +1271,7 @@ function drawCampMap() {
     (fresh.length ? fresh : Z_ROSTER[z]).slice(0, 5).forEach((k, i) => { const sp = ETYPES[k][1], [w, h] = sprSize(sp); spr(sp, 296 + i * 30 + (24 - w) / 2, 80 - h / 2, false, 1, fleshAtlas()); });
     const st = q.stars[id] || 0;
     text("BEST", 264, 104, 1, "#96a0c8", "left"); for (let s = 0; s < 3; s++) bigStarS(304 + s * 14, 104, s < st);
+    drawChallenges(id);
   }
   text("HERO KIT", 264, 122, 1, "#96a0c8", "left");
   const open = kitsOpen();
@@ -1333,9 +1347,11 @@ function drawHeroTab() {
 function campMsg(s) { SG.camp.msg = { s, t: 3 }; }
 function campClick(x, y) {
   const C = SG.camp, q = siegeSave();
-  for (const k of ["map", "research", "hero"]) if (hitR(x, y, CAMP_BTN[k])) { C.tab = k; play("tick"); return; }
+  for (const k of ["map", "research", "hero", "endless"]) if (hitR(x, y, CAMP_BTN[k])) { C.tab = k; play("tick"); if (k === "endless") endlessBoards(); return; }
   if (hitR(x, y, CAMP_BTN.leave)) { siegeLeave(); return; }
   if (C.tab === "research") { researchClick(x, y); return; }
+  if (C.tab === "endless") { endlessClick(x, y); return; }
+  if (C.tab === "map" && q.stars[C.sel] && SMAPS[C.sel]) for (let i = 0; i < 2; i++) if (hitR(x, y, CH_BTN[i])) { startSiege(C.sel, { kit: kitNow(), mode: i ? "iron" : "riptide" }); return; }
   if (C.tab === "hero") {
     KITS.forEach((d, i) => { const bx = 12 + i * 156; if (hitR(x, y, [bx + 30, 194, 88, 13]) && kitsOpen().includes(i)) { q.kit = i; saveStore(); play("select"); } });
     return;
@@ -1494,5 +1510,85 @@ function siegeAwards() {
   return got;
 }
 
-window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, siegeCast, siegeHook, siegeAwards, siegeEnter, siegeUnlocked, LEAK, SIEGE_COS, SIEGE_TITLES, TUNE, GUARD, addGuardian, zoneDark, doorOpen, inKelp, ZMAPS, autoLayout, HUD_KEEP, openCampaign, campClick, mapOpen, zonesDone, starsTotal, starsSpent, RES, resHas, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
-if (TEST_SIEGE) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); if (TEST_SIEGE === "campaign") { openCampaign(); return; } let kit = 0; try { kit = clamp(parseInt(new URLSearchParams(location.search).get("kit"), 10) || 0, 0, 2); } catch (e) {} startSiege(SMAPS[TEST_SIEGE] ? TEST_SIEGE : "0.0", { test: true, kit }); } }, 50); }
+// ---------------------------------------------------------------------------------------------------- challenges and Hold the Line (part 8)
+// Once a map is won, two challenges open on it, each worth a badge: RIPTIDE (tougher waves, 1 hull) and IRON (only two
+// tower types, picked by the game). HOLD THE LINE: one endless map a week, the same for everyone (once the Kelp Forest is
+// reclaimed); waves keep coming and keep getting harder, and the score is the wave you reach. Shared board under /siege
+// (This Week and All Time). That's the one part of the siege that needs database rules (siege node in database.rules.json).
+function ironPair(id) {                                          // the two towers an Iron run allows
+  const r = seeded(9000 + mapIndex(id)), open = siegeTowersOpen(true), dmg = open.filter(k => [0, 1, 3, 6].includes(k)), z = SMAPS[id].zone;
+  const a = r.choice(dmg), rest = open.filter(k => k !== a && k !== 4);
+  const b = SZ[z].dark > 0.5 && rest.includes(5) ? 5 : r.choice(rest.filter(k => k !== 5).concat(rest.includes(5) ? [5] : []));
+  return [a, b].sort((x, y) => x - y);
+}
+const weekNow = () => typeof dealerWeek === "function" ? dealerWeek() : Math.floor((Date.now() / 864e5 + 3) / 7);
+function endlessMap(wk) { const ids = Object.keys(SMAPS).filter(id => SMAPS[id].zone < 10); return ids[((wk === undefined ? weekNow() : wk) * 7 + 3) % ids.length]; }   // the Floor's split loops make a poor arena
+const endlessOpen = () => (SG && SG.test) || zoneDone(1);
+function endlessWave(w) {                                        // wave w of Hold the Line: the zone's foes and everything above it, growing without end
+  const G = SG, D = Math.min(G.D, 12), r = seeded(weekNow() * 1000 + w), z = G.M.zone, pool = [...new Set(Z_ROSTER.slice(0, z + 1).flat())];
+  const budget = (TUNE.b0 + TUNE.b1 * w + TUNE.b2 * w * w) * (1 + TUNE.bD * D) * (w > 12 ? 1 + (w - 12) * 0.09 : 1) * (G.M.ease || 1), groups = [];
+  let left = budget, delay = 0;
+  const kinds = w < 2 ? ["crawler"] : pool;
+  while (left > 1 && groups.length < 5) {
+    const k = r.choice(kinds), c = E_COST[k], n = clamp(Math.floor(left / c * (groups.length ? 1 : r.uniform(0.4, 0.6))), 1, 24);
+    groups.push([k, n, r.randint(0, G.M.routes.length - 1), k === "runner" ? 0.6 : 0.9, delay]);
+    left -= n * c; delay += n * 0.5 + 1.2;
+  }
+  if (w % 10 === 9) groups.push(["GUARD", 1, r.randint(0, G.M.routes.length - 1), 1, delay + 2]);
+  return groups;
+}
+function endlessDone() {                                         // the buoy fell: score the run, save the best, post it
+  const G = SG, wave = Math.max(0, G.wave), wk = weekNow(); G.result.wave = wave;
+  if (G.test) return;
+  const q = siegeSave(); q.endBest = Math.max(q.endBest | 0, wave); q.endWk = q.endWk && q.endWk[0] === wk ? [wk, Math.max(q.endWk[1], wave)] : [wk, wave];
+  G.result.best = q.endWk[1]; saveStore();
+  if (store.name && wave > 0 && LB.url) {
+    const body = JSON.stringify({ n: store.name, s: wave, k: G.hero ? G.hero.kit : 0, m: G.id, t: Date.now() });
+    const post = path => fetch(LB.url + path, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    Promise.all([post("/siege/week/" + wk + ".json"), post("/siege/all.json")]).then(([a, b]) => { if (!a.ok || !b.ok) G.result.note = "UPDATE THE DATABASE RULES"; }).catch(() => {});
+  }
+}
+async function endlessBoards() {                                 // This Week and All Time, for the ENDLESS tab
+  const C = SG && SG.camp; if (!C) return;
+  C.boards = { status: LB.url ? "LOADING..." : "NO SHARED BOARD SET UP" };
+  if (!LB.url) return;
+  try { const [w, a] = await Promise.all([LB.top("/siege/week/" + weekNow()), LB.top("/siege/all")]); if (SG && SG.camp) SG.camp.boards = { week: w, all: a, status: "" }; }
+  catch (e) { if (SG && SG.camp) SG.camp.boards = { status: "CAN'T REACH THE BOARD" }; }
+}
+const CH_BTN = [[352, 97, 56, 13], [412, 97, 56, 13]];
+function drawChallenges(id) {                                    // on the MAP tab, once the map is won
+  const q = siegeSave(); if (!q.stars[id] || !SMAPS[id]) return;
+  ["RIPTIDE", "IRON"].forEach((lab, i) => { const got = q.badges[id + (i ? "i" : "r")]; siegeBtn(...CH_BTN[i], (got ? "* " : "") + lab, got ? GOLD : i ? "#c8c8d2" : CYAN); });
+  const ip = ironPair(id).map(k => TW[k].name.split(" ")[0]).join(" + ");
+  if (SG.camp.hover && hitR(SG.camp.hover[0], SG.camp.hover[1], CH_BTN[0])) text("TOUGHER WAVES, ONLY 1 HULL", 410, 116, 1, CYAN);
+  else if (SG.camp.hover && hitR(SG.camp.hover[0], SG.camp.hover[1], CH_BTN[1])) text("ONLY " + ip, 410, 116, 1, "#c8c8d2");
+}
+function drawEndlessTab() {
+  const C = SG.camp, q = siegeSave(), wk = weekNow(), id = endlessMap(wk), M = SMAPS[id];
+  rect("#0a1020", 0, 20, SIW, SIH - 20);
+  text("HOLD THE LINE", 8, 28, 1, GOLD, "left");
+  if (!endlessOpen()) { text("RECLAIM THE KELP FOREST TO OPEN HOLD THE LINE.", SIW / 2, SIH / 2, 1, "#96a0c8"); return; }
+  text("THIS WEEK: " + M.name + " (" + SZ[M.zone].name + ")", SIW / 2, 28, 1, "#aadcff");
+  text("ONE MAP A WEEK, THE SAME FOR EVERYONE. WAVES NEVER STOP. HOW FAR CAN YOU HOLD?", SIW / 2, 40, 1, "#96a0c8");
+  const mine = q.endWk && q.endWk[0] === wk ? q.endWk[1] : 0;
+  text("YOUR BEST THIS WEEK: WAVE " + mine + "   ALL TIME: WAVE " + (q.endBest | 0), SIW / 2, 52, 1, WHITE);
+  const B = C.boards || { status: "" };
+  [["THIS WEEK", B.week], ["ALL TIME", B.all]].forEach(([lab, rows], i) => {
+    const x = 20 + i * 228, y = 62;
+    rect(INK, x, y, 212, 140); rect("#0e1a30", x + 1, y + 1, 210, 138); outline(x + 1, y + 1, 210, 138, "#78bee6");
+    text(lab, x + 106, y + 9, 1, GOLD);
+    if (!rows || !rows.length) text(B.status || "NO WAVES HELD YET", x + 106, y + 70, 1, "#96a0c8");
+    else rows.forEach((e, k) => { const yy = y + 22 + k * 11, me = e.n === store.name; text((k + 1) + ". " + e.n, x + 8, yy, 1, me ? GOLD : WHITE, "left"); text("WAVE " + e.s, x + 150, yy, 1, me ? GOLD : "#aadcff", "right"); text(KITS[e.k | 0] ? KITS[e.k | 0].name.slice(0, 4) : "", x + 204, yy, 1, "#96a0c8", "right"); });
+  });
+  KITS.forEach((k, i) => { const on = kitsOpen().includes(i); siegeBtn(20 + i * 70, 212, 66, 14, on ? k.name.slice(0, 10) : "???", kitNow() === i ? GOLD : on ? null : "#5a5a6e"); });
+  siegeBtn(330, 210, 130, 18, "HOLD THE LINE", RED, "#3c1420");
+  if (!store.name) text("SET YOUR INITIALS IN MORE TO GO ON THE BOARD", 330 + 65, 236, 1, "#96a0c8");
+}
+function endlessClick(x, y) {
+  if (!endlessOpen()) return;
+  KITS.forEach((k, i) => { if (hitR(x, y, [20 + i * 70, 212, 66, 14]) && kitsOpen().includes(i)) { siegeSave().kit = i; saveStore(); play("select"); } });
+  if (hitR(x, y, [330, 210, 130, 18])) startSiege(endlessMap(), { mode: "endless", kit: kitNow() });
+}
+
+window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, ironPair, endlessMap, endlessWave, weekNow, endlessOpen, siegeCast, siegeHook, siegeAwards, siegeEnter, siegeUnlocked, LEAK, SIEGE_COS, SIEGE_TITLES, TUNE, GUARD, addGuardian, zoneDark, doorOpen, inKelp, ZMAPS, autoLayout, HUD_KEEP, openCampaign, campClick, mapOpen, zonesDone, starsTotal, starsSpent, RES, resHas, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
+if (TEST_SIEGE) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); if (TEST_SIEGE === "campaign") { openCampaign(); return; } if (TEST_SIEGE === "endless") { startSiege(endlessMap(), { test: true, mode: "endless" }); return; } let kit = 0; try { kit = clamp(parseInt(new URLSearchParams(location.search).get("kit"), 10) || 0, 0, 2); } catch (e) {} startSiege(SMAPS[TEST_SIEGE] ? TEST_SIEGE : "0.0", { test: true, kit }); } }, 50); }

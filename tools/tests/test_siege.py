@@ -172,6 +172,29 @@ async def main():
             out.notSold = DATA.hats.indexOf('SIEGE BICORNE') >= SHOP_N.hat && DATA.boats.indexOf('IRONCLAD') >= SHOP_N.boat;
             st.siege = undefined; return out; })()""")
         for k, v in r.items(): check("rewards: " + k, v, r)
+        # challenges and Hold the Line (part 8)
+        r = await ev("""(() => { const Q = SIEGE, out = {};
+            Q.startSiege('1.1', {test: true, mode: 'riptide'}); out.riptide = Q.SG.hull === 1 && Q.SG.hullMax === 1;
+            Q.startSiege('1.1', {test: true, mode: 'iron'}); const ip = Q.SG.iron; out.iron = ip.length === 2 && JSON.stringify(Q.ringFor(0).map(b => b[7])) === JSON.stringify(ip);
+            out.ironDamage = Object.keys(Q.SMAPS).every(id => { Q.startSiege(id, {test: true}); return Q.ironPair(id).some(k => [0, 1, 3, 6].includes(k)); });
+            Q.startSiege(Q.endlessMap(), {test: true, mode: 'endless'}); const g = Q.SG; out.noFloor = Q.SMAPS[Q.endlessMap()].zone < 10;
+            for (let w = 0; w < 12; w++) { Q.callWave(); for (let i = 0; i < 60 * 60 && g.spawn.length; i++) Q.siegeStep(1/60); g.en = []; g.nextT = 1; }
+            out.endless = g.wave === 11 && !g.result && g.waves.length === 12 && g.waves[9].some(x => x[0] === 'GUARD');
+            g.hull = 0; Q.siegeStep(1/60); out.scored = g.result && g.result.wave === 11;
+            out.sameWeek = Q.endlessMap(100) === Q.endlessMap(100) && Q.endlessMap(100) !== Q.endlessMap(101);
+            return out; })()""")
+        for k, v in r.items(): check("part 8: " + k, v, r)
+        r = await ev("""(() => { const Q = SIEGE, st = REEL.store, out = {}; st.siege = undefined; st.name = '';
+            const winAs = (id, mode) => { Q.startSiege(id, {mode}); const g = Q.SG; g.wave = g.waves.length - 1; g.spawn = []; g.en = []; Q.siegeStep(1/60); return g.result; };
+            winAs('0.0', 'normal'); const r1 = winAs('0.0', 'riptide'); out.badgeR = st.siege.badges['0.0r'] === 1 && r1.badge === 'RIPTIDE BADGE!' && st.siege.stars['0.0'] === 3;
+            winAs('0.0', 'iron'); out.badgeI = st.siege.badges['0.0i'] === 1;
+            st.siege.stars = {}; winAs('0.1', 'iron'); out.noStars = !st.siege.stars['0.1'];
+            Q.startSiege('0.0', {mode: 'endless'}); const g = Q.SG; g.wave = 23; g.hull = 0; Q.siegeStep(1/60); out.best = st.siege.endBest === 23 && st.siege.endWk[1] === 23;
+            st.siege = undefined; return out; })()""")
+        for k, v in r.items(): check("part 8: " + k, v, r)
+        import json as _json
+        rules = _json.load(open(os.path.join(HERE, "..", "..", "database.rules.json")))
+        check("database rules have the siege board", "siege" in rules["rules"] and ".indexOn" in rules["rules"]["siege"]["all"])
         # bot play: a good bot wins the first two Shallows maps
         rs = [await ev("siegeBot('0.0', 1.0, 1200)") for _ in range(3)]
         check("good bot wins Sandbar Crossing", all(x["won"] for x in rs), rs)
