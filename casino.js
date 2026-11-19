@@ -542,6 +542,10 @@ function rdPays(t) {                                         // -> multiple of t
   for (const f of "LSTKM") if (t.filter(x => x === f).length === 2) return RD_PAIR[f];
   return 0;
 }
+// The symbols on the pay line for reel stops `st`. The window shows rows stop, stop+1, stop+2 and the pay line is
+// the middle one (stop+1). Until Nov 19, 2026 the payout read the top row, so pairs and three of a kind you could
+// see on the line paid nothing (and some spins paid for symbols above it). Payback is unchanged: every stop is equally likely.
+const rdLine = st => st.map((s0, k) => RD_STRIPS[k][(s0 + 1) % 24]);
 CZ.rd = null;
 function rdOpen() { if (!CZ.rd) CZ.rd = { bet: 10, phase: "idle", stops: [0, 5, 10], off: [0, 0, 0], t: 0, msg: "PULL THE LEVER", win: 0, k: 0 }; }
 function rdSpin() {
@@ -551,7 +555,7 @@ function rdSpin() {
   c.final = [0, 1, 2].map(() => Math.floor(Math.random() * 24)); c.phase = "spin"; c.t = 0; c.win = 0; c.msg = ""; c.lever = 0.3; play("tick");
 }
 function rdSettle() {
-  const c = CZ.rd, t = c.final.map((s0, k) => RD_STRIPS[k][s0]), x = rdPays(t);
+  const c = CZ.rd, t = rdLine(c.final), x = rdPays(t);
   c.phase = "done"; c.win = Math.floor(c.staked * x);
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (t.every(q => q === "L")) tavAward("reeldeal");
@@ -1190,4 +1194,4 @@ EXTRA_OV.cup = { draw: drawCup, tap: cupTap, key: cupKey, back: "tables", music:
 
 function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); cupTick(dt); roundsAnnounce(); }
 
-window.CASINO = { DECOR, get DECOR_LIST() { return decorList(); }, DECOR_ALL, jpPot, jpLast, jpWin, JP_ODDS, JP_CAP, cupData, cupDeck, cupEnter, cupDeal, cupHit, cupStand, cupTick, cupNext, cupBoard, cupClaim, CUP_HANDS, decorData, decorDraw, decorBar, buyRound, roundsToday, ROUND_PRICE, tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
+window.CASINO = { rdLine, DECOR, get DECOR_LIST() { return decorList(); }, DECOR_ALL, jpPot, jpLast, jpWin, JP_ODDS, JP_CAP, cupData, cupDeck, cupEnter, cupDeal, cupHit, cupStand, cupTick, cupNext, cupBoard, cupClaim, CUP_HANDS, decorData, decorDraw, decorBar, buyRound, roundsToday, ROUND_PRICE, tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
