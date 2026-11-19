@@ -179,6 +179,19 @@ items += [("mhat%d" % (len(HATS) - 1), FS.monsterify(_named["hat%d" % (len(HATS)
           ("mpet%d" % (len(PETS) - 1), FS.monsterify(_named["pet%d" % (len(PETS) - 1)], 500 + len(PETS) - 1, eyes=2, teeth=False))]
 # ---- Nov 19, 2026: the Coral Reef's fish. Appended so nothing above moves.
 items += [(fid, art.spr[fid][0]) for fid in fishing.REEF]
+# ---- Nov 19, 2026: Siege of the Deep rewards (siege.js part 7). Never sold; earned in the siege. Appended so nothing above moves.
+# Names are looked up by siege.js, so keep them.
+SIEGE_HAT = ("SIEGE BICORNE", ["...kkk...", ".kkkykkk.", "kkkkkkkkk", "rrrrrrrrr"])
+SIEGE_PET = ("KING CRAB", ["r.y.y.r", "rryyyrr", ".rkrkr.", "rrrrrrr", "r.r.r.r"])
+SIEGE_FLAG = ("THE SIEGE", ["rrrrrr", "rwwwrr", "rrwrrr", "nnnnnn"])
+HATS.append(SIEGE_HAT); items.append(("hat%d" % (len(HATS) - 1), outlined(pg, from_rows(pg, SIEGE_HAT[1], P))))
+PETS.append(SIEGE_PET); items.append(("pet%d" % (len(PETS) - 1), outlined(pg, from_rows(pg, SIEGE_PET[1], P))))
+FLAGS.append(SIEGE_FLAG); items.append(("flag%d" % (len(FLAGS) - 1), from_rows(pg, SIEGE_FLAG[1], P)))
+TAV_BOATS += ["IRONCLAD"]
+items.append(("boat%d" % (len(BOATS) + 1 + len(TAV_BOATS) - 1), outlined(pg, from_rows(pg, BOAT_ROWS[0], {"b": (70, 74, 86), "w": (230, 230, 240), "r": (200, 60, 60), "d": (40, 42, 52)}))))
+_named = dict(items)
+items += [("mhat%d" % (len(HATS) - 1), FS.monsterify(_named["hat%d" % (len(HATS) - 1)], 300 + len(HATS) - 1, eyes=0, teeth=False)),
+          ("mpet%d" % (len(PETS) - 1), FS.monsterify(_named["pet%d" % (len(PETS) - 1)], 500 + len(PETS) - 1, eyes=2, teeth=True))]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()
