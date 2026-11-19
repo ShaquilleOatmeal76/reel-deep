@@ -82,6 +82,10 @@ of the lighthouse keeper's log are hidden down there. Read them from the menu (*
 West of the Woods is **Shipwreck Beach**: dig the disturbed sand with your hoe for salvage (more when a storm is blowing
 out at sea). East of the Lagoon is **Mangrove Marsh**, where Silas the hermit lives. Patch up the skiff at the end of
 the dock to sail round the island and out to **Gull Rock**.
+Eight **festivals**, two each season: the Tide Fair (spring 13), Kite Day (spring 24), the Fishing Derby (summer 11),
+Lantern Night (summer 25), Salvage Day (fall 16), the Harvest Supper (fall 27), Ice Fishing Morning (winter 8) and the
+Midwinter Feast (winter 25). Everyone gathers, and the booth runs the event. Ribbons pay sand dollars, and gold wins a
+decoration you can't get any other way. Festival fish only bite on their day.
 
 ## Save codes
 
