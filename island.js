@@ -3098,7 +3098,7 @@ isleUpdate = function (dt) {
 
 // ---- drawing the caves
 function foeSprite(f) { const F = CAVE_FOES[f.kind], fr = Math.floor(f.t * 6 + f.ph) % 2; return pix("foe_" + f.kind + fr, F.rows[fr], F.pal); }
-function drawBoss(f, x, y) {
+function drawCaveBoss(f, x, y) {                          // was drawBoss: that name replaced the Sleeper's and froze its fight (fixed Nov 19, 2026)
   const B = BOSSES[f.boss], flash = f.hit > 0 && Math.floor(T * 30) % 2;
   g.save(); g.translate(Math.round(x), Math.round(y));
   const fill = (col, path) => { g.fillStyle = flash ? "#ffffff" : col; g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); path(); g.fill(); g.stroke(); };
@@ -3135,7 +3135,7 @@ placedSprites = function (list) {
   for (const f of C.foes) list.push([f.y + 4, { draw(cx, cy) {
     const x = f.x - cx, y = f.y - cy;
     if (x < -40 || x > IW + 40 || y < -40 || y > IH + 40) return;
-    if (f.boss) { drawBoss(f, x, y); return; }
+    if (f.boss) { drawCaveBoss(f, x, y); return; }
     g.globalAlpha = 0.25; g.fillStyle = "#000"; g.beginPath(); g.ellipse(Math.round(x), Math.round(y + 4), f.r, 2, 0, 0, 7); g.fill(); g.globalAlpha = 1;
     if (f.hit > 0 && Math.floor(T * 30) % 2) return;
     const c = foeSprite(f), fly = CAVE_FOES[f.kind].kind === "bat" ? -6 + Math.sin(T * 4 + f.ph) * 2 : CAVE_FOES[f.kind].kind === "hop" && f.st === 1 ? -Math.sin(f.t / 0.4 * Math.PI) * 8 : 0;
