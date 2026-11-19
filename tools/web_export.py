@@ -134,6 +134,34 @@ HOOKS += [("CHIP HOOK", ["kwk.", ".k..", ".k..", ".k.k", ".k.k", "..k."], {"k": 
 FLAIR += [("777", ["yyy.yyy", "..y...y", ".y...y."]), ("CARD SUITS", ["r.r..k.", "rrr.kkk", ".r...k."])]; FLAIR_POS += ["top", "top"]
 items += [("hook%d" % i, from_rows(pg, HOOKS[i][1], HOOKS[i][2])) for i in range(len(HOOKS) - 3, len(HOOKS))]
 items += [("flair%d" % i, from_rows(pg, FLAIR[i][1], P)) for i in range(len(FLAIR) - 2, len(FLAIR))]
+# ---- Nov 18, 2026: the Captain's Locker (prestige gear, chips only) and the Shady Dealer's weekly stock (casino.js).
+# Never sold for coins (all past SHOP_N). Appended so nothing above moves. Names are looked up by casino.js, so keep them.
+P.update({"u": (255, 245, 220), "t": (60, 230, 200), "j": (24, 22, 34)})
+TAV_BOATS += ["GOLDEN TRAWLER", "BLACK PEARL"]
+_boat_pal = [{"b": (30, 40, 90), "w": (255, 240, 170), "r": (255, 210, 70), "d": (220, 160, 40)},     # golden trawler: navy and gold
+             {"b": (24, 22, 34), "w": (255, 245, 220), "r": (70, 66, 96), "d": (200, 40, 60)}]       # black pearl
+NEW_HATS = [("CROWN JEWELS", ["y.y.y.y.y", "yyyyyyyyy", "ycyryfycy", "yyyyyyyyy"]), ("ADMIRAL'S HAT", ["...nnn...", ".nnnynnn.", "nnnnnnnnn", "yyyyyyyyy"]),
+            ("BOWLER", ["..kkk..", ".kkkkk.", ".rrrrr.", "kkkkkkk"]), ("TRICORN", ["k.....k", "kkkykkk", ".kkkkk."]), ("STRAW HAT", ["..eeee..", "..rrrr..", "eeeeeeee"]),
+            ("JESTER CAP", ["r.....y", "rr...yy", ".rryyy.", "yyyrrrr"]), ("NIGHTCAP", ["....w", "..ccc", ".cccc", "ccccc", "wwwww"]), ("GOLD LAUREL", ["y.y.y.y", ".yyyyy.", "yy...yy"])]
+NEW_PETS = [("KRAKEN", [".ppppp.", "ppkpkpp", "ppppppp", "p.p.p.p", "p.p.p.p", ".p...p."]), ("GOLDEN SEAHORSE", ["..yy.", ".yyyk", "..yy.", ".yy..", "..yy.", "...y."]),
+            ("LOBSTER", ["r...r", "rr.rr", ".rrr.", ".rkr.", ".r.r."]), ("SEAGULL", [".ww..", "wwkoo", "wwww.", "..ww."]), ("OTTER", [".bb..", "bkbbu", "bbbbb", "b.b.b"]),
+            ("HERMIT CRAB", ["..ee.", ".eeee", "reeee", "r.r.."])]
+NEW_FLAGS = [("ROYAL STANDARD", ["rrrrrr", "ryryry", "ryyyyr", "rrrrrr"]), ("DICE FLAG", ["wwwwww", "wkwwkw", "wwwwww", "wkwwkw"]), ("ANCHOR FLAG", ["nnwnnn", "nwwwnn", "nnwnnn", "nwwwnn"]),
+             ("LIGHTHOUSE", ["cccccc", "ccrccc", "ccwccc", "ccrccc"]), ("RED ROGER", ["rrrrrr", "rwwrrr", "rrwrrr", "rwrwrr"])]
+NEW_FLAIR = [("BIG RUBIES", [".r.", "rrr", "rwr", ".r."], "top"), ("BANDANAS", ["rwrwr", "rrrrr", "....r"], "top"), ("PEARLS", ["u.u.u", ".u.u."], "chin"), ("AVIATORS", ["yyyyyy", "ss.ss."], "face")]
+NEW_HOOKS = [("LEVIATHAN HOOK", ["k..k", "kkkk", ".k..", ".kkk", ".k.k", "..k."], {"k": (60, 230, 200)}),
+             ("FISHBONE HOOK", ["k.k.", ".k..", "kkk.", ".k.k", "kk.k", "..k."], {"k": (236, 230, 206)}),
+             ("KEY HOOK", ["kk..", "kk..", ".k..", ".kkk", ".k.k", "..k."], {"k": (255, 210, 70)})]
+_b0 = len(BOATS) + 1 + len(TAV_BOATS) - 2                     # boats in DATA: BOATS, the maw boat, then the tavern's
+items += [("boat%d" % (_b0 + k), outlined(pg, from_rows(pg, BOAT_ROWS[0], _boat_pal[k]))) for k in range(2)]
+for name, rows in NEW_HATS: HATS.append((name, rows)); items.append(("hat%d" % (len(HATS) - 1), outlined(pg, from_rows(pg, rows, P))))
+for name, rows in NEW_PETS: PETS.append((name, rows)); items.append(("pet%d" % (len(PETS) - 1), outlined(pg, from_rows(pg, rows, P))))
+for name, rows in NEW_FLAGS: FLAGS.append((name, rows)); items.append(("flag%d" % (len(FLAGS) - 1), from_rows(pg, rows, P)))
+for name, rows, at in NEW_FLAIR: FLAIR.append((name, rows)); FLAIR_POS.append(at); items.append(("flair%d" % (len(FLAIR) - 1), from_rows(pg, rows, P)))
+for name, rows, pal in NEW_HOOKS: HOOKS.append((name, rows, pal)); items.append(("hook%d" % (len(HOOKS) - 1), from_rows(pg, rows, pal)))
+_named = dict(items)
+items += [("mhat%d" % i, FS.monsterify(_named["hat%d" % i], 300 + i, eyes=0, teeth=False)) for i in range(len(HATS) - len(NEW_HATS), len(HATS))]
+items += [("mpet%d" % i, FS.monsterify(_named["pet%d" % i], 500 + i, eyes=2, teeth=_named["pet%d" % i].get_width() >= 7)) for i in range(len(PETS) - len(NEW_PETS), len(PETS))]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()
