@@ -72,7 +72,7 @@ async def main():
         await page.screenshot(path=OUT + "/called_wide.png")
         # ...rides to the floor, rises slowly past the crack, can knock
         await ev("(() => { REEL.S.hy = 1150 * 6; REEL.S.reached = 1150; REEL.S.hx = OX + 108; })()")
-        await ev(tick + "(120)")
+        await ev(tick + "(260)")
         r = await ev("(() => ({ st: REEL.S.state, b: REEL.S.bottom, fr: REEL.S.freeRide, m: REEL.S.hy / 6 }))()")
         check("floor with a full hook rises slowly, no floor credit", r["st"] == "rise" and r["b"] is False and r["fr"] is True, r)
         await page.screenshot(path=OUT + "/rise_wide.png")
@@ -94,6 +94,18 @@ async def main():
             await ev(tick + "(2)")
             check("full hook turns back: " + name, await ev("REEL.S.state") == "turn")
         await ev("REEL.store.sec.beat = false")
+
+        # ---- slow last metres: time from 1146 m to the floor
+        await ev(DIVE + "(0, 1140)")
+        r = await ev("""(() => { const S = REEL.S; let t = 0, t20 = null; while (S.state === 'down' && t < 20) { REEL.simTick(1 / 60); t += 1 / 60;
+          if (t20 === null && S.hy / 6 >= 1150) t20 = t; } return { t, t20, st: S.state }; })()""")
+        check("last metres take about 3 s", 2.5 < r["t"] - r["t20"] < 4.5 and r["t"] > 3, r)
+        await ev(DIVE + "(0, 1110)")
+        r = await ev("(() => { const S = REEL.S; REEL.simTick(0.1); return (S.hy / 6 - 1110) / 0.1; })()")
+        check("normal speed above the floor", r > 15, r)
+        await ev(DIVE + "(0, 1153)")
+        await ev(tick + "(2)")
+        await page.screenshot(path=OUT + "/slow_floor_wide.png")
 
         # ---- deepest readout
         await ev(DIVE + "(0, 900)")
