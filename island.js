@@ -1881,6 +1881,7 @@ function aquaObjects() {
   const o = [];
   for (let k = 0; k < 5; k++) o.push({ k: "tank", x: 14 + k * 60, y: 22, solid: [0, 0, 52, 34], act: { kind: "tank", z: k } });
   for (let k = 0; k < 5; k++) o.push({ k: "tank", x: 14 + k * 60, y: 96, solid: [0, 0, 52, 34], act: { kind: "tank", z: k + 5 } });
+  o.push({ k: "tank", x: 254, y: 140, solid: [0, 0, 52, 34], act: { kind: "tank", z: REEF_Z } });   // the Coral Reef's tank (Nov 19, 2026)
   o.push({ k: "donate", x: 110, y: 150, solid: [1, 10, 16, 8], act: { kind: "donate" } });
   o.push({ k: "plaque", x: 196, y: 156, solid: [0, 4, 30, 8], act: { kind: "plaque" } });
   o.push({ k: "adoor", x: 144, y: 180, solid: null, act: { kind: "door", to: "port", rect: [0, 0, 32, 12], dir: "down", go: { x: 598, y: 414, dir: "down" } } });

@@ -34,14 +34,15 @@ ORANGE = (255, 160, 70)
 SAVE = os.path.join(ac.DATA, "fishing.json")
 CAPACITY = 3
 
-ZONES = [("SHALLOWS", 0, 110), ("KELP FOREST", 110, 200), ("TWILIGHT", 200, 320), ("THE WRECK", 320, 440), ("THE ABYSS", 440, 570),
-         ("CRYSTAL CAVES", 570, 700), ("VENT FIELDS", 700, 830), ("BONE YARD", 830, 960), ("THE TRENCH", 960, 1110), ("THE FLOOR", 1110, 1160)]
+ZONES = [("SHALLOWS", 0, 110), ("KELP FOREST", 110, 170), ("TWILIGHT", 250, 320), ("THE WRECK", 320, 440), ("THE ABYSS", 440, 570),
+         ("CRYSTAL CAVES", 570, 700), ("VENT FIELDS", 700, 830), ("BONE YARD", 830, 960), ("THE TRENCH", 960, 1110), ("THE FLOOR", 1110, 1160),
+         ("CORAL REEF", 170, 250)]   # Nov 19, 2026: appended (zone indexes are saved), but it sits between Kelp and Twilight by depth
 MAX_M = 1160
 BOTTOM_M = 1158
 BLEND = 18
-ZONE_COL = [(86, 180, 240), (40, 150, 130), (40, 70, 160), (60, 50, 110), (30, 24, 70), (70, 40, 130), (130, 40, 30), (90, 96, 84), (14, 14, 30), (90, 44, 60)]
-WATER = [(-2, (120, 206, 250)), (0, (86, 180, 240)), (55, (58, 140, 224)), (110, (36, 128, 160)), (200, (24, 92, 120)),
-         (260, (22, 54, 120)), (320, (18, 40, 96)), (440, (14, 24, 64)), (570, (14, 14, 44)), (630, (36, 20, 70)), (700, (28, 14, 48)),
+ZONE_COL = [(86, 180, 240), (40, 150, 130), (40, 70, 160), (60, 50, 110), (30, 24, 70), (70, 40, 130), (130, 40, 30), (90, 96, 84), (14, 14, 30), (90, 44, 60), (200, 96, 118)]
+WATER = [(-2, (120, 206, 250)), (0, (86, 180, 240)), (55, (58, 140, 224)), (110, (36, 128, 160)), (164, (28, 102, 140)), (178, (40, 140, 180)),
+         (236, (36, 124, 172)), (252, (24, 64, 126)), (260, (22, 54, 120)), (320, (18, 40, 96)), (440, (14, 24, 64)), (570, (14, 14, 44)), (630, (36, 20, 70)), (700, (28, 14, 48)),
          (765, (58, 18, 20)), (830, (34, 16, 18)), (895, (24, 32, 32)), (960, (12, 14, 22)), (1110, (8, 8, 18)), (1200, (6, 6, 14))]
 DEPTH_PX = MAX_M * M
 BOTTOM_BONUS = 40
@@ -99,13 +100,22 @@ SPECIES += [('gboot', 'GOLDEN BOOT', 3, (1, 1), 0, 0, None, False), ('werewolf',
 SPECIES += [('blacktip', 'BLACKTIP SHARK', 0, (12, 18), 30, 1, None, False), ('leopard', 'LEOPARD SHARK', 1, (16, 24), 16, 1, None, False),
             ('mako', 'MAKO SHARK', 2, (30, 42), 46, 1, None, False), ('hammer', 'HAMMERHEAD', 3, (34, 46), 22, 1, None, False),
             ('goblin', 'GOBLIN SHARK', 4, (40, 54), 14, 1, None, False), ('lshark', 'LANTERN SHARK', 5, (8, 12), 26, 1, None, False)]
-SHARKS = ("blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "sleeper", "frill", "megalodon")
+# The Coral Reef (Nov 19, 2026): zone 10, between the Kelp Forest and Twilight. Appended so nothing above moves.
+SPECIES += [('tang', 'BLUE TANG', 10, (3, 5), 26, 4, None, False), ('trigger', 'TRIGGERFISH', 10, (4, 7), 20, 3, None, False),
+            ('idol', 'MOORISH IDOL', 10, (3, 5), 18, 3, None, False), ('cuttle', 'CUTTLEFISH', 10, (6, 10), 14, 3, None, False),
+            ('boxfish', 'BOXFISH', 10, (2, 4), 10, 3, None, False), ('mantis', 'MANTIS SHRIMP', 10, (3, 5), 12, 2, None, False),
+            ('napoleon', 'NAPOLEON WRASSE', 10, (18, 28), 12, 1, None, False), ('flash', 'FLASHLIGHT FISH', 10, (4, 6), 24, 3, 'NIGHT', False),
+            ('whitetip', 'WHITETIP SHARK', 10, (18, 26), 24, 1, None, False), ('nurse', 'NURSE SHARK', 10, (24, 34), 10, 1, None, False),
+            ('rainbow', 'RAINBOW PARROT', 10, (110, 140), 24, 0, None, True), ('goliath', 'GOLIATH GROUPER', 10, (120, 150), 12, 0, None, True),
+            ('pmanta', 'PEARL MANTA', 10, (115, 145), 18, 0, None, True)]
+REEF = ("tang", "trigger", "idol", "cuttle", "boxfish", "mantis", "napoleon", "flash", "whitetip", "nurse", "rainbow", "goliath", "pmanta")
+SHARKS = ("blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "sleeper", "frill", "megalodon", "whitetip", "nurse")
 SPEC = {s[0]: s for s in SPECIES}
 JUNK = ("boot", "anchor")                       # a pulse clears these out of the way
 FIXED = ("chest", "pearl", "tripod", "gboot")   # these never move (and a pulse leaves them be)
-GLOWS = ("angler", "jelly", "lantern", "levi", "viper", "chest", "dragon", "hatchet", "pearl", "ancient", "colossal", "vampire", "emerald", "lshark")
-JELLY_CHANCE = [0.0, 0.07, 0.09, 0.11, 0.13, 0.11, 0.13, 0.12, 0.14, 0.0]
-PER_CHUNK = [(1, 2), (1, 2), (1, 2), (1, 2), (2, 2), (1, 2), (2, 2), (2, 2), (2, 2), (1, 2)]
+GLOWS = ("angler", "jelly", "lantern", "levi", "viper", "chest", "dragon", "hatchet", "pearl", "ancient", "colossal", "vampire", "emerald", "lshark", "flash")
+JELLY_CHANCE = [0.0, 0.07, 0.09, 0.11, 0.13, 0.11, 0.13, 0.12, 0.14, 0.0, 0.05]
+PER_CHUNK = [(1, 2), (1, 2), (1, 2), (1, 2), (2, 2), (1, 2), (2, 2), (2, 2), (2, 2), (1, 2), (1, 2)]
 CHUNK = [(1, 2), (1, 2), (1, 2), (1, 2), (2, 2), (1, 2)]
 CHUNK = 72
 TROPHY_CHANCE = 0.045
@@ -152,11 +162,14 @@ def water_color(m):
     return WATER[-1][1]
 
 
+ZORDER = sorted(range(len(ZONES)), key=lambda i: ZONES[i][1])   # zones by depth (the Coral Reef was appended)
+
+
 def zone_of(m):
-    for i, (_, a, b) in enumerate(ZONES):
-        if m < b:
+    for i in ZORDER:
+        if m < ZONES[i][2]:
             return i
-    return len(ZONES) - 1
+    return ZORDER[-1]
 
 
 def load_save():
@@ -339,6 +352,20 @@ class Art:
             "hammer": lambda: self.hammer(F(28, 7, (118, 128, 140), (226, 230, 236), (84, 92, 104), fin_h=6)),
             "goblin": lambda: self.snout(F(30, 7, (222, 160, 170), (244, 204, 210), (186, 118, 136), "teeth", WHITE, fin_h=4)),
             "lshark": lambda: F(14, 5, (36, 40, 66), (64, 72, 112), (26, 28, 50), "glow", (130, 210, 255), fin_h=3),
+            # the Coral Reef
+            "tang": lambda: F(10, 7, (40, 92, 220), (70, 140, 240), (255, 214, 50), "stripes", (20, 30, 80), fin_h=3),
+            "trigger": lambda: F(11, 8, (226, 204, 150), (250, 242, 222), (60, 120, 220), "stripes", (60, 120, 220), fin_h=3),
+            "idol": lambda: F(9, 9, (250, 242, 212), (255, 250, 236), (250, 210, 60), "bands", (34, 30, 40), fin_h=5),
+            "cuttle": lambda: C(SQUID, {"r": (206, 150, 110), "t": (236, 192, 150), "w": (255, 240, 200), "k": INK}),
+            "boxfish": lambda: F(8, 7, (250, 220, 50), (255, 242, 160), (240, 186, 40), "spots", (34, 30, 40), tail=3),
+            "mantis": lambda: C(LOBSTER, {"r": (60, 200, 140), "w": (255, 120, 90), "k": INK}),
+            "napoleon": lambda: F(20, 11, (60, 150, 150), (126, 204, 190), (40, 110, 120), "stripes", (100, 210, 230), fin_h=3),
+            "flash": lambda: F(9, 5, (34, 34, 56), (54, 54, 86), (22, 22, 40), "glow", (180, 255, 240)),
+            "whitetip": lambda: F(24, 6, (120, 128, 142), (232, 236, 242), (250, 250, 255), "teeth", WHITE, fin_h=5),
+            "nurse": lambda: self.whiskers(F(26, 7, (172, 142, 100), (222, 204, 172), (140, 112, 80), fin_h=4)),
+            "rainbow": lambda: F(24, 10, (70, 220, 200), (255, 150, 200), (255, 210, 60), "spots", (255, 110, 220), fin_h=4),
+            "goliath": lambda: F(32, 15, (124, 112, 72), (204, 192, 142), (92, 82, 52), "spots", (70, 60, 40), tail=7, fin_h=4),
+            "pmanta": lambda: C(RAY, {"m": (240, 236, 250), "t": (255, 170, 200), "w": (120, 200, 255), "k": INK}, 2),
         })
         assert set(mk) == set(SPEC), set(SPEC) ^ set(mk)
         self.big = {}
