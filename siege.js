@@ -897,8 +897,8 @@ function drawPet(H) {
   g.save(); g.translate(Math.round(P.x), 0); if (flip) g.scale(-1, 1);
   g.drawImage(atlas, a[0], a[1], a[2], a[3], -Math.round(a[2] / 2), Math.round(P.y - a[3] - 6 - hop), a[2], a[3]); g.restore();
 }
-const HERO_PANEL = [4, SIH - 31, 128, 27];
-const heroBtn = i => [HERO_PANEL[0] + 26 + i * 50, HERO_PANEL[1] + 15, 46, 10];
+const HERO_PANEL = [4, SIH - 31, 134, 27];
+const heroBtn = i => [HERO_PANEL[0] + 26 + i * 53, HERO_PANEL[1] + 15, 50, 10];
 function drawHeroPanel() {
   const G = SG, H = G.hero; if (!H) return;
   const [x, y, w, h] = HERO_PANEL, d = KITS[H.kit];
