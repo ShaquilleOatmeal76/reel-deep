@@ -812,7 +812,7 @@ function drawIsle() {
   }
   const [fx, fy] = facingPoint(), near = !I.msg && !I.menu && !I.shop && !I.inv && !I.fish && !I.list && !I.chest && (forageAt(fx, fy) || forageAt(I.px, I.py - 4) || objAt(fx, fy) || objAt(I.px, I.py - 4));
   if (!near && !I.msg && !I.menu && !I.shop && !I.inv && A.outdoor) drawTileCursor(cx, cy);
-  if (near) { const bx = Math.round(I.px - cx), by = Math.round(I.py - cy) - 26 + Math.round(Math.sin(t * 5)); rect(INK, bx - 4, by - 4, 9, 9); rect(WHITE, bx - 3, by - 3, 7, 7); text("E", bx + 1, by + 1, 1, INK, "center", null); }
+  if (near) { const bx = Math.round(I.px - cx), by = Math.round(I.py - cy) - 26 + Math.round(Math.sin(t * 5)); rect(INK, bx - 4, by - 4, 9, 11); rect(WHITE, bx - 3, by - 3, 7, 9); text("E", bx, by + 1, 1, INK, "center", null); }   // the E prompt; the box was 7 tall and cut off its bottom bar, so it read as F (Nov 19, 2026)
   if (A.outdoor) {                                          // weather and night
     const w = weatherOf(s);
     if (w === "rain") { g.globalAlpha = 0.12; rect("#283c64", 0, 0, IW, IH); g.globalAlpha = 1; for (let k = 0; k < 90; k++) { const x = (k * 53 + t * 40) % (IW + 20) - 10, y = (k * 97 + t * 260) % (IH + 20) - 10; rect("#b4c8e6", x, y, 1, 4); } }
