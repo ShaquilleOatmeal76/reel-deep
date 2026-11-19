@@ -204,7 +204,7 @@ function casinoOpen(id) {                                    // -> true if casin
 // Line Snap (a crash game) and Bigger Fish (higher or lower). Later parts add their games to HUBS.
 const HUBS = {
   tables: { title: "THE TABLES", say: "CARDS AND DICE", games: [["c21", "CATCH 21", "FISH CARDS TO 21"], ["bigger", "BIGGER FISH", "HIGHER OR LOWER?"], ["crown", "CROWN & ANCHOR", "THE SAILOR'S DICE"]] },
-  machines: { title: "THE MACHINES", say: "PULL, DROP, SPIN", games: [["plinko", "PLINKO", "DROP A FISH, X25"], ["snap", "LINE SNAP", "CASH OUT IN TIME"], ["reel", "THE REEL DEAL", "SLOTS, UP TO X250"], ["wheel", "SHIP'S WHEEL", "SPIN FOR X10"]] },
+  machines: { title: "THE MACHINES", say: "PULL, DROP, SPIN", games: [["plinko", "PLINKO", "DROP A FISH, X25"], ["snap", "LINE SNAP", "CASH OUT IN TIME"], ["reel", "THE REEL DEAL", "SLOTS TO X250"], ["wheel", "SHIP'S WHEEL", "SPIN FOR X10"], ["treasure", "TREASURE DIVE", "DODGE JELLIES"], ["net", "NET HAUL", "PICK 5 FISH"]] },
 };
 CZ.hub = { sel: 0 };
 const GAME_OPEN = {
@@ -215,10 +215,12 @@ const GAME_OPEN = {
   crown: () => { caOpen(); openOverlay("crown"); },
   reel: () => { rdOpen(); openOverlay("reel"); },
   wheel: () => { whOpen(); openOverlay("wheel"); },
+  treasure: () => { tdOpen(); openOverlay("treasure"); },
+  net: () => { nhOpen(); openOverlay("net"); },
 };
 function hubHits(o) {
   const L = czL(), g0 = HUBS[o].games;
-  return g0.map((gm, k) => L.w ? [gm[0], L.X + (k % 2) * 178, 30 + Math.floor(k / 2) * 34, 170, 28, k] : [gm[0], L.X + 8, 28 + k * 26, 104, 23, k]);
+  return g0.map((gm, k) => L.w ? [gm[0], L.X + (k % 2) * 178, 30 + Math.floor(k / 2) * 34, 170, 28, k] : [gm[0], L.X + 8, 26 + k * 25, 104, 22, k]);
 }
 function drawHub(o) {
   const H = HUBS[o], L = czL();
@@ -675,6 +677,182 @@ function whTap(rx, ly) {
 function whKey(code, dir) { const c = CZ.wh; if (c.phase === "spin") return; if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); } else if (code === "Space" || code === "Enter") whSpin(); }
 EXTRA_OV.wheel = { draw: drawWh, tap: whTap, key: whKey, back: () => CZ.wh && CZ.wh.phase === "spin" ? "wheel" : "machines", music: true };
 
-function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); }
+// ===================================================================== Part 4
+// ---- TREASURE DIVE: 25 crates on the sea floor, 1 / 3 / 5 / 10 of them hiding a jellyfish. Open crates one at a time;
+// each safe one raises the payout, a jelly loses the stake. After k safe crates the payout is 0.95 x C(25, k) / C(25 - j, k)
+// (the fair odds of getting that far, with the edge taken once), so cashing out at any point pays back 95% on average.
+// Max win 5,000 (cashes out for you). Title TREASURE HUNTER: 5 crates past 10 jellies.
+const TD_J = [1, 3, 5, 10];
+CZ.td = null;
+const tdChoose = (n, k) => { let r = 1; for (let i = 0; i < k; i++) r = r * (n - i) / (i + 1); return r; };
+const tdMult = (k, j) => EDGE * tdChoose(25, k) / tdChoose(25 - j, k);
+function tdOpen() { if (!CZ.td) CZ.td = { bet: 10, j: 3, phase: "stake", jel: [], open: [], k: 0, msg: "PICK HOW MANY JELLIES", win: 0, boom: -1 }; }
+function tdStart() {
+  const c = CZ.td; if (c.phase === "dive") return;
+  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet;
+  const a = Array.from({ length: 25 }, (x, i) => i); for (let i = 24; i > 0; i--) { const q = Math.floor(Math.random() * (i + 1)); [a[i], a[q]] = [a[q], a[i]]; }
+  c.jel = a.slice(0, c.j); c.open = []; c.k = 0; c.boom = -1; c.phase = "dive"; c.win = 0; c.msg = "OPEN A CRATE"; play("plop");
+}
+const tdCashNow = c => Math.min(MAX_WIN, Math.floor(c.staked * tdMult(c.k, c.j)));
+function tdPick(i) {
+  const c = CZ.td; if (c.phase !== "dive" || c.open.includes(i)) return;
+  c.open.push(i);
+  if (c.jel.includes(i)) { c.boom = i; c.phase = "done"; c.win = 0; c.msg = "A JELLY! STUNG"; play("zap"); return; }
+  c.k++; play("hit");
+  if (c.j === 10 && c.k >= 5) tavAward("treasure");
+  c.msg = "SAFE! " + fmtX(tdMult(c.k, c.j)).replace(".00", "");
+  if (c.k >= 25 - c.j || tdCashNow(c) >= MAX_WIN) tdCash(true);
+}
+function tdCash(auto) {
+  const c = CZ.td; if (c.phase !== "dive" || !c.k) { play("miss"); return; }
+  c.win = tdCashNow(c); c.phase = "done"; addChips(c.win, c.win > c.staked ? "win" : "");
+  c.msg = (auto ? "ALL CLEAR! +" : "SURFACED WITH +") + c.win; play("chime");
+}
+function tdGrid() { const L = czL(); return L.w ? { x: L.X + 8, y: 22, cw: 40, ch: 28, gap: 2 } : { x: L.X + 5, y: 27, cw: 21, ch: 17, gap: 1 }; }
+function tdHits() {
+  const L = czL(), G = tdGrid(), h = [];
+  for (let i = 0; i < 25; i++) h.push(["crate", G.x + (i % 5) * (G.cw + G.gap), G.y + Math.floor(i / 5) * (G.ch + G.gap), G.cw, G.ch, i]);
+  const px = L.w ? L.X + 236 : L.X + 4, py = L.w ? 30 : 120, pw = 112;
+  if (CZ.td.phase === "dive") h.push(["cash", L.w ? px : L.X + 14, L.w ? py + 52 : 152, L.w ? pw : 92, L.w ? 26 : 18, 0]);
+  else { stakeCtl(h, "stake", px, py, pw); stakeCtl(h, "jel", px, py + (L.w ? 22 : 16), pw); h.push(["go", L.w ? px : L.X + 14, L.w ? py + 46 : 155, L.w ? pw : 92, L.w ? 26 : 16, 0]); }
+  return h;
+}
+function drawTd() {
+  const c = CZ.td, L = czL(), X = L.X, t = T;
+  rect("#0a1e3c", 0, 0, LW, LH); for (let k = 0; k < 12; k++) rect("#0e2850", ((k * 53 + Math.floor(t * 6)) % LW), 20 + (k * 37) % 170, 2, 2);
+  czTitle(L, "TREASURE DIVE", CYAN);
+  const G = tdGrid(), done = c.phase === "done";
+  rect("#3c3020", G.x - 3, G.y - 3, 5 * (G.cw + G.gap) + 4, 5 * (G.ch + G.gap) + 4);
+  for (const [id, x, y, w, h, i] of tdHits()) {
+    if (id === "crate") {
+      const op = c.open.includes(i), jel = c.jel.includes(i), show = op || (done && jel);
+      if (!show) { rect("#8a5c38", x, y, w, h); rect("#6a4428", x, y + Math.floor(h / 2), w, 1); rect("#6a4428", x + Math.floor(w / 2), y, 1, h); outline(x, y, w, h, "#4a2e1c"); if (done) { g.globalAlpha = 0.5; rect("#0a1e3c", x, y, w, h); g.globalAlpha = 1; } }
+      else if (jel) { rect(i === c.boom ? "#5a1428" : "#1e2a46", x, y, w, h); fitDraw(atlas, "jelly0", x + w / 2, y + h / 2, w - 4, h - 4, 2); }
+      else { rect("#1e3c5a", x, y, w, h); disc(GOLD, x + w / 2, y + h / 2, Math.min(w, h) * 0.28); rect("#fff6c8", Math.round(x + w / 2 - 1), Math.round(y + h / 2 - 2), 2, 2); }
+    } else if (id === "stake" && i < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, L.w ? "STAKE" : "BET");
+    else if (id === "jel" && i < 0) drawStakeCtl(x, y, 112, c.j, "#ff8cd2", L.w ? "JELLIES" : "JELLY");
+    else if (id === "go") btn(x, y, w, h, "DIVE", tav().chips >= c.bet ? GOLD : GREY);
+    else if (id === "cash") btn(x, y, w, h, c.k ? "SURFACE " + tdCashNow(c) : "OPEN ONE FIRST", c.k ? GOLD : GREY);
+  }
+  if (L.w) {
+    const py = 30;
+    if (c.phase === "dive") { text("CRATES OPEN " + c.k, X + 292, py + 6, 1, WHITE, "center", null); text("NOW " + fmtX(tdMult(c.k, c.j)), X + 292, py + 20, 1, GOLD, "center", null); text("NEXT " + fmtX(tdMult(c.k + 1, c.j)), X + 292, py + 32, 1, CHIP, "center", null); }
+    text(c.msg.slice(0, 18), X + 292, 116, 1, done && !c.win ? "#ff8c8c" : done ? GOLD : WHITE, "center", null);
+    ["MORE JELLIES,", "BIGGER JUMPS", "ABOUT 95% BACK"].forEach((l, i) => text(l, X + 292, 140 + i * 10, 1, "#5a7aa0", "center", null));
+    text("SPACE: DIVE/SURFACE  ARROWS: STAKE, JELLIES", X + 174, 180, 1, "#3c5a80", "center", null);
+  } else {
+    text(c.phase === "dive" ? fmtX(tdMult(c.k, c.j)) + "  NEXT " + fmtX(tdMult(c.k + 1, c.j)) : c.msg.slice(0, 19), X + 60, c.phase === "dive" ? 126 : 112, 1, c.phase === "dive" ? GOLD : done && !c.win ? "#ff8c8c" : WHITE, "center", null);
+    if (c.phase === "dive") text(c.msg.slice(0, 19), X + 60, 138, 1, WHITE, "center", null);
+    else text("ABOUT 95% BACK", X + 60, 180, 1, "#5a7aa0", "center", null);
+  }
+  text(c.phase === "dive" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function tdTap(rx, ly) {
+  const c = CZ.td, h = hitAt(tdHits(), rx, ly);
+  if (!h) { if (ly > 186 && c.phase !== "dive") closeOverlay(); return; }
+  const [id, , , , , v] = h;
+  if (id === "crate") tdPick(v);
+  else if (id === "cash") tdCash();
+  else if (id === "go") tdStart();
+  else if (id === "stake") { c.bet = stakeStep(c.bet, v); play("tick"); }
+  else if (id === "jel") { c.j = TD_J[(TD_J.indexOf(c.j) + v + TD_J.length) % TD_J.length]; play("tick"); }
+}
+function tdKey(code, dir) {
+  const c = CZ.td;
+  if (c.phase === "dive") { if (code === "Space" || code === "Enter") tdCash(); return; }
+  if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); }
+  else if (code === "ArrowUp" || code === "ArrowDown" || code === "KeyW" || code === "KeyS") { c.j = TD_J[(TD_J.indexOf(c.j) + (code === "ArrowUp" || code === "KeyW" ? 1 : -1) + TD_J.length) % TD_J.length]; play("tick"); }
+  else if (code === "Space" || code === "Enter") tdStart();
+}
+EXTRA_OV.treasure = { draw: drawTd, tap: tdTap, key: tdKey, back: () => CZ.td && CZ.td.phase === "dive" ? "treasure" : "machines", music: true };
 
-window.CASINO = { CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
+// ---- NET HAUL (keno): pick 5 of 20 fish, cast the net, it brings up 8. 3 matches pay x2, 4 pay x6, all 5 pay x40:
+// 94.6% back, 30% of casts pay. Every cast draws on the spot (a shared midnight draw would be seeded from the date, so
+// anyone reading the game's code could work out tomorrow's fish). Title FULL NET for all five.
+const NH_FISH = ["minnow", "clown", "tuna", "squid", "crab", "shrimp", "blacktip", "koi", "puffer", "bass", "trout", "perch", "sword", "parrot", "ember", "boot", "anchor", "jelly0", "gboot", "bottle"].filter(f => DATA.atlas[f]);
+const NH_PAY = [0, 0, 0, 2, 6, 40];
+CZ.nh = null;
+function nhOpen() { if (!CZ.nh) CZ.nh = { bet: 10, picks: [], phase: "pick", drawn: [], shown: 0, t: 0, msg: "PICK 5 FISH", win: 0, cur: 0 }; }
+function nhQuick() { const c = CZ.nh; if (c.phase === "draw") return; const a = NH_FISH.map((f, i) => i); for (let i = a.length - 1; i > 0; i--) { const q = Math.floor(Math.random() * (i + 1)); [a[i], a[q]] = [a[q], a[i]]; } c.picks = a.slice(0, 5).sort((x, y) => x - y); c.drawn = []; c.phase = "pick"; c.msg = "QUICK PICK!"; play("tick"); }
+function nhToggle(i) {
+  const c = CZ.nh; if (c.phase === "draw") return;
+  if (c.phase === "done") { c.phase = "pick"; c.drawn = []; }
+  if (c.picks.includes(i)) c.picks = c.picks.filter(x => x !== i); else if (c.picks.length < 5) c.picks.push(i); else { play("miss"); return; }
+  c.msg = c.picks.length < 5 ? "PICK " + (5 - c.picks.length) + " MORE" : "CAST THE NET!"; play("tick");
+}
+function nhCast() {
+  const c = CZ.nh; if (c.phase === "draw") return;
+  if (c.picks.length !== 5) { c.msg = "PICK 5 FISH FIRST"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet;
+  const a = NH_FISH.map((f, i) => i); for (let i = a.length - 1; i > 0; i--) { const q = Math.floor(Math.random() * (i + 1)); [a[i], a[q]] = [a[q], a[i]]; }
+  c.drawn = a.slice(0, 8); c.shown = 0; c.t = 0; c.phase = "draw"; c.win = 0; c.msg = "HAULING..."; play("plop");
+}
+function nhTick(dt) {
+  const c = CZ.nh; if (!c || c.phase !== "draw") return;
+  c.t += dt;
+  const n = Math.min(8, Math.floor(c.t / 0.22));
+  while (c.shown < n) { const f = c.drawn[c.shown++]; play(c.picks.includes(f) ? "hit" : "tick"); }
+  if (c.t > 8 * 0.22 + 0.3) {
+    const m = c.drawn.filter(f => c.picks.includes(f)).length, x = NH_PAY[m];
+    c.phase = "done"; c.win = Math.floor(c.staked * x); if (c.win) addChips(c.win, "win");
+    if (m === 5) tavAward("fullnet");
+    c.msg = m + " MATCHED" + (x ? "! +" + c.win : ". AGAIN?"); play(m === 5 ? "fanfare" : x ? "chime" : "miss");
+  }
+}
+function nhHits() {
+  const L = czL(), h = [];
+  NH_FISH.forEach((f, i) => h.push(L.w ? ["fish", L.X + 4 + (i % 5) * 44, 22 + Math.floor(i / 5) * 30, 42, 28, i] : ["fish", L.X + 4 + (i % 5) * 23, 26 + Math.floor(i / 5) * 21, 21, 19, i]));
+  if (L.w) { const px = L.X + 236; stakeCtl(h, "stake", px, 30, 112); h.push(["quick", px, 52, 112, 18, 0]); h.push(["cast", px, 74, 112, 26, 0]); }
+  else { stakeCtl(h, "stake", L.X + 4, 128, 112); h.push(["quick", L.X + 4, 148, 44, 18, 0]); h.push(["cast", L.X + 52, 148, 64, 18, 0]); }
+  return h;
+}
+function drawNh() {
+  const c = CZ.nh, L = czL(), X = L.X;
+  rect("#0e2a2a", 0, 0, LW, LH);
+  czTitle(L, "NET HAUL", LIME);
+  const caught = new Set(c.drawn.slice(0, c.phase === "draw" ? c.shown : c.drawn.length));
+  for (const [id, x, y, w, h, v] of nhHits()) {
+    if (id === "fish") {
+      const pk = c.picks.includes(v), cg = caught.has(v), hit = pk && cg;
+      rect(hit ? "#3c6a1e" : cg ? "#1e4a5a" : pk ? "#2a3c1e" : "#142828", x, y, w, h); outline(x, y, w, h, hit ? GOLD : pk ? LIME : cg ? CYAN : "#2a4a4a");
+      fitDraw(atlas, NH_FISH[v], x + w / 2, y + h / 2, w - 6, h - 6, 2);
+      if (cg) for (let k = 2; k < w - 1; k += 4) rect(hit ? GOLD : "#a0e6f0", x + k, y + 1, 1, h - 2);   // caught in the net
+    } else if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, L.w ? "STAKE" : "BET");
+    else if (id === "quick") btn(x, y, w, h, L.w ? "QUICK PICK" : "QUICK", c.phase === "draw" ? GREY : CYAN);
+    else if (id === "cast") btn(x, y, w, h, L.w ? "CAST THE NET" : "CAST", c.phase !== "draw" && c.picks.length === 5 && tav().chips >= c.bet ? GOLD : GREY);
+  }
+  const m = c.drawn.slice(0, c.phase === "draw" ? c.shown : 8).filter(f => c.picks.includes(f)).length;
+  if (L.w) {
+    text(c.msg.slice(0, 18), X + 292, 112, 1, c.phase === "done" && c.win ? GOLD : WHITE, "center", null);
+    if (c.drawn.length) text("MATCHED " + m + " OF 5", X + 292, 124, 1, LIME, "center", null);
+    [["3 MATCH", "X2"], ["4 MATCH", "X6"], ["5 MATCH", "X40"]].forEach(([a, b0], i) => { text(a, X + 244, 142 + i * 10, 1, "#a0c8b4", "left", null); text(b0, X + 344, 142 + i * 10, 1, CHIP, "right", null); });
+    text("NET BRINGS UP 8 OF 20. ABOUT 95% BACK", X + 112, 180, 1, "#3c6a6a", "center", null);
+  } else {
+    text(c.msg.slice(0, 19), X + 60, 118, 1, c.phase === "done" && c.win ? GOLD : WHITE, "center", null);
+    text("3 X2  4 X6  5 X40", X + 60, 176, 1, "#a0c8b4", "center", null);
+  }
+  text(c.phase === "draw" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function nhTap(rx, ly) {
+  const c = CZ.nh, h = hitAt(nhHits(), rx, ly);
+  if (!h) { if (ly > 186 && c.phase !== "draw") closeOverlay(); return; }
+  const [id, , , , , v] = h;
+  if (id === "fish") nhToggle(v);
+  else if (c.phase === "draw") return;
+  else if (id === "stake") { c.bet = stakeStep(c.bet, v); play("tick"); }
+  else if (id === "quick") nhQuick();
+  else if (id === "cast") nhCast();
+}
+function nhKey(code, dir) {
+  const c = CZ.nh; if (c.phase === "draw") return;
+  if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); }
+  else if (code === "KeyQ" || code === "ArrowUp" || code === "KeyW") nhQuick();
+  else if (code === "Space" || code === "Enter") nhCast();
+}
+EXTRA_OV.net = { draw: drawNh, tap: nhTap, key: nhKey, back: () => CZ.nh && CZ.nh.phase === "draw" ? "net" : "machines", music: true };
+
+function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); }
+
+window.CASINO = { tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
