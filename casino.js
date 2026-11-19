@@ -250,11 +250,16 @@ function hubKey(o, code, dir) {
 for (const o of Object.keys(HUBS)) EXTRA_OV[o] = { draw: () => drawHub(o), tap: (rx, ly) => hubTap(o, rx, ly), key: (c, d) => hubKey(o, c, d), back: "tavern", music: true };
 
 // ---- small shared pieces for the games: a stake control, a big button, chip-coloured result chips
-function stakeCtl(h, id, x, y, w) { h.push([id, x, y, 16, 15, -1]); h.push([id, x + w - 16, y, 16, 15, 1]); }
-function drawStakeCtl(x, y, w, val, col, lab) {
+// Stake controls ("stake" / "bet") also get a MAX button just left of the +: its step is STAKE_MAX, so every game's
+// existing handler (stakeStep(bet, v) or a CUP_BETS index + v) jumps straight to the most it allows.
+const isStakeId = id => id === "stake" || id === "bet";
+function stakeCtl(h, id, x, y, w) { h.push([id, x, y, 16, 15, -1]); if (isStakeId(id)) h.push([id, x + w - 42, y, 24, 15, STAKE_MAX]); h.push([id, x + w - 16, y, 16, 15, 1]); }
+function drawStakeCtl(x, y, w, val, col, lab) {               // lab STAKE / BET = a stake control with a MAX button
+  const mx = lab === "STAKE" || lab === "BET";
   box(x, y, 16, 15, col); text("-", x + 8, y + 7, 1, col, "center", null);
   box(x + w - 16, y, 16, 15, col); text("+", x + w - 8, y + 7, 1, col, "center", null);
-  text(lab ? lab + " " + val : val, x + w / 2, y + 7, 1, WHITE, "center", null);
+  if (mx) { box(x + w - 42, y, 24, 15, col); text("MAX", x + w - 30, y + 7, 1, col, "center", null); }
+  text(mx ? "BET " + val : lab ? lab + " " + val : val, mx ? x + 16 + (w - 58) / 2 : x + w / 2, y + 7, 1, WHITE, "center", null);
 }
 const fmtX = m => "X" + (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.floor(m));
 function czTitle(L, t, col) { if (L.w) { text(t, L.X, 8, 1, col || GOLD, "left", null); chipsAt(L.X + 348, 8, "right"); } else { text(t, L.X + 60, 8, 1, col || GOLD, "center", null); g.save(); g.translate(L.X, 0); chipsLine(19); g.restore(); } }

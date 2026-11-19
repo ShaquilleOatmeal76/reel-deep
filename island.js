@@ -6,7 +6,8 @@
 // game.js calls: raftCast (cast), raftHook (hookCheck), raftDraw / raftLights (the ocean), raftScene (after drawShack),
 // raftTap (titleTap); overlays "raft" and "raftbuild" go through EXTRA_OV.
 
-const RAFT = { AT: 50, PLANKS: 60, PLANK_P: 0.6, ROPE_P: 0.25, SAIL_P: 0.2, COMPASS: 300 };
+const RAFT = { AT: 50, PLANKS: 60, PLANK_P: [1, 0.7, 0.4],   // chance of a 1st, 2nd, 3rd plank each dive: ~2.1 a dive (was one plank 60% of dives)
+  ROPE_P: 0.25, SAIL_P: 0.2, COMPASS: 300 };
 const isle = () => store.isle;
 const raftOpen = () => store.dives >= RAFT.AT || isle().built;      // the shipwright has turned up
 const raftNeeds = () => { const q = isle(); return { planks: q.planks >= RAFT.PLANKS, rope: !!q.rope, sail: !!q.sail, compass: !!q.compass }; };
@@ -43,7 +44,8 @@ function raftCast() {
   S.rparts = [];
   if (!raftOpen() || isle().built) return;
   const r = RNG((S.seed ^ 0x51ab1e) >>> 0), q = isle(), at = z => ({ x: r.uniform(10, LW - 24), y: r.uniform(ZONES[z][1] + 8, ZONES[z][2] - 8) * M });
-  if (q.planks < RAFT.PLANKS && r.random() < RAFT.PLANK_P) S.rparts.push({ k: "plank", x: r.uniform(10, LW - 24), y: r.uniform(20, 600) * M });
+  let left = RAFT.PLANKS - q.planks;
+  for (const p of RAFT.PLANK_P) if (left > 0 && r.random() < p) { S.rparts.push({ k: "plank", x: r.uniform(10, LW - 24), y: r.uniform(20, 600) * M }); left--; }
   if (!q.rope && r.random() < RAFT.ROPE_P) S.rparts.push(Object.assign({ k: "rope" }, at(1)));
   if (!q.sail && r.random() < RAFT.SAIL_P) S.rparts.push(Object.assign({ k: "sail" }, at(3)));
 }
