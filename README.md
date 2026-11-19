@@ -89,6 +89,10 @@ decoration you can't get any other way. Festival fish only bite on their day.
 Restore the **hatchery** by the Lagoon to breed fish. Put a pair of one kind in a tank, and every three days they have
 young. Sometimes that's one of 30 colour morphs (each kind has a common morph and a rare one). The hatchery keeps your
 Morph Collection.
+**The finale:** beat the Dreamer at the bottom of the caves, then rebuild the lighthouse and light it after dark. After
+that, the Angler's Fish bites off the point at night and the lighthouse shines on the title screen. Island
+achievements earn things you can't buy: six titles, two jukebox songs, the Keeper's Cap, Pickles as a pet, the
+Driftwood Isle flag, Sea Glass flair, the Island Skiff boat, and three FIN PRIX paints from hatchery morphs.
 
 ## Save codes
 
