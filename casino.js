@@ -188,12 +188,16 @@ EXTRA_OV.dealer = { draw: () => drawCzShop("dealer"), tap: (rx, ly) => czShopTap
 
 // ---- the two chip-shop rows (game.js asks these)
 function casinoShopRow(id) {
+  if (id === "decor") { const n = decorData().own.length; return ["DECORATE THE BAR", null, n ? "YOU OWN " + n + " OF " + DECOR_LIST.length + ". MAKE IT YOURS" : "LAMPS, SIGNS, A FISH TANK. 2,000 TO 40,000"]; }
+  if (id === "round") return ["BUY A ROUND", tav().round === dayString() ? null : ROUND_PRICE, tav().round === dayString() ? "YOU GOT TODAY'S ROUND. CHEERS!" : "EVERYONE AT THE BAR SEES YOUR NAME TODAY"];
   if (id === "locker") { const n = LOCKER.filter(czOwn).length; return ["CAPTAIN'S LOCKER", null, n ? "YOU OWN " + n + " OF " + LOCKER.length + ". PRESTIGE GEAR" : "PRESTIGE GEAR. 10,000 TO 75,000 CHIPS"]; }
   return ["SHADY DEALER", null, "THREE THINGS. THIS WEEK ONLY. NEW STOCK IN " + dealerDaysLeft() + (dealerDaysLeft() === 1 ? " DAY" : " DAYS")];
 }
 function casinoOpen(id) {                                    // -> true if casino.js handles this id (tavern rows, chip shop rows, hub cards)
   if (id === "locker") { TAV.lkSay = null; openOverlay("locker"); }
   else if (id === "dealer") { TAV.dlSay = null; CZ.dl.tab = 0; CZ.dl.sel = 0; openOverlay("dealer"); }
+  else if (id === "decor") { CZ.dc.say = ""; openOverlay("decor"); }
+  else if (id === "round") buyRound();
   else if (HUBS[id]) { CZ.hub.sel = 0; openOverlay(id); }
   else if (GAME_OPEN[id]) GAME_OPEN[id]();
   else return false;
@@ -853,6 +857,145 @@ function nhKey(code, dir) {
 }
 EXTRA_OV.net = { draw: drawNh, tap: nhTap, key: nhKey, back: () => CZ.nh && CZ.nh.phase === "draw" ? "net" : "machines", music: true };
 
-function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); }
+// ===================================================================== Part 5
+// ---- DECORATE THE BAR: your own Rusty Hook. Five spots (lamp, sign, fish tank, barrel, counter), three things each,
+// 2,000-40,000 chips. Drawn in the bar on both widths (decorDraw is called from drawTavern / drawTavernWide). Looks only.
+// Save: tav.decor { own: ["slot.i"...], eq: { slot: i } }.
+const DECOR = {
+  lamp: [["OIL LAMP", 2000], ["SHIP'S LANTERN", 6000], ["CHANDELIER", 25000]],
+  sign: [["OPEN SIGN", 3000], ["NEON FISH", 8000], ["GOLD STAR", 20000]],
+  tank: [["GOLDFISH BOWL", 4000], ["REEF TANK", 12000], ["SHARK TANK", 35000]],
+  keg: [["WATER BARREL", 2000], ["GOLD KEG", 15000], ["TREASURE CHEST", 40000]],
+  counter: [["MAHOGANY BAR", 5000], ["MARBLE BAR", 18000], ["GOLDEN BAR", 30000]],
+};
+const DECOR_SLOTS = Object.keys(DECOR), DECOR_LIST = DECOR_SLOTS.flatMap(sl => DECOR[sl].map((it, i) => [sl, i, it[0], it[1]]));
+const DECOR_NAME = { lamp: "LAMP", sign: "SIGN", tank: "FISH TANK", keg: "BARREL", counter: "THE BAR TOP" };
+function decorData() { const q = tav(); if (!q.decor || typeof q.decor !== "object") q.decor = { own: [], eq: {} }; if (!Array.isArray(q.decor.own)) q.decor.own = []; if (!q.decor.eq) q.decor.eq = {}; return q.decor; }
+const decorOwn = (sl, i) => decorData().own.includes(sl + "." + i);
+const decorOn = (sl, i) => decorData().eq[sl] === i;
+const flick = k => 0.75 + 0.25 * Math.sin(T * 9 + k) * Math.sin(T * 3.7 + k * 2);
+// each draw takes the spot's anchor (x, y) in the bar picture
+const DECOR_DRAW = {
+  lamp: [
+    (x, y) => { rect("#5a5a64", x + 3, y, 1, 4); rect("#c8a05a", x, y + 4, 7, 2); g.globalAlpha = flick(1); rect("#ffd27a", x + 2, y + 6, 3, 4); g.globalAlpha = 1; rect("#8a6a3a", x + 1, y + 10, 5, 1); },
+    (x, y) => { rect("#5a5a64", x + 4, y, 1, 3); rect("#2a2a30", x + 1, y + 3, 7, 1); rect("#2a2a30", x + 1, y + 11, 7, 1); g.globalAlpha = flick(2); rect("#ffb43c", x + 2, y + 4, 5, 7); g.globalAlpha = 1; rect("#2a2a30", x + 1, y + 4, 1, 7); rect("#2a2a30", x + 7, y + 4, 1, 7); },
+    (x, y) => { rect("#c8a05a", x + 6, y, 1, 3); rect(GOLD, x, y + 3, 13, 2); for (let k = 0; k < 4; k++) { rect(GOLD, x + k * 4, y + 5, 1, 3); g.globalAlpha = flick(k); rect("#fff6c8", x + k * 4 - 1, y + 8, 3, 3); g.globalAlpha = 1; } },
+  ],
+  sign: [
+    (x, y) => { rect("#1e1420", x, y, 24, 10); g.globalAlpha = flick(3); text("OPEN", x + 12, y + 5, 1, "#ff6ec8", "center", null); g.globalAlpha = 1; },
+    (x, y) => { rect("#14141e", x, y, 24, 10); g.globalAlpha = flick(4); const c = "#5ae6ff"; rect(c, x + 5, y + 3, 10, 1); rect(c, x + 5, y + 6, 10, 1); rect(c, x + 4, y + 4, 1, 2); rect(c, x + 15, y + 4, 2, 2); rect(c, x + 17, y + 3, 1, 1); rect(c, x + 17, y + 6, 1, 1); rect(c, x + 18, y + 2, 1, 2); rect(c, x + 18, y + 6, 1, 2); rect(c, x + 7, y + 4, 1, 1); g.globalAlpha = 1; },
+    (x, y) => { rect("#1e1a10", x, y, 24, 10); g.globalAlpha = flick(5); poly(GOLD, [[x + 12, y + 1], [x + 14, y + 4], [x + 18, y + 4], [x + 15, y + 6], [x + 16, y + 9], [x + 12, y + 7], [x + 8, y + 9], [x + 9, y + 6], [x + 6, y + 4], [x + 10, y + 4]]); g.globalAlpha = 1; },
+  ],
+  tank: [
+    (x, y) => { disc("#a0e6ff", x + 7, y + 5, 5); rect("#a0e6ff", x + 3, y + 1, 9, 1); rect(ORANGE, x + 5 + Math.round(Math.sin(T * 2) * 2), y + 5, 3, 2); },
+    (x, y) => { rect("#2a8ac8", x, y, 18, 9); outline(x, y, 18, 9, "#c8c8d2"); rect("#e6c88c", x + 1, y + 7, 16, 1); rect("#ff6e8c", x + 3, y + 5, 1, 2); rect("#ff6e8c", x + 13, y + 4, 2, 3); fitDraw(atlas, "clown", x + 9 + Math.sin(T * 1.5) * 4, y + 4, 6, 4, 1); },
+    (x, y) => { rect("#1e5a8c", x, y, 22, 10); outline(x, y, 22, 10, "#c8c8d2"); rect("#c8b48c", x + 1, y + 8, 20, 1); g.save(); if (Math.cos(T * 0.8) < 0) { g.translate(x * 2 + 22, 0); g.scale(-1, 1); } fitDraw(atlas, "blacktip", x + 11 + Math.sin(T * 0.8) * 4, y + 4, 12, 6, 1); g.restore(); },
+  ],
+  keg: [
+    (x, y) => { rect("#7a5232", x, y, 10, 11); rect("#5a3a22", x, y + 2, 10, 1); rect("#5a3a22", x, y + 8, 10, 1); rect("#4a2e1c", x + 4, y + 5, 2, 2); },
+    (x, y) => { rect("#c8962a", x, y, 10, 11); rect(GOLD, x, y + 2, 10, 1); rect(GOLD, x, y + 8, 10, 1); rect("#fff6c8", x + 2, y + 3, 1, 4); rect("#8a6a3a", x + 4, y + 5, 2, 2); },
+    (x, y) => { rect("#6a4428", x, y + 3, 14, 8); rect("#8a5c38", x, y, 14, 4); rect(GOLD, x, y + 3, 14, 1); rect(GOLD, x + 6, y + 3, 2, 3); for (let k = 0; k < 3; k++) { g.globalAlpha = flick(k + 7); rect("#fff6c8", x + 2 + k * 5, y - 1, 1, 1); g.globalAlpha = 1; } },
+  ],
+};
+const DECOR_BAR = [["#4a2414", "#7a3a22"], ["#b4b4be", "#e6e6f0"], ["#c8962a", "#ffd246"]];   // the counter: bar, top edge
+// anchors: narrow bar (the 120 column) and the wide bar (relative to WX())
+const DECOR_AT = { n: { lamp: [12, 10], sign: [94, 17], tank: [2, 50], keg: [106, 49] }, w: { lamp: [20, 4], sign: [140, 12], tank: [6, 61], keg: [152, 60] } };
+function decorBar(wide) { const i = decorData().eq.counter; return typeof i === "number" && DECOR_BAR[i] ? DECOR_BAR[i] : null; }   // game.js asks this for the counter colours
+function decorDraw(wide, x0, eq) {                             // draw the bar's decor; x0 = left edge of the bar picture
+  eq = eq || decorData().eq;
+  const A = DECOR_AT[wide ? "w" : "n"];
+  for (const sl of ["lamp", "sign", "tank", "keg"]) { const i = eq[sl]; if (typeof i === "number" && DECOR_DRAW[sl][i]) DECOR_DRAW[sl][i](x0 + A[sl][0], A[sl][1]); }
+  if (roundsToday().length || tav().round === dayString()) { const by = wide ? 66 : 54; for (const mx of wide ? [x0 + 60, x0 + 104] : [x0 + 32, x0 + 82]) { rect("#ffd246", mx, by, 4, 5); rect("#fffaf0", mx, by - 1, 4, 2); rect("#c8962a", mx + 4, by + 1, 1, 3); } }
+}
+CZ.dc = { sel: 0, say: "" };
+function decorHits() {
+  const L = czL(), per = L.w ? 15 : 6, page = Math.floor(CZ.dc.sel / per), h = [];
+  DECOR_LIST.slice(page * per, page * per + per).forEach((it, k) => h.push(L.w ? ["row", L.X, 22 + k * 11, 220, 10, page * per + k] : ["row", L.X + 4, 27 + k * 13, 112, 11, page * per + k]));
+  if (L.w) h.push(["act", L.X + 228, 150, 120, 18, 0]);
+  else { h.push(["page", L.X + 2, 2, 16, 13, -1]); h.push(["page", L.X + 102, 2, 16, 13, 1]); h.push(["act", L.X + 14, 163, 92, 14, 0]); }
+  return h;
+}
+function decorPreview(x, y, it, h, crop) {                     // a little bar with the picked thing in it
+  h = h || 64; crop = crop || 2;
+  const eq = Object.assign({}, decorData().eq, { [it[0]]: it[1] });
+  g.save(); g.beginPath(); g.rect(x, y, 120, h); g.clip(); g.translate(x, y - crop);
+  for (let k = 0; k < 120; k += 8) rect(k % 16 ? "#2a1a12" : "#321f15", k, 0, 8, 70);
+  rect("#4a2e1c", 32, 28, 56, 3); spr("oldman", 46, 30, false, 2);
+  const bar = it[0] === "counter" ? DECOR_BAR[it[1]] : (typeof eq.counter === "number" ? DECOR_BAR[eq.counter] : null);
+  rect(bar ? bar[0] : "#6a4428", 0, 60, 120, 9); rect(bar ? bar[1] : "#8a5c38", 0, 60, 120, 2);
+  decorDraw(false, 0, eq); g.restore(); outline(x, y, 120, h, GOLD);
+}
+function drawDecor() {
+  const L = czL(), X = L.X, it = DECOR_LIST[CZ.dc.sel], own = decorOwn(it[0], it[1]), on = decorOn(it[0], it[1]);
+  const act = own ? (on ? "TAKE DOWN" : "PUT UP") : (tav().chips >= it[3] ? "BUY " : "NEEDS ") + it[3], col = own || tav().chips >= it[3] ? CHIP : GREY;
+  tavernBg();
+  czTitle(L, L.w ? "DECORATE THE BAR" : "DECORATE");
+  for (const [id, x, y, w, h, v] of decorHits()) {
+    if (id === "row") { const r = DECOR_LIST[v], sel = v === CZ.dc.sel, ow = decorOwn(r[0], r[1]); rect(sel ? "#5a3a22" : "#24160e", x, y, w, h); if (sel) outline(x, y, w, h, GOLD);
+      text(L.w ? DECOR_NAME[r[0]] + ": " + r[2] : r[2].slice(0, 14), x + 3, y + 5, 1, sel ? WHITE : "#d8c8b0", "left", null);
+      text(ow ? (decorOn(r[0], r[1]) ? "UP" : "*") : L.w ? r[3] : Math.floor(r[3] / 1000) + "K", x + w - 3, y + 5, 1, ow ? LIME : CHIP, "right", null); }
+    else if (id === "page") { box(x, y, w, h, GOLD); text(v < 0 ? "<" : ">", x + 8, y + 6, 1, GOLD, "center", null); }
+    else if (id === "act") { if (L.w) btn(x, y, w, h, act, col); else { box(x, y, w, h, col); text(act, x + w / 2, y + 7, 1, col, "center", null); } }
+  }
+  if (L.w) { decorPreview(X + 228, 22, it); text(it[2], X + 288, 98, 1, WHITE, "center", null); text(DECOR_NAME[it[0]], X + 288, 110, 1, GOLD, "center", null); text("ONE OF EACH ON SHOW", X + 288, 126, 1, "#a08c70", "center", null); text(CZ.dc.say, X + 288, 178, 1, "#a08c70", "center", null); }
+  else { decorPreview(X, 106, it, 54, 8); text(CZ.dc.say || DECOR_NAME[it[0]], X + 60, 185, 1, "#a08c70", "center", null); }
+  text("TAP HERE TO GO BACK", LW / 2, 194, 1, WHITE, "center", null);
+}
+function decorAct() {
+  const it = DECOR_LIST[CZ.dc.sel], d = decorData(), key = it[0] + "." + it[1];
+  if (d.own.includes(key)) { d.eq[it[0]] = d.eq[it[0]] === it[1] ? -1 : it[1]; saveStore(); play("select"); CZ.dc.say = d.eq[it[0]] === it[1] ? "LOOKS GOOD UP THERE" : "BACK IN THE CELLAR"; return; }
+  if (tav().chips < it[3]) { play("miss"); CZ.dc.say = "COME BACK WITH CHIPS"; return; }
+  addChips(-it[3]); chipsSpent(it[3]); d.own.push(key); d.eq[it[0]] = it[1]; saveStore(); play("fanfare"); CZ.dc.say = "THE OLD MAN APPROVES";
+}
+function decorTap(rx, ly) {
+  const h = hitAt(decorHits(), rx, ly), per = czL().w ? 15 : 6, pages = Math.ceil(DECOR_LIST.length / per);
+  if (!h) { if (ly > 186) closeOverlay(); return; }
+  if (h[0] === "row") { if (h[5] === CZ.dc.sel) decorAct(); else { CZ.dc.sel = h[5]; CZ.dc.say = ""; play("tick"); } }
+  else if (h[0] === "page") { CZ.dc.sel = ((Math.floor(CZ.dc.sel / per) + h[5] + pages) % pages) * per; play("tick"); }
+  else decorAct();
+}
+function decorKey(code, dir) {
+  const n = DECOR_LIST.length;
+  if (code === "ArrowUp" || code === "KeyW" || dir < 0) CZ.dc.sel = (CZ.dc.sel - 1 + n) % n;
+  else if (code === "ArrowDown" || code === "KeyS" || dir > 0) CZ.dc.sel = (CZ.dc.sel + 1) % n;
+  else if (code === "Space" || code === "Enter") { decorAct(); return; }
+  else return;
+  CZ.dc.say = ""; play("tick");
+}
+EXTRA_OV.decor = { draw: drawDecor, tap: decorTap, key: decorKey, back: "chipshop", music: true };
 
-window.CASINO = { tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
+// ---- BUY A ROUND: 1,000 chips, once a day. Your initials go up for everyone at the bar that day (shared path
+// /casino/rounds/<day>, write-once entries {n, t}; needs the rules in database.rules.json). Title ON THE HOUSE: 10 rounds.
+const ROUND_PRICE = 1000;
+CZ.rounds = { day: "", names: [], at: 0 };
+function roundsToday() {                                     // initials who bought a round today (loads now and then)
+  const R = CZ.rounds, d = dayString(), now = Date.now();
+  if (R.day !== d) { R.day = d; R.names = tav().round === d && store.name ? [store.name] : []; R.at = 0; }
+  if (LB.url && now - R.at > 60000) {
+    R.at = now;
+    fetch(LB.url + "/casino/rounds/" + d + ".json").then(r => r.ok ? r.json() : null).then(v => { if (v && R.day === d) { const n = [...new Set(Object.values(v).filter(e => e && e.n).map(e => e.n))]; if (tav().round === d && store.name && !n.includes(store.name)) n.push(store.name); R.names = n; } }).catch(() => {});
+  }
+  return R.names;
+}
+function buyRound() {
+  const q = tav(), d = dayString();
+  if (q.round === d) { play("miss"); TAV.say = "YOU ALREADY GOT TODAY'S"; return; }
+  if (q.chips < ROUND_PRICE) { play("miss"); TAV.say = "COME BACK WITH CHIPS"; return; }
+  addChips(-ROUND_PRICE); chipsSpent(ROUND_PRICE); q.round = d; q.rounds = (q.rounds || 0) + 1; saveStore();
+  if (q.rounds >= 10) tavAward("onthehouse");
+  const R = CZ.rounds; roundsToday(); if (store.name && !R.names.includes(store.name)) R.names.push(store.name);
+  if (LB.url && store.name) fetch(LB.url + "/casino/rounds/" + d + ".json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, t: Date.now() }) }).catch(() => {});
+  TAV.show = 2.5; play("fanfare"); TAV.say = "A ROUND ON " + (store.name || "YOU") + "! CHEERS!"; S.overlay = "tavern";
+}
+let czLastOv = null;
+function roundsAnnounce() {                                  // walking into the bar: say who's bought a round today
+  if (S.overlay === "tavern" && czLastOv !== "tavern" && !["chipshop", "decor"].includes(czLastOv)) {
+    const n = roundsToday().filter(x => x !== store.name);
+    if (n.length) TAV.say = n.slice(0, 3).join(", ") + (n.length > 3 ? " AND MORE" : "") + " BOUGHT A ROUND TODAY. CHEERS!";
+  }
+  czLastOv = S.overlay;
+}
+
+function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); roundsAnnounce(); }
+
+window.CASINO = { DECOR, DECOR_LIST, decorData, decorDraw, decorBar, buyRound, roundsToday, ROUND_PRICE, tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };

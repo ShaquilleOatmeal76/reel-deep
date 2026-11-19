@@ -170,7 +170,7 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   dives: 0,                                              // dives finished, for things that open up with experience
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
-  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "", bhw: { d: "", line: 0 }, blife: [], spent: 0,
+  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "", bhw: { d: "", line: 0 }, blife: [], spent: 0, decor: { own: [], eq: {} }, round: "", rounds: 0,
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {},
     fp: { cups: {}, best: {}, own: [], eq: {}, races: 0, wins: 0 } },   // the Rusty Hook; fp: FIN PRIX (finprix.js, fpData())
   ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" },
@@ -343,7 +343,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat([["whale", "WHALE", "SPEND 100,000 CHIPS"], ["captain", "THE CAPTAIN", "OWN THE WHOLE LOCKER"]])   // casino.js, Nov 18, 2026
   .concat([["snaphappy", "SNAP HAPPY", "CASH OUT X50 IN LINE SNAP"], ["biggerfish", "BIGGER FISH", "10 RIGHT CALLS IN A ROW"]])
   .concat([["anchors", "ANCHORS AWEIGH", "ROLL THREE ANCHORS"], ["reeldeal", "THE REEL DEAL", "THREE LEGENDS ON THE REELS"], ["helmsman", "HELMSMAN", "HIT X10 ON THE WHEEL"]])
-  .concat([["treasure", "TREASURE HUNTER", "5 CRATES PAST 10 JELLIES"], ["fullnet", "FULL NET", "ALL 5 IN NET HAUL"]]);
+  .concat([["treasure", "TREASURE HUNTER", "5 CRATES PAST 10 JELLIES"], ["fullnet", "FULL NET", "ALL 5 IN NET HAUL"]])
+  .concat([["onthehouse", "ON THE HOUSE", "BUY 10 ROUNDS"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -2223,9 +2224,12 @@ const FISH_PICKS = ["clown", "koi", "tuna", "sword", "puffer", "bass", "parrot",
 // far too easy to buy, so a rumour now costs more each time (150, +50 a time, up to 400) and the magnet lasts 3 dives.
 // [id, label, price, what it is]. Cosmetics here are the tavern's own: chips only, never in the coin shop.
 const SHOP_PER = 7;
+const CZ_ROWS = ["locker", "dealer", "decor", "round"];     // chip-shop rows run by casino.js
 const SHOP_ROWS = [
   ["locker", "CAPTAIN'S LOCKER", 0, "PRESTIGE GEAR. 10,000 TO 75,000 CHIPS"],   // casino.js
   ["dealer", "SHADY DEALER", 0, "THREE THINGS. THIS WEEK ONLY"],             // casino.js
+  ["decor", "DECORATE THE BAR", 0, "LAMPS, SIGNS, A FISH TANK"],             // casino.js
+  ["round", "BUY A ROUND", 1000, "EVERYONE SEES YOUR NAME TODAY"],           // casino.js
   ["story", "A STORY", 50, "TIP THE OLD MAN"],
   ["fish", "A DERBY FISH", 200, "YOUR OWN RACER"],
   ["finprix", "FIN PRIX LOOKS", 0, "KARTS, PAINT, TRAILS, POSES"],
@@ -2257,7 +2261,7 @@ const TAV_COSM = { cap: ["hat", 26], cat: ["pet", 14], tub: ["boat", 19], ace: [
 const rumourPrice = () => Math.min(400, 150 + 50 * (tav().rumours || 0));
 function shopRowState(i) {                                  // -> [label shown, price or null, note]
   const q = tav(), [id, lab, price, note] = SHOP_ROWS[i], cm = TAV_COSM[id];
-  if ((id === "locker" || id === "dealer") && typeof casinoShopRow === "function") return casinoShopRow(id);
+  if (CZ_ROWS.includes(id) && typeof casinoShopRow === "function") return casinoShopRow(id);
   if (cm) { const own = store.own[cm[0]].includes(cm[1]), on = store.eq[cm[0]] === cm[1]; return [lab, own ? null : price, own ? (on ? "WEARING IT" : "YOURS") : note]; }
   if ((id === "rumour" || id === "magnet") && !bottleShopOpen()) return ["???", null, "FISH UP " + STARTERS.length + " BOTTLES FIRST: " + startersFound() + "/" + STARTERS.length];
   if (id === "rumour") return [lab, rumourPool().length ? rumourPrice() : null, rumourPool().length ? note : "NOTHING NEW TO TELL"];
@@ -2281,7 +2285,7 @@ function rumourPool() { return BOTTLES.map((b, i) => i).filter(i => bottleOpen(i
 function bootDepth() { return Math.round(RNG(hashStr("boot" + weekString())).uniform(ZONES[3][1] + 6, ZONES[3][2] - 6)); }
 function shopBuy(i) {
   const q = tav(), id = SHOP_ROWS[i][0], [, price] = shopRowState(i), cm = TAV_COSM[id];
-  if ((id === "locker" || id === "dealer") && typeof casinoOpen === "function") { casinoOpen(id); return; }
+  if (CZ_ROWS.includes(id) && typeof casinoOpen === "function") { casinoOpen(id); return; }
   if (id === "story" && q.stories) { if (price && q.chips >= price) { addChips(-price); q.stories++; play("fanfare"); } TAV.story = q.stories - 1; openOverlay("story"); return; }
   if (id === "fish" && q.fish) { TAV.fishBack = null; openOverlay("myfish"); return; }
   if (id === "finprix") { if (q.fish) pitOpen("garage"); else play("miss"); return; }
@@ -2633,7 +2637,9 @@ function drawTavern() {
     text(store.log[s[0]].rec, x + 12, 48, 1, GOLD, "center", null);
   });
   spr("oldman", 46, 30, false, 2);
-  rect("#6a4428", 0, 60, 120, 9); rect("#8a5c38", 0, 60, 120, 2);                                 // the bar
+  const bar = typeof decorBar === "function" ? decorBar(false) : null;                            // casino.js: a fancier counter
+  rect(bar ? bar[0] : "#6a4428", 0, 60, 120, 9); rect(bar ? bar[1] : "#8a5c38", 0, 60, 120, 2);   // the bar
+  if (typeof decorDraw === "function") decorDraw(false, 0);                                       // casino.js: your decor
   text("RUSTY HOOK", 60, 8, 1, GOLD, "center");
   box(96, 2, 22, 11, CYAN); text("TOP", 107, 7, 1, CYAN, "center", null);
   const sayL = wrap(TAV.say, 19).slice(0, 2); sayL.forEach((l, i) => text(l, 60, (sayL.length > 1 ? 72 : 76) + i * 8, 1, WHITE, "center", null));
@@ -2708,7 +2714,7 @@ function drawChipShop() {
   const [, price, note] = shopRowState(TAV.shopSel);
   box(4, 134, 112, 34, GOLD);
   wrap(note, 18).slice(0, 2).forEach((l, i) => text(l, 60, 141 + i * 9, 1, "#e8dcc4", "center", null));
-  const sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid], opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || sid === "locker" || sid === "dealer";
+  const sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid], opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || ["locker", "dealer", "decor"].includes(sid);
   const lab = opens ? "TAP AGAIN TO OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAP AGAIN: TAKE OFF" : "TAP AGAIN: PUT ON") : price === null ? (sid === "story" && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? (price >= 1000 ? "TAP TO BUY " : "TAP AGAIN: BUY ") : "NEEDS ") + price;   // 4-digit prices need the shorter line
   if (lab) text(sid === "dream" && price !== null && tav().chips >= price ? "DREAM FOR " + price : lab, 60, 160, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
@@ -3753,7 +3759,9 @@ function drawTavernWide() {
     text(store.log[sp[0]].rec, x + 14, 58, 1, GOLD, "center", null);
   });
   spr("oldman", cx - 14, 40, false, 2);
-  rect("#6a4428", x0, 72, 172, 10); rect("#8a5c38", x0, 72, 172, 2);                       // the bar
+  const bar = typeof decorBar === "function" ? decorBar(true) : null;
+  rect(bar ? bar[0] : "#6a4428", x0, 72, 172, 10); rect(bar ? bar[1] : "#8a5c38", x0, 72, 172, 2);   // the bar
+  if (typeof decorDraw === "function") decorDraw(true, x0);
   if (tav().carved) text(tav().carved + " WAS HERE", cx, 78, 1, "#3c2414", "center", null);
   rect("#1e120c", x0 + 4, 90, 164, 40); outline(x0 + 4, 90, 164, 40, "#5a3a22");
   wrap(TAV.say, 26).slice(0, 3).forEach((l, i, a) => text(l, cx, 110 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
@@ -3809,7 +3817,7 @@ function drawChipShopWide() {
   g.restore();
   text(lab, px + pw / 2, 102, 1, WHITE, "center", null);
   wrap(note, 19).slice(0, 3).forEach((l, i) => text(l, px + pw / 2, 115 + i * 10, 1, "#e8dcc4", "center", null));
-  const opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || sid === "locker" || sid === "dealer";
+  const opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || ["locker", "dealer", "decor"].includes(sid);
   const act = opens ? "OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAKE OFF" : "PUT ON") : price === null ? (sid === "story" && tav().stories ? "READ" : "") : sid === "dream" ? "DREAM FOR " + price : (tav().chips >= price ? "BUY " : "NEEDS ") + price;
   if (act) btn(px, 150, pw, 18, act, price !== null && tav().chips < price ? GREY : CHIP);
   closeLine("TAP HERE TO GO BACK");
