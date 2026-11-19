@@ -170,7 +170,7 @@ let store = { log: {}, best: 0, name: "", lure: 0, coins: 0, seenHelp: false, my
   dives: 0,                                              // dives finished, for things that open up with experience
   sec: { found: [], bottles: [], lastBottle: 0, konami: 0, mark: true, woke: false, sleeper: false, crack: false, crossed: false, beat: false, afterSleeper: 0 },
   flip: { log: {}, runs: 0, wins: 0, best: 0, mons: [] },   // the Flipside: creatures caught (for the Bestiary), trips made, best score, monster forms caught
-  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "", bhw: { d: "", line: 0 }, blife: [], spent: 0, decor: { own: [], eq: {} }, round: "", rounds: 0,
+  tav: { chips: 0, daily: "", claims: 0, bet: null, hist: [], fish: null, jukebox: false, songs: [], song: -1, stories: 0, magnet: 0, map: "", rumours: 0, carved: "", bhw: { d: "", line: 0 }, blife: [], spent: 0, decor: { own: [], eq: {} }, round: "", rounds: 0, jpLast: 0, jpWon: 0, cup: null, cupClaim: 0,
     stats: { stack: 0, win: 0, fast: 0, hands: 0, derbies: 0 }, posted: {}, postedAt: 0, names: {},
     fp: { cups: {}, best: {}, own: [], eq: {}, races: 0, wins: 0 } },   // the Rusty Hook; fp: FIN PRIX (finprix.js, fpData())
   ach: { sharks: 0, bit: 0, rel: 0, stung: 0, ghosts: 0, bounty: 0, bday: "" },
@@ -344,7 +344,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat([["snaphappy", "SNAP HAPPY", "CASH OUT X50 IN LINE SNAP"], ["biggerfish", "BIGGER FISH", "10 RIGHT CALLS IN A ROW"]])
   .concat([["anchors", "ANCHORS AWEIGH", "ROLL THREE ANCHORS"], ["reeldeal", "THE REEL DEAL", "THREE LEGENDS ON THE REELS"], ["helmsman", "HELMSMAN", "HIT X10 ON THE WHEEL"]])
   .concat([["treasure", "TREASURE HUNTER", "5 CRATES PAST 10 JELLIES"], ["fullnet", "FULL NET", "ALL 5 IN NET HAUL"]])
-  .concat([["onthehouse", "ON THE HOUSE", "BUY 10 ROUNDS"]]);
+  .concat([["onthehouse", "ON THE HOUSE", "BUY 10 ROUNDS"]])
+  .concat([["megajack", "MEGA JACKPOT", "HIT THE REEL DEAL JACKPOT"], ["tablechamp", "TABLE CHAMP", "WIN A WEEKLY TOURNAMENT"], ["podium", "PODIUM", "TOP 3 IN A TOURNAMENT"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];

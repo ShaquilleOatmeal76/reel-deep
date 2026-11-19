@@ -188,7 +188,7 @@ EXTRA_OV.dealer = { draw: () => drawCzShop("dealer"), tap: (rx, ly) => czShopTap
 
 // ---- the two chip-shop rows (game.js asks these)
 function casinoShopRow(id) {
-  if (id === "decor") { const n = decorData().own.length; return ["DECORATE THE BAR", null, n ? "YOU OWN " + n + " OF " + DECOR_LIST.length + ". MAKE IT YOURS" : "LAMPS, SIGNS, A FISH TANK. 2,000 TO 40,000"]; }
+  if (id === "decor") { const n = decorData().own.length; return ["DECORATE THE BAR", null, n ? "YOU OWN " + n + " OF " + decorList().length + ". MAKE IT YOURS" : "LAMPS, SIGNS, A FISH TANK. 2,000 TO 40,000"]; }
   if (id === "round") return ["BUY A ROUND", tav().round === dayString() ? null : ROUND_PRICE, tav().round === dayString() ? "YOU GOT TODAY'S ROUND. CHEERS!" : "EVERYONE AT THE BAR SEES YOUR NAME TODAY"];
   if (id === "locker") { const n = LOCKER.filter(czOwn).length; return ["CAPTAIN'S LOCKER", null, n ? "YOU OWN " + n + " OF " + LOCKER.length + ". PRESTIGE GEAR" : "PRESTIGE GEAR. 10,000 TO 75,000 CHIPS"]; }
   return ["SHADY DEALER", null, "THREE THINGS. THIS WEEK ONLY. NEW STOCK IN " + dealerDaysLeft() + (dealerDaysLeft() === 1 ? " DAY" : " DAYS")];
@@ -207,7 +207,7 @@ function casinoOpen(id) {                                    // -> true if casin
 // The tavern's games grouped into two menus (TABLES and MACHINES) so the bar doesn't get longer as games are added, plus
 // Line Snap (a crash game) and Bigger Fish (higher or lower). Later parts add their games to HUBS.
 const HUBS = {
-  tables: { title: "THE TABLES", say: "CARDS AND DICE", games: [["c21", "CATCH 21", "FISH CARDS TO 21"], ["bigger", "BIGGER FISH", "HIGHER OR LOWER?"], ["crown", "CROWN & ANCHOR", "THE SAILOR'S DICE"]] },
+  tables: { title: "THE TABLES", say: "CARDS AND DICE", games: [["c21", "CATCH 21", "FISH CARDS TO 21"], ["bigger", "BIGGER FISH", "HIGHER OR LOWER?"], ["crown", "CROWN & ANCHOR", "THE SAILOR'S DICE"], ["cup", "TOURNAMENT", "WEEKLY CATCH 21"]] },
   machines: { title: "THE MACHINES", say: "PULL, DROP, SPIN", games: [["plinko", "PLINKO", "DROP A FISH, X25"], ["snap", "LINE SNAP", "CASH OUT IN TIME"], ["reel", "THE REEL DEAL", "SLOTS TO X250"], ["wheel", "SHIP'S WHEEL", "SPIN FOR X10"], ["treasure", "TREASURE DIVE", "DODGE JELLIES"], ["net", "NET HAUL", "PICK 5 FISH"]] },
 };
 CZ.hub = { sel: 0 };
@@ -221,6 +221,7 @@ const GAME_OPEN = {
   wheel: () => { whOpen(); openOverlay("wheel"); },
   treasure: () => { tdOpen(); openOverlay("treasure"); },
   net: () => { nhOpen(); openOverlay("net"); },
+  cup: () => { cupData(); CZ.cupMsg = ""; openOverlay("cup"); },
 };
 function hubHits(o) {
   const L = czL(), g0 = HUBS[o].games;
@@ -524,10 +525,11 @@ EXTRA_OV.crown = { draw: drawCa, tap: caTap, key: caKey, back: () => CZ.ca && CZ
 // ---- THE REEL DEAL: a three-reel slot machine with fishing reels. Each reel has 24 stops (weights below, the same on
 // every reel, each reel in its own fixed order). Pays on the middle line: three of a kind (legend x250, shark x60, tuna
 // x25, clown x12, minnow x8, old boots x3), bait anywhere (1 = stake back, 2 = x5, 3 = x20), or two of one fish (legend
-// x10, shark x4, tuna x3, clown x2, minnow x2). Worked out exactly: 94.97% back, 25% of spins pay more than the stake.
+// x8, shark x4, tuna x3, clown x2, minnow x2). Worked out exactly: 93.97% back from the reels, 25% of spins pay more than
+// the stake; the shared progressive jackpot (part 6) adds about 1-3% on top (more when the pot is big), never past ~97%.
 const RD_SYM = { L: [null, "LEGEND"], S: ["blacktip", "SHARK"], T: ["tuna", "TUNA"], K: ["clown", "CLOWN"], M: ["minnow", "MINNOW"], B: ["boot", "BOOT"], C: ["shrimp", "BAIT"], G: [null, "WEED"] };
 const RD_W = { L: 1, S: 2, T: 3, K: 4, M: 5, B: 4, C: 1, G: 4 };
-const RD_THREE = { L: 250, S: 60, T: 25, K: 12, M: 8, B: 3 }, RD_BAIT = [0, 1, 5, 20], RD_PAIR = { L: 10, S: 4, T: 3, K: 2, M: 2 };
+const RD_THREE = { L: 250, S: 60, T: 25, K: 12, M: 8, B: 3 }, RD_BAIT = [0, 1, 5, 20], RD_PAIR = { L: 8, S: 4, T: 3, K: 2, M: 2 };   // legend pair was x10 before the jackpot
 const RD_STRIPS = [0, 1, 2].map(k => { const r = RNG(hashStr("reel deal " + k)), a = []; for (const [s0, n] of Object.entries(RD_W)) for (let i = 0; i < n; i++) a.push(s0); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; });
 function rdPays(t) {                                         // -> multiple of the stake for symbols t (three letters)
   if (t[0] === t[1] && t[1] === t[2] && RD_THREE[t[0]]) return RD_THREE[t[0]];
@@ -548,6 +550,7 @@ function rdSettle() {
   c.phase = "done"; c.win = Math.floor(c.staked * x);
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (t.every(q => q === "L")) tavAward("reeldeal");
+  if (Math.random() < c.staked / MAX_STAKE / JP_ODDS) { jpWin(c); return; }
   c.msg = x >= 25 ? "BIG CATCH! +" + c.win : x > 1 ? "WIN! +" + c.win : x === 1 ? "BAIT: STAKE BACK" : "NOTHING. AGAIN?";
   play(x >= 25 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
 }
@@ -578,7 +581,8 @@ function drawRd() {
   czTitle(L, "THE REEL DEAL", "#ff6e6e");
   const mx = L.w ? X + 8 : X + 4, my = L.w ? 22 : 26, cw = L.w ? 186 : 98, ch = L.w ? 116 : 84, sz = L.w ? 32 : 22;
   rect("#7a1e1e", mx, my, cw, ch); outline(mx, my, cw, ch, GOLD); rect("#5a1414", mx + 2, my + ch - 10, cw - 4, 8);
-  text(L.w ? "~ THE REEL DEAL ~".replace(/~/g, "*") : "REEL DEAL", mx + cw / 2, my + 7, 1, GOLD, "center", null);
+  const pot = jpPot(), jflash = c.jp && Math.floor(T * 6) % 2;
+  text((L.w ? "JACKPOT " : "POT ") + pot, mx + cw / 2, my + 7, 1, jflash ? WHITE : GOLD, "center", null);   // the shared progressive jackpot
   const wx0 = mx + (L.w ? 12 : 6), wy = my + 15, ww = (cw - (L.w ? 24 : 12) - 8) / 3, wh = sz * 3;
   for (let k = 0; k < 3; k++) {
     const x = wx0 + k * (ww + 4);
@@ -599,7 +603,7 @@ function drawRd() {
   if (L.w) {
     const rows = [["L", "X250"], ["S", "X60"], ["T", "X25"], ["K", "X12"], ["M", "X8"], ["B", "X3"]];
     rows.forEach(([q, p0], i) => { const y = 92 + i * 12; for (let k = 0; k < 3; k++) rdSymbol(q, L.X + 248 + k * 16, y, 15); text(p0, L.X + 344, y, 1, CHIP, "right", null); });
-    text("BAIT: X1 / X5 / X20", L.X + 292, 166, 1, "#d8c8b0", "center", null); text("PAIRS: X2 TO X10", L.X + 292, 176, 1, "#d8c8b0", "center", null);
+    text("BAIT: X1 / X5 / X20", L.X + 292, 166, 1, "#d8c8b0", "center", null); text("PAIRS: X2 TO X8", L.X + 292, 176, 1, "#d8c8b0", "center", null);
     text("ABOUT 95% BACK", X + 101, 164, 1, "#a08c70", "center", null);
   } else text("3 LEGENDS X250", X + 60, 176, 1, "#d8c8b0", "center", null);
   text(c.phase === "spin" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
@@ -865,10 +869,11 @@ const DECOR = {
   lamp: [["OIL LAMP", 2000], ["SHIP'S LANTERN", 6000], ["CHANDELIER", 25000]],
   sign: [["OPEN SIGN", 3000], ["NEON FISH", 8000], ["GOLD STAR", 20000]],
   tank: [["GOLDFISH BOWL", 4000], ["REEF TANK", 12000], ["SHARK TANK", 35000]],
-  keg: [["WATER BARREL", 2000], ["GOLD KEG", 15000], ["TREASURE CHEST", 40000]],
+  keg: [["WATER BARREL", 2000], ["GOLD KEG", 15000], ["TREASURE CHEST", 40000], ["TOURNEY CUP", 0]],   // the cup is won (weekly tournament), never sold
   counter: [["MAHOGANY BAR", 5000], ["MARBLE BAR", 18000], ["GOLDEN BAR", 30000]],
 };
-const DECOR_SLOTS = Object.keys(DECOR), DECOR_LIST = DECOR_SLOTS.flatMap(sl => DECOR[sl].map((it, i) => [sl, i, it[0], it[1]]));
+const DECOR_SLOTS = Object.keys(DECOR), DECOR_ALL = DECOR_SLOTS.flatMap(sl => DECOR[sl].map((it, i) => [sl, i, it[0], it[1]]));
+const decorList = () => DECOR_ALL.filter(it => it[3] > 0 || decorOwn(it[0], it[1]));   // won things (price 0) show once you have them
 const DECOR_NAME = { lamp: "LAMP", sign: "SIGN", tank: "FISH TANK", keg: "BARREL", counter: "THE BAR TOP" };
 function decorData() { const q = tav(); if (!q.decor || typeof q.decor !== "object") q.decor = { own: [], eq: {} }; if (!Array.isArray(q.decor.own)) q.decor.own = []; if (!q.decor.eq) q.decor.eq = {}; return q.decor; }
 const decorOwn = (sl, i) => decorData().own.includes(sl + "." + i);
@@ -895,6 +900,7 @@ const DECOR_DRAW = {
     (x, y) => { rect("#7a5232", x, y, 10, 11); rect("#5a3a22", x, y + 2, 10, 1); rect("#5a3a22", x, y + 8, 10, 1); rect("#4a2e1c", x + 4, y + 5, 2, 2); },
     (x, y) => { rect("#c8962a", x, y, 10, 11); rect(GOLD, x, y + 2, 10, 1); rect(GOLD, x, y + 8, 10, 1); rect("#fff6c8", x + 2, y + 3, 1, 4); rect("#8a6a3a", x + 4, y + 5, 2, 2); },
     (x, y) => { rect("#6a4428", x, y + 3, 14, 8); rect("#8a5c38", x, y, 14, 4); rect(GOLD, x, y + 3, 14, 1); rect(GOLD, x + 6, y + 3, 2, 3); for (let k = 0; k < 3; k++) { g.globalAlpha = flick(k + 7); rect("#fff6c8", x + 2 + k * 5, y - 1, 1, 1); g.globalAlpha = 1; } },
+    (x, y) => { rect(GOLD, x + 2, y, 8, 5); rect(GOLD, x, y + 1, 2, 3); rect(GOLD, x + 10, y + 1, 2, 3); rect("#c8962a", x + 5, y + 5, 2, 3); rect("#c8962a", x + 3, y + 8, 6, 3); rect("#fff6c8", x + 3, y + 1, 1, 3); },
   ],
 };
 const DECOR_BAR = [["#4a2414", "#7a3a22"], ["#b4b4be", "#e6e6f0"], ["#c8962a", "#ffd246"]];   // the counter: bar, top edge
@@ -910,7 +916,7 @@ function decorDraw(wide, x0, eq) {                             // draw the bar's
 CZ.dc = { sel: 0, say: "" };
 function decorHits() {
   const L = czL(), per = L.w ? 15 : 6, page = Math.floor(CZ.dc.sel / per), h = [];
-  DECOR_LIST.slice(page * per, page * per + per).forEach((it, k) => h.push(L.w ? ["row", L.X, 22 + k * 11, 220, 10, page * per + k] : ["row", L.X + 4, 27 + k * 13, 112, 11, page * per + k]));
+  decorList().slice(page * per, page * per + per).forEach((it, k) => h.push(L.w ? ["row", L.X, 22 + k * 11, 220, 10, page * per + k] : ["row", L.X + 4, 27 + k * 13, 112, 11, page * per + k]));
   if (L.w) h.push(["act", L.X + 228, 150, 120, 18, 0]);
   else { h.push(["page", L.X + 2, 2, 16, 13, -1]); h.push(["page", L.X + 102, 2, 16, 13, 1]); h.push(["act", L.X + 14, 163, 92, 14, 0]); }
   return h;
@@ -926,12 +932,12 @@ function decorPreview(x, y, it, h, crop) {                     // a little bar w
   decorDraw(false, 0, eq); g.restore(); outline(x, y, 120, h, GOLD);
 }
 function drawDecor() {
-  const L = czL(), X = L.X, it = DECOR_LIST[CZ.dc.sel], own = decorOwn(it[0], it[1]), on = decorOn(it[0], it[1]);
+  const L = czL(), X = L.X, it = decorList()[CZ.dc.sel], own = decorOwn(it[0], it[1]), on = decorOn(it[0], it[1]);
   const act = own ? (on ? "TAKE DOWN" : "PUT UP") : (tav().chips >= it[3] ? "BUY " : "NEEDS ") + it[3], col = own || tav().chips >= it[3] ? CHIP : GREY;
   tavernBg();
   czTitle(L, L.w ? "DECORATE THE BAR" : "DECORATE");
   for (const [id, x, y, w, h, v] of decorHits()) {
-    if (id === "row") { const r = DECOR_LIST[v], sel = v === CZ.dc.sel, ow = decorOwn(r[0], r[1]); rect(sel ? "#5a3a22" : "#24160e", x, y, w, h); if (sel) outline(x, y, w, h, GOLD);
+    if (id === "row") { const r = decorList()[v], sel = v === CZ.dc.sel, ow = decorOwn(r[0], r[1]); rect(sel ? "#5a3a22" : "#24160e", x, y, w, h); if (sel) outline(x, y, w, h, GOLD);
       text(L.w ? DECOR_NAME[r[0]] + ": " + r[2] : r[2].slice(0, 14), x + 3, y + 5, 1, sel ? WHITE : "#d8c8b0", "left", null);
       text(ow ? (decorOn(r[0], r[1]) ? "UP" : "*") : L.w ? r[3] : Math.floor(r[3] / 1000) + "K", x + w - 3, y + 5, 1, ow ? LIME : CHIP, "right", null); }
     else if (id === "page") { box(x, y, w, h, GOLD); text(v < 0 ? "<" : ">", x + 8, y + 6, 1, GOLD, "center", null); }
@@ -942,20 +948,20 @@ function drawDecor() {
   text("TAP HERE TO GO BACK", LW / 2, 194, 1, WHITE, "center", null);
 }
 function decorAct() {
-  const it = DECOR_LIST[CZ.dc.sel], d = decorData(), key = it[0] + "." + it[1];
+  const it = decorList()[CZ.dc.sel], d = decorData(), key = it[0] + "." + it[1];
   if (d.own.includes(key)) { d.eq[it[0]] = d.eq[it[0]] === it[1] ? -1 : it[1]; saveStore(); play("select"); CZ.dc.say = d.eq[it[0]] === it[1] ? "LOOKS GOOD UP THERE" : "BACK IN THE CELLAR"; return; }
   if (tav().chips < it[3]) { play("miss"); CZ.dc.say = "COME BACK WITH CHIPS"; return; }
   addChips(-it[3]); chipsSpent(it[3]); d.own.push(key); d.eq[it[0]] = it[1]; saveStore(); play("fanfare"); CZ.dc.say = "THE OLD MAN APPROVES";
 }
 function decorTap(rx, ly) {
-  const h = hitAt(decorHits(), rx, ly), per = czL().w ? 15 : 6, pages = Math.ceil(DECOR_LIST.length / per);
+  const h = hitAt(decorHits(), rx, ly), per = czL().w ? 15 : 6, pages = Math.ceil(decorList().length / per);
   if (!h) { if (ly > 186) closeOverlay(); return; }
   if (h[0] === "row") { if (h[5] === CZ.dc.sel) decorAct(); else { CZ.dc.sel = h[5]; CZ.dc.say = ""; play("tick"); } }
   else if (h[0] === "page") { CZ.dc.sel = ((Math.floor(CZ.dc.sel / per) + h[5] + pages) % pages) * per; play("tick"); }
   else decorAct();
 }
 function decorKey(code, dir) {
-  const n = DECOR_LIST.length;
+  const n = decorList().length;
   if (code === "ArrowUp" || code === "KeyW" || dir < 0) CZ.dc.sel = (CZ.dc.sel - 1 + n) % n;
   else if (code === "ArrowDown" || code === "KeyS" || dir > 0) CZ.dc.sel = (CZ.dc.sel + 1) % n;
   else if (code === "Space" || code === "Enter") { decorAct(); return; }
@@ -996,6 +1002,187 @@ function roundsAnnounce() {                                  // walking into the
   czLastOv = S.overlay;
 }
 
-function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); roundsAnnounce(); }
+// ===================================================================== Part 6
+// ---- THE SHARED PROGRESSIVE JACKPOT on the Reel Deal. The pot grows on the clock for everyone: 5,000 + 250 an hour
+// since anyone last hit it, capped at 50,000 (so no write per spin). Any spin can hit it, with chance (stake / 75) /
+// 20,000; at the cap that adds 3.3% to the reels' 94%, so it never pays back more than ~97%. The winner writes a
+// write-once record to /casino/jackpot {n, s, t} and everyone's pot starts again from that time. Without the shared
+// database the pot is your own. Title MEGA JACKPOT.
+const JP_BASE = 5000, JP_RATE = 250 / 3600000, JP_CAP = 50000, JP_ODDS = 20000;
+CZ.jp = { last: 0, at: 0, who: "" };
+function jpLast() {                                         // when the pot was last hit (shared, else your own)
+  const q = tav(); if (!q.jpLast) { q.jpLast = Date.now(); saveStore(); }
+  const now = Date.now();
+  if (LB.url && now - CZ.jp.at > 60000) {
+    CZ.jp.at = now;
+    fetch(LB.url + '/casino/jackpot.json?orderBy="t"&limitToLast=1').then(r => r.ok ? r.json() : null).then(v => { const e = v && Object.values(v).filter(x => x && x.t)[0]; if (e) { CZ.jp.last = e.t; CZ.jp.who = e.n || ""; } }).catch(() => {});
+  }
+  return Math.max(CZ.jp.last || 0, q.jpWon || 0) || q.jpLast;
+}
+const jpPot = () => Math.min(JP_CAP, JP_BASE + Math.floor(Math.max(0, Date.now() - jpLast()) * JP_RATE));
+function jpWin(c) {
+  const pot = jpPot(), now = Date.now();
+  addChips(pot, "win"); c.win += pot; c.jp = true;
+  tav().jpWon = now; CZ.jp.last = now; CZ.jp.who = store.name || ""; saveStore();
+  tavAward("megajack");
+  if (LB.url && store.name) fetch(LB.url + "/casino/jackpot.json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, s: pot, t: now }) }).catch(() => {});
+  c.msg = "JACKPOT!!! +" + pot; TAV.show = 3; play("fanfare");
+}
 
-window.CASINO = { DECOR, DECOR_LIST, decorData, decorDraw, decorBar, buyRound, roundsToday, ROUND_PRICE, tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
+// ---- THE WEEKLY TOURNAMENT: Catch 21 for a trophy. Buy in for 1,000 chips, play 25 hands with a 1,000-point stack
+// (bets 10-200 points, house rules: ties go to you, a natural pays 3 to 2, a legend wins at once). Everyone plays the same
+// cards: hand h of week w is dealt from its own deck seeded by (w, h), so the best play wins, not the luckiest deal. One
+// entry a week; your final stack goes to /casino/cup/<week>. When the week is over, the top 3 claim a prize on their next
+// visit: TABLE CHAMP (1st) and PODIUM (top 3) titles, and the TOURNEY CUP for the bar (1st). Prizes are looks only.
+const CUP_BUYIN = 1000, CUP_HANDS = 25, CUP_STACK = 1000, CUP_BETS = [10, 25, 50, 100, 200];
+function cupData() {
+  const q = tav(), wk = dealerWeek();
+  if (!q.cup || q.cup.wk !== wk) q.cup = { wk, in: false, hand: 0, stack: CUP_STACK, bet: 50, cur: null, done: false };
+  return q.cup;
+}
+function cupDeck(wk, h) { const r = RNG(hashStr("tourney " + wk + " " + h)), d = [];
+  for (let i = 0; i < 24; i++) { const x = r.random(); if (x < 0.03) d.push([C21_LEG[Math.floor(r.random() * C21_LEG.length)], 0, "l"]); else d.push([C21_POOL[Math.floor(r.random() * C21_POOL.length)], 1 + Math.floor(r.random() * 11), r.random() < 0.08 ? "t" : ""]); }
+  return d; }
+const cupTake = (c, h) => { const card = cupDeck(c.wk, c.hand)[h.n++]; return card; };
+function cupEnter() {
+  const c = cupData();
+  if (c.in) return;
+  if (tav().chips < CUP_BUYIN) { play("miss"); CZ.cupMsg = "BUY-IN IS " + CUP_BUYIN + " CHIPS"; return; }
+  addChips(-CUP_BUYIN); chipsSpent(CUP_BUYIN); c.in = true; saveStore(); CZ.cupMsg = "GOOD LUCK"; play("chime");
+}
+function cupDeal() {
+  const c = cupData(); if (!c.in || c.done || c.cur) return;
+  const bet = Math.min(c.bet, c.stack); c.stack -= bet;
+  const h = { n: 0, bet, you: [], dealer: [], phase: "play", msg: "" }; c.cur = h;
+  h.you = [cupTake(c, h), cupTake(c, h)]; h.dealer = [cupTake(c, h), cupTake(c, h)];
+  const nat = x => x.length === 2 && c21Sum(x) === 21;
+  if (h.you.some(q => q[2] === "l")) return cupEnd(2, "A LEGEND! YOU WIN");
+  if (h.dealer.some(q => q[2] === "l")) return cupEnd(0, "HIS LEGEND WINS");
+  if (nat(h.you)) return nat(h.dealer) ? cupEnd(1, "TWO 21S: A PUSH") : cupEnd(2.5, "CATCH 21! 3 TO 2");
+  if (nat(h.dealer)) return cupEnd(0, "HE HAS 21");
+  if (c21Sum(h.you) > 21) return cupEnd(0, "BUST ON THE DEAL");
+  h.msg = "YOU HAVE " + c21Sum(h.you); saveStore(); play("tick");
+}
+function cupHit(dbl) {
+  const c = cupData(), h = c.cur; if (!h || h.phase !== "play") return;
+  if (dbl) { if (h.you.length !== 2 || c.stack < h.bet) { play("miss"); return; } c.stack -= h.bet; h.bet *= 2; }
+  const q = cupTake(c, h); h.you.push(q); play("tick");
+  if (q[2] === "l") return cupEnd(2, "A LEGEND! YOU WIN");
+  const t = c21Sum(h.you);
+  if (t > 21) return cupEnd(0, "BUST AT " + t);
+  h.msg = "YOU HAVE " + t;
+  if (dbl || t === 21) cupStand(); else saveStore();
+}
+function cupStand() { const h = cupData().cur; if (!h || h.phase !== "play") return; h.phase = "dealer"; h.t = 0; h.msg = "HIS TURN..."; }
+function cupTick(dt) {
+  const c = tav().cup, h = c && c.cur; if (!h || h.phase !== "dealer" || (h.t += dt) < 0.4) return;
+  h.t = 0;
+  const d = c21Sum(h.dealer), y = c21Sum(h.you);
+  if (d < 17) { const q = cupTake(c, h); h.dealer.push(q); play("tick"); if (q[2] === "l") cupEnd(0, "HIS LEGEND WINS"); return; }
+  if (d > 21) cupEnd(2, "HE BUSTS! YOU WIN"); else if (y >= d) cupEnd(2, y === d ? "A TIE GOES TO YOU" : "YOU WIN, " + y + " TO " + d); else cupEnd(0, "HE WINS, " + d + " TO " + y);
+}
+function cupEnd(mult, msg) {
+  const c = cupData(), h = c.cur; h.phase = "over"; h.msg = msg; c.stack += Math.floor(h.bet * mult); c.hand++;
+  play(mult > 1 ? "chime" : mult ? "tick" : "miss");
+  if (c.hand >= CUP_HANDS || c.stack < CUP_BETS[0]) cupFinish();
+  saveStore();
+}
+function cupNext() { const c = cupData(); if (c.cur && c.cur.phase === "over" && !c.done) { c.cur = null; c.bet = Math.min(c.bet, c.stack); saveStore(); } }
+function cupFinish() {
+  const c = cupData(); c.done = true;
+  if (LB.url && store.name && c.stack > 0) fetch(LB.url + "/casino/cup/" + c.wk + ".json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, s: c.stack, t: Date.now() }) }).catch(() => {});
+  CZ.cupB = {};                                              // reload the board
+}
+CZ.cupB = {}; CZ.cupMsg = "";
+function cupBoard(wk) {                                      // -> {rows, msg} for that week (best score per name), loads in the background
+  const B = CZ.cupB[wk] || (CZ.cupB[wk] = { rows: null, msg: LB.url ? "LOADING..." : "NO SHARED BOARD", at: 0 });   // messages fit 18 characters
+  if (LB.url && Date.now() - B.at > 60000) {
+    B.at = Date.now();
+    fetch(LB.url + "/casino/cup/" + wk + '.json?orderBy="s"&limitToLast=20').then(r => { if (!r.ok) { B.msg = "NEW RULES NEEDED"; return null; } return r.json(); }).then(v => {
+      if (v === null && B.msg !== "LOADING...") return;
+      const best = {}; Object.values(v || {}).forEach(e => { if (e && e.n && e.s > (best[e.n] || 0)) best[e.n] = e.s; });
+      B.rows = Object.entries(best).sort((a, b) => b[1] - a[1]).slice(0, 10); B.msg = "";
+    }).catch(() => { B.msg = "BOARD IS OFFLINE"; });
+  }
+  return B;
+}
+function cupClaim() {                                         // last week's top 3 collect their prizes
+  const q = tav(), last = dealerWeek() - 1;
+  if (!store.name || (q.cupClaim || 0) >= last) return;
+  const B = cupBoard(last); if (!B.rows) return;
+  q.cupClaim = last;
+  const rank = B.rows.findIndex(r => r[0] === store.name);
+  if (rank === 0) { tavAward("tablechamp"); const d = decorData(); if (!d.own.includes("keg.3")) d.own.push("keg.3"); d.eq.keg = 3; CZ.cupMsg = "YOU WON LAST WEEK! A CUP FOR THE BAR"; }
+  if (rank >= 0 && rank <= 2) { tavAward("podium"); if (rank) CZ.cupMsg = "#" + (rank + 1) + " LAST WEEK. WELL PLAYED"; }
+  saveStore();
+}
+function cupHits() {
+  const L = czL(), c = cupData(), h = [], px = L.w ? L.X + 236 : L.X + 4, pw = L.w ? 112 : 112;
+  if (!c.in) h.push(["enter", L.w ? px : L.X + 14, L.w ? 120 : 150, L.w ? pw : 92, L.w ? 26 : 18, 0]);
+  else if (c.done) {}
+  else if (!c.cur) { stakeCtl(h, "bet", L.w ? px : L.X + 4, L.w ? 120 : 128, 112); h.push(["deal", L.w ? px : L.X + 14, L.w ? 142 : 148, L.w ? pw : 92, L.w ? 24 : 18, 0]); }
+  else if (c.cur.phase === "play") { const y = L.w ? 120 : 140; [["hit", "HIT"], ["stand", "STAND"], ["double", L.w ? "DOUBLE" : "DBL"]].forEach(([id], i) => h.push([id, (L.w ? px : L.X + 2) + i * (L.w ? 38 : 39), y, L.w ? 36 : 37, 20, 0])); }
+  else if (c.cur.phase === "over") h.push(["next", L.w ? px : L.X + 14, L.w ? 120 : 148, L.w ? pw : 92, L.w ? 24 : 18, 0]);
+  return h;
+}
+function drawCup() {
+  const L = czL(), X = L.X, c = cupData(), wk = c.wk, B = cupBoard(wk), cur = c.cur;
+  cupClaim();
+  rect(FELT, 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
+  czTitle(L, L.w ? "THE WEEKLY TOURNAMENT" : "TOURNAMENT");
+  const days = dealerDaysLeft() + (dealerDaysLeft() === 1 ? " DAY" : " DAYS");
+  const board = (x, y, n, w) => { text("THIS WEEK", x + w / 2, y, 1, GOLD, "center", null); if (!B.rows) { text(B.msg, x + w / 2, y + 14, 1, GREY, "center", null); return; } if (!B.rows.length) text("NO SCORES YET", x + w / 2, y + 14, 1, GREY, "center", null);
+    B.rows.slice(0, n).forEach(([nm, sc], i) => { const me = nm === store.name; text((i + 1) + ". " + nm, x + 2, y + 12 + i * 10, 1, me ? GOLD : i < 3 ? WHITE : "#a0c8b4", "left", null); text(sc, x + w - 2, y + 12 + i * 10, 1, me ? GOLD : CHIP, "right", null); }); };
+  if (!c.in) {                                                // the lobby
+    if (L.w) { ["BUY IN: " + CUP_BUYIN, "25 HANDS", "1,000 POINTS", "SAME CARDS FOR ALL", "TOP 3: TITLES", "#1: A CUP FOR", "THE BAR", "ENDS IN " + days].forEach((l, i) => text(l, X + 292, 24 + i * 10, 1, i === 7 ? GOLD : "#c8e6d2", "center", null)); board(X, 24, 10, 220); }
+    else { ["BUY IN: " + CUP_BUYIN, "25 HANDS, 1,000 PTS", "SAME CARDS FOR ALL", "ENDS IN " + days].forEach((l, i) => text(l, X + 60, 28 + i * 10, 1, i === 3 ? GOLD : "#c8e6d2", "center", null)); board(X + 4, 74, 5, 112); }
+  } else {
+    const tx = L.w ? X + 4 : X + 4, k = L.w ? 2 : 1;
+    const hn = Math.min(c.hand + (cur && cur.phase !== "over" ? 1 : 0), CUP_HANDS) + "/" + CUP_HANDS;
+    text(L.w ? "HAND " + hn + "   STACK " + c.stack : hn + "   STACK " + c.stack, L.w ? X + 112 : X + 60, L.w ? 22 : 30, 1, GOLD, "center", null);
+    if (cur) {
+      g.save(); g.translate(tx, L.w ? 30 : 38); g.scale(k, k);
+      text("HIM " + (cur.phase === "play" ? "?" : c21Sum(cur.dealer)), 0, 3, 1, "#c8e6d2", "left", null);
+      cur.dealer.slice(0, 6).forEach((q, i) => fishCard(i * Math.min(18, 92 / Math.max(1, cur.dealer.length - 1)), 8, q, cur.phase === "play" && i === 1));
+      text("YOU " + c21Sum(cur.you), 0, 42, 1, "#c8e6d2", "left", null);
+      cur.you.slice(0, 6).forEach((q, i) => fishCard(i * Math.min(18, 92 / Math.max(1, cur.you.length - 1)), 47, q));
+      g.restore();
+      text(cur.msg.slice(0, 19), L.w ? X + 292 : X + 60, L.w ? 108 : 124, 1, cur.phase === "over" ? GOLD : WHITE, "center", null);
+    } else if (c.done) { text("FINISHED WITH " + c.stack, L.w ? X + 112 : X + 60, L.w ? 60 : 50, 1, GOLD, "center", null); text(store.name ? "POSTED TO THE BOARD" : "SET YOUR INITIALS TO POST", L.w ? X + 112 : X + 60, L.w ? 74 : 62, 1, "#c8e6d2", "center", null); if (!L.w) board(X + 4, 74, 5, 112); }
+    else text("PICK A BET AND DEAL", L.w ? X + 112 : X + 60, L.w ? 60 : 60, 1, WHITE, "center", null);
+    if (L.w) board(X + 236, 24, 7, 112);
+  }
+  for (const [id, x, y, w, h, v] of cupHits()) {
+    if (id === "enter") btn(x, y, w, h, "BUY IN " + CUP_BUYIN, tav().chips >= CUP_BUYIN ? GOLD : GREY);
+    else if (id === "bet" && v < 0) drawStakeCtl(x, y, 112, Math.min(c.bet, c.stack), CHIP, "BET");
+    else if (id === "deal") btn(x, y, w, h, "DEAL HAND", GOLD);
+    else if (id === "next") btn(x, y, w, h, c.done ? "DONE" : "NEXT HAND", GOLD);
+    else if (["hit", "stand", "double"].includes(id)) btn(x, y, w, h, id === "double" ? "DBL" : id.toUpperCase(), id === "double" && (cur.you.length !== 2 || c.stack < cur.bet) ? GREY : CHIP);
+  }
+  if (CZ.cupMsg && !c.cur) text(CZ.cupMsg.slice(0, L.w ? 36 : 19), L.w ? X + 174 : X + 60, 184, 1, "#a0c8b4", "center", null);
+  text(cur && cur.phase === "dealer" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function cupTap(rx, ly) {
+  const c = cupData(), h = hitAt(cupHits(), rx, ly);
+  if (!h) { if (ly > 186) closeOverlay(); return; }
+  const [id, , , , , v] = h;
+  if (id === "enter") cupEnter();
+  else if (id === "bet") { const i = CUP_BETS.indexOf(c.bet); c.bet = CUP_BETS[clamp((i < 0 ? 2 : i) + v, 0, CUP_BETS.length - 1)]; play("tick"); }
+  else if (id === "deal") cupDeal();
+  else if (id === "hit") cupHit(false);
+  else if (id === "stand") cupStand();
+  else if (id === "double") cupHit(true);
+  else if (id === "next") cupNext();
+}
+function cupKey(code, dir) {
+  const c = cupData(), cur = c.cur;
+  if (!c.in) { if (code === "Space" || code === "Enter") cupEnter(); return; }
+  if (cur && cur.phase === "play") { if (code === "Space" || code === "KeyH") cupHit(false); else if (code === "Enter" || code === "KeyS" || code === "ArrowDown") cupStand(); else if (code === "KeyD" || code === "ArrowUp") cupHit(true); return; }
+  if (cur && cur.phase === "over") { if (code === "Space" || code === "Enter") cupNext(); return; }
+  if (!cur && !c.done) { if (dir) { const i = CUP_BETS.indexOf(c.bet); c.bet = CUP_BETS[clamp((i < 0 ? 2 : i) + dir, 0, CUP_BETS.length - 1)]; play("tick"); } else if (code === "Space" || code === "Enter") cupDeal(); }
+}
+EXTRA_OV.cup = { draw: drawCup, tap: cupTap, key: cupKey, back: "tables", music: true };
+
+function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); cupTick(dt); roundsAnnounce(); }
+
+window.CASINO = { DECOR, get DECOR_LIST() { return decorList(); }, DECOR_ALL, jpPot, jpLast, jpWin, JP_ODDS, JP_CAP, cupData, cupDeck, cupEnter, cupDeal, cupHit, cupStand, cupTick, cupNext, cupBoard, cupClaim, CUP_HANDS, decorData, decorDraw, decorBar, buyRound, roundsToday, ROUND_PRICE, tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
