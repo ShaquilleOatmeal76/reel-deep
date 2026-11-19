@@ -3828,3 +3828,208 @@ drawIsleFar = function (x, wl) {
   for (const off of [0, Math.PI]) { const k = Math.cos(a + off); g.beginPath(); g.moveTo(cxl, cyl); g.lineTo(cxl + k * 90, cyl - 6); g.lineTo(cxl + k * 90, cyl + 2); g.closePath(); g.fill(); }
   g.restore();
 };
+
+// =====================================================================================================================
+// Part 9: the last of the plan. Your shack grows (a bigger room, a kitchen with a fridge, a second room) and has a
+// wardrobe (your topside character, hat and pet, which now show on the island) and a radio (songs you own play while you
+// walk about). Topside, Bram drops by the Rusty Hook and your island trophies sit on the bar. And two things shared through
+// the database: share your aquarium with a code and visit a friend's, and the Best Island board.
+// ---- the shack
+UPGRADES.push(["shack1", "BIGGER SHACK", "A BIGGER ROOM FOR YOUR THINGS", 3000, [["wood", 200], ["stone", 80]]],
+  ["shack2", "SHACK KITCHEN", "A KITCHEN: COOK EVERY RECIPE AT HOME, AND A FRIDGE", 5000, [["wood", 150], ["iron", 10], ["glass", 10]]],
+  ["shack3", "SECOND ROOM", "A SECOND ROOM TO DECORATE", 8000, [["wood", 300], ["stone", 150], ["gold", 5]]]);
+const shackTier = () => { const u = isleSave().up; return u.shack3 ? 3 : u.shack2 ? 2 : u.shack1 ? 1 : 0; };
+AREAS.shack2 = { name: "THE SECOND ROOM", w: 12, h: 10, outdoor: false, wall: [[120, 96, 80], [96, 76, 64]] };
+function shackGeo() { return shackTier() ? { w: 18, h: 12, door: [8, 9], dx: 136, entry: [144, 168] } : { w: 12, h: 10, door: [5, 6], dx: 88, entry: [96, 140] }; }
+function artWardrobe() { const P = paintCanvas(20, 30); P.shadow(9, 27, 9, 2); P.rect(0, 0, 20, 28, INK); P.rect(1, 1, 18, 26, "#8c5a32"); P.rect(2, 2, 7, 23, "#a06c40"); P.rect(11, 2, 7, 23, "#a06c40"); P.rect(8, 12, 1, 3, GOLD); P.rect(11, 12, 1, 3, GOLD); return P.c; }
+function artRadio() { const P = paintCanvas(12, 9); P.rect(0, 2, 12, 7, INK); P.rect(1, 3, 10, 5, "#c8643c"); P.rect(2, 4, 4, 3, "#3c2c22"); P.rect(7, 4, 3, 1, "#f0e6c8"); P.rect(9, 0, 1, 3, "#5a5a64"); return P.c; }
+function artCounter() { const P = paintCanvas(44, 22); P.rect(0, 0, 44, 20, INK); P.rect(1, 1, 42, 18, "#d2c4a6"); P.rect(1, 1, 42, 4, "#f0e6d2"); P.rect(6, 2, 8, 2, "#3c3c46"); P.rect(18, 2, 8, 2, "#3c3c46"); P.rect(30, 8, 10, 8, "#8c8c96"); return P.c; }
+function artFridge() { const P = paintCanvas(18, 30); P.rect(0, 0, 18, 28, INK); P.rect(1, 1, 16, 26, "#e6eaf0"); P.rect(1, 10, 16, 1, INK); P.rect(13, 4, 2, 4, "#8c8c96"); P.rect(13, 14, 2, 6, "#8c8c96"); return P.c; }
+function artInDoor() { const P = paintCanvas(18, 28); P.rect(0, 0, 18, 28, INK); P.rect(1, 1, 16, 27, "#7a5232"); P.rect(3, 3, 12, 10, "#8c6440"); P.rect(3, 15, 12, 10, "#8c6440"); P.rect(13, 14, 2, 2, GOLD); return P.c; }
+const _isleArt9 = isleArt;
+isleArt = function () { _isleArt9(); if (!IART.wardrobe) Object.assign(IART, { wardrobe: artWardrobe(), radio: artRadio(), counter: artCounter(), fridge: artFridge(), idoor: artInDoor() }); };
+function shackObjects9() {
+  const t = shackTier(), G = shackGeo(), say = s => ({ kind: "folksay", text: [s] });
+  const o = [{ k: "bed", x: 20, y: 34, solid: [0, 0, 28, 34], act: { kind: "bed" } }, { k: "table", x: t ? 200 : 120, y: t ? 100 : 74, solid: [0, 4, 26, 12] },
+    { k: "chest", x: 60, y: 34, solid: [0, 0, 18, 13], act: say("AN OLD SEA CHEST. THE KEEPER'S INITIALS ARE CARVED ON THE LID.") },
+    { k: "wardrobe", x: 98, y: 20, solid: [0, 18, 20, 10], act: { kind: "wardrobe", rect: [0, 10, 20, 26] } },
+    { k: "radio", x: (t ? 200 : 120) + 7, y: (t ? 100 : 74) - 4, solid: null, act: { kind: "radio", rect: [-4, -2, 20, 16] } },
+    { k: "door", x: G.dx, y: G.h * TS - 12, solid: null, act: { kind: "door", to: "port", rect: [0, 0, 16, 12] } }];
+  if (t >= 2) o.push({ k: "counter", x: 150, y: 26, solid: [0, 4, 44, 16], act: { kind: "kitchen" } }, { k: "fridge", x: 200, y: 22, solid: [0, 12, 18, 16], act: { kind: "fridge", rect: [0, 8, 18, 26] } });
+  else o.push({ k: "stove", x: 150, y: 28, solid: [0, 4, 18, 18], act: { kind: "cook" } });
+  if (t >= 3) o.push({ k: "idoor", x: 250, y: 8, solid: [0, 0, 18, 28], act: { kind: "door", to: "shack2", rect: [0, 20, 18, 16], dir: "up", go: { x: 96, y: 134, dir: "up" } } });
+  return o;
+}
+const _buildArea9 = buildArea;
+buildArea = function (id) {
+  if (id === "shack") { const G = shackGeo(); Object.assign(AREAS.shack, { w: G.w, h: G.h, door: G.door }); }
+  const m = _buildArea9(id);
+  if (id === "shack") m.objs = shackObjects9();
+  if (id === "shack2") m.objs = [{ k: "door", x: 88, y: 148, solid: null, act: { kind: "door", to: "shack", rect: [0, 0, 16, 12], dir: "down", go: { x: 259, y: 56, dir: "down" } } }];
+  return m;
+};
+const _isleDoor9 = isleDoor;
+isleDoor = function (to, a) { if (to === "shack" && !(a && a.x !== undefined)) { play("tick"); const e = shackGeo().entry; isleGo("shack", e[0], e[1], "up"); } else _isleDoor9(to, a); };
+const _listPick9 = listPick;
+listPick = function () { const L = ISLE.list, before = shackTier(); _listPick9(); if (L && L.kind === "yard" && shackTier() !== before) { delete ISLE.maps.shack; toast("BRAM WILL HAVE IT DONE BY THE TIME YOU GET HOME", GOLD); } };
+const _listRows9 = listRows;
+listRows = function () {
+  const L = ISLE.list, s = isleSave();
+  if (L.kind === "yard") { const rows = _listRows9(); return rows.filter((r, i) => { const id = UPGRADES[i] && UPGRADES[i][0]; return !(id === "shack2" && !s.up.shack1) && !(id === "shack3" && !s.up.shack2); }); }
+  if (L.kind === "wardrobe") {
+    const cyc = (kind, list) => { const own = store.own[kind].slice().sort((a, b) => a - b), k = own.indexOf(store.eq[kind] || 0); store.eq[kind] = own[(k + 1) % own.length]; saveStore(); if (kind === "char") for (const key in ISPR) if (key.startsWith("pc")) delete ISPR[key]; };
+    const nm = (kind, list) => (DATA[list][store.eq[kind] || 0] || "").toString();
+    return [{ icon: "chest", name: "CHARACTER: " + (store.eq.char + 1), info: "WHO YOU ARE ON THE ISLAND (" + store.own.char.length + " YOURS). E: NEXT.", ok: true, act: () => cyc("char") },
+      { icon: "chest", name: "HAT: " + nm("hat", "hats"), info: "HATS YOU OWN TOPSIDE. E: NEXT.", ok: true, act: () => cyc("hat") },
+      { icon: "chest", name: "PET: " + nm("pet", "pets"), info: "YOUR PET FOLLOWS YOU ROUND THE ISLAND. E: NEXT.", ok: true, act: () => cyc("pet") }];
+  }
+  if (L.kind === "radio") return [{ icon: "radio", name: "OFF", info: "SWITCH THE RADIO OFF.", ok: true, act: () => { ISLE.radio = -1; } }].concat(SONGS.map((sg, i) => sg && songOwned(i) ? { icon: "radio", name: sg[0] + (ISLE.radio === i ? " (ON)" : ""), info: "PLAY " + sg[0] + ". IT KEEPS PLAYING WHILE YOU WALK ABOUT.", ok: true, act: () => { ISLE.radio = i; } } : null).filter(Boolean));
+  if (L.kind === "board") return (L.rows || []).map((e, i) => ({ icon: "chest", name: (i + 1) + ". " + e.n + "  " + e.s, info: "THE BEST ISLANDS. YOURS SCORES " + islandScore() + ".", ok: true, act: () => {} }));
+  return _listRows9();
+};
+Object.assign(LIST_TITLE, { wardrobe: "THE WARDROBE", radio: "THE RADIO", board: "THE BEST ISLAND BOARD" });
+const _listPick9b = listPick;
+listPick = function () { const L = ISLE.list; if (L && ["wardrobe", "radio", "board"].includes(L.kind)) { const r = listRows()[L.sel]; if (r) { r.act(); play("select"); } return; } _listPick9b(); };
+const _itemIcon9 = itemIcon;
+itemIcon = function (id) { if (/^shack\d$/.test(id)) return pix("icon_shack", [".rrr.", "rrrrr", "wwdww", "wwdww"], { r: "#a4504a", w: "#d2c4a6", d: "#6e482a" }); if (id === "radio") return IART.radio || pix("icon_radio", ["rrr", "rkr"], { r: "#c8643c", k: INK }); return _itemIcon9(id); };
+// ---- your topside hat and pet on the island
+const _drawIslePlayer9 = drawIslePlayer;
+drawIslePlayer = function (x, y, t) {
+  _drawIslePlayer9(x, y, t);
+  const h = store.eq.hat, a = h && DATA.atlas["hat" + h]; if (!a) return;
+  const bob = ISLE.moving && Math.floor(ISLE.walk * 7) % 2 ? 1 : 0;
+  g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(x - a[2] / 2), Math.round(y - 13 - a[3] - bob), a[2], a[3]);
+};
+const _placedSprites9 = placedSprites;
+placedSprites = function (list) {
+  _placedSprites9(list);
+  const I = ISLE, p = store.eq.pet, a = p && DATA.atlas["pet" + p]; if (!a || !I.map) return;
+  if (!I.pet || I.pet.area !== I.map.id) I.pet = { area: I.map.id, x: I.px - 12, y: I.py };
+  const P = I.pet;
+  list.push([P.y, { draw(cx, cy) { const flip = I.px < P.x; g.save(); g.translate(Math.round(P.x - cx), 0); if (flip) g.scale(-1, 1); g.drawImage(atlas, a[0], a[1], a[2], a[3], -Math.round(a[2] / 2), Math.round(P.y - cy - a[3] - (Math.hypot(I.px - P.x, I.py - P.y) > 16 ? Math.abs(Math.sin(T * 10)) * 2 : 0)), a[2], a[3]); g.restore(); } }]);
+};
+// ---- the radio and the pet each frame
+const _isleUpdate9 = isleUpdate;
+isleUpdate = function (dt) {
+  _isleUpdate9(dt);
+  const I = ISLE; if (!I) return;
+  if (store.eq.pet && I.map && (!I.pet || I.pet.area !== I.map.id)) I.pet = { area: I.map.id, x: I.px - 12, y: I.py };
+  if (I.pet && I.pet.area === (I.map && I.map.id)) { const dx = I.px - I.pet.x, dy = I.py - I.pet.y, d = Math.hypot(dx, dy); if (d > 18) { const k = Math.min(1, (d - 18) / d) * Math.min(1, dt * 4); I.pet.x += dx * k; I.pet.y += dy * k; } }
+  if (typeof AC === "undefined" || !AC) return;
+  const want = I.radio >= 0 && SONGS[I.radio] && songOwned(I.radio) ? I.radio : -1;
+  if (want !== MUS.song) MUS = { song: want, step: 0, next: AC.currentTime + 0.1 };
+  if (want < 0 || AC.state !== "running") return;
+  const [, , , bpm, lead, bass] = SONGS[want], L = lead.split(" "), B = bass.split(" "), sd = 30 / bpm;
+  while (MUS.next < AC.currentTime + 0.25) { const i = MUS.step % L.length; if (noteHz(L[i])) tone(noteHz(L[i]), MUS.next, sd * 0.9, "square", 0.03); if (noteHz(B[i % B.length])) tone(noteHz(B[i % B.length]), MUS.next, sd * 0.95, "triangle", 0.07); MUS.step++; MUS.next += sd; }
+};
+const _isleLeave9 = isleLeave;
+isleLeave = function () { if (ISLE) ISLE.radio = -1; MUS = { song: -1, step: 0, next: 0 }; _isleLeave9(); };
+// ---- the kitchen, fridge, wardrobe, radio
+const FRIDGE = { a: "shack", x: -1, y: -1, id: "chest" };
+const _isleAct59 = isleAct5;
+isleAct5 = function (o) {
+  const a = o.act;
+  if (a.kind === "kitchen") { ISLE.list = { kind: "cook", where: "smoke", sel: 0, top: 0 }; play("select"); }
+  else if (a.kind === "fridge") { ISLE.chest = { p: FRIDGE, side: 0, sel: 0 }; play("select"); }
+  else if (a.kind === "wardrobe") { ISLE.list = { kind: "wardrobe", sel: 0, top: 0 }; play("select"); }
+  else if (a.kind === "radio") { if (ISLE.radio === undefined) ISLE.radio = -1; ISLE.list = { kind: "radio", sel: 0, top: 0 }; play("select"); }
+  else if (a.kind === "plaque9") aquaPlaque();
+  else if (a.kind === "board9") boardAct();
+  else _isleAct59(o);
+};
+// ---- shared: the aquarium and the Best Island board
+function islandScore() {
+  const s = isleSave(), hearts = Object.values(s.folk).reduce((t, f) => t + Math.floor(f.pts / HEART), 0);
+  return Object.keys(s.log).length * 10 + Object.keys(s.donated).length * 10 + Object.keys(s.morphs || {}).length * 20 + hearts * 5
+    + Object.keys(RESTORE).filter(b => s.rest[b] === "done").length * 50 + Object.keys(s.pages).length * 10 + Object.keys(s.cave.boss).length * 50 + (s.flags.lit ? 500 : 0);
+}
+const NAME_OK = () => /^[A-Z0-9]{1,3}$/.test(store.name || "");
+const aquaCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), b => CODE_ABC[b & 31]).join("");
+async function aquaShare() {
+  const s = isleSave();
+  if (!LB.url) { isleSay(["THE SHARED DATABASE ISN'T SET UP, SO AQUARIUMS CAN'T BE SHARED."]); return; }
+  if (!NAME_OK()) { isleSay(["PUT YOUR NAME ON THE SCORES TOPSIDE FIRST. YOUR AQUARIUM IS SHARED UNDER IT."]); return; }
+  isleSay(["SHARING..."]);
+  const body = { n: store.name, d: Object.keys(s.donated).join(","), m: Object.keys(s.morphs || {}).join(","), t: Date.now() };
+  for (let k = 0; k < 3; k++) {
+    const code = aquaCode();
+    try { const r = await fetch(LB.url + "/aquarium/" + code + ".json", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (r.ok) { s.aquaCode = code; saveStore(); isleSay(["YOUR AQUARIUM CODE: " + code.slice(0, 3) + "-" + code.slice(3), "GIVE IT TO A FRIEND. THEY CAN VISIT FROM THEIR OWN AQUARIUM'S PLAQUE. (SHARE AGAIN LATER TO UPDATE IT: YOU'LL GET A NEW CODE.)"]); play("fanfare"); return; }
+      if (r.status === 401 || r.status === 403) { isleSay(["THE DATABASE SAID NO. ITS RULES NEED UPDATING FOR SHARED AQUARIUMS."]); return; } } catch (e) { break; }
+  }
+  isleSay(["COULDN'T REACH THE SHARED DATABASE. TRY AGAIN LATER."]);
+}
+async function aquaVisit(raw) {
+  const code = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!/^[A-HJ-NP-Z2-9]{6}$/.test(code)) { isleSay(["THAT DOESN'T LOOK LIKE AN AQUARIUM CODE. THEY'RE SIX LETTERS AND NUMBERS, LIKE ABC-123."]); return; }
+  if (!LB.url) { isleSay(["THE SHARED DATABASE ISN'T SET UP."]); return; }
+  isleSay(["LOOKING IT UP..."]);
+  try {
+    const r = await fetch(LB.url + "/aquarium/" + code + ".json"), d = r.ok ? await r.json() : null;
+    if (!d || typeof d.d !== "string") { isleSay(["NO AQUARIUM HAS THAT CODE."]); return; }
+    ISLE.visit = { n: String(d.n || "???").slice(0, 3), d: new Set(d.d.split(",").filter(id => SPEC[id])), m: String(d.m || "").split(",").filter(id => MORPH[id]) };
+    isleSay(["WELCOME TO " + ISLE.visit.n + "'S AQUARIUM. " + ISLE.visit.d.size + " OF " + TOPFISH.length + " FISH DONATED" + (ISLE.visit.m.length ? ", AND " + ISLE.visit.m.length + " HATCHERY MORPHS." : ".")]); play("chime");
+  } catch (e) { isleSay(["COULDN'T REACH THE SHARED DATABASE. TRY AGAIN LATER."]); }
+}
+function aquaPlaque() {
+  if (ISLE.visit) { isleSay([ISLE.visit.n + "'S AQUARIUM. " + ISLE.visit.d.size + " OF " + TOPFISH.length + " FISH." + (ISLE.visit.m.length ? " HATCHERY MORPHS: " + ISLE.visit.m.map(id => MORPH[id].name).slice(0, 6).join(", ") + "." : ""), "GO BACK OUT THROUGH THE DOOR TO RETURN HOME."]); return; }
+  const s = isleSave(), n = Object.keys(s.donated).length;
+  isleSay(["THE AQUARIUM. DONATED: " + n + " OF " + TOPFISH.length + " FISH FROM THE OPEN SEA." + (s.aquaCode ? " YOUR LAST SHARE CODE: " + s.aquaCode.slice(0, 3) + "-" + s.aquaCode.slice(3) + "." : "")], { opts: ["SHARE", "VISIT", "DONE"], act: [aquaShare, () => { let c = null; try { c = window.prompt("YOUR FRIEND'S AQUARIUM CODE:"); } catch (e) { c = null; } if (c) aquaVisit(c); }, () => play("tick")] });
+}
+async function boardAct() {
+  isleSay(["THE BEST ISLAND BOARD. YOUR ISLAND SCORES " + islandScore() + ".", "IT COUNTS YOUR LOG, DONATIONS, MORPHS, HEARTS, BUILDINGS, PAGES, BOSSES AND THE LIGHT."], { opts: ["POST IT", "SEE TOP 10", "DONE"], act: [boardPost, boardShow, () => play("tick")] });
+}
+async function boardPost() {
+  if (!LB.url) { isleSay(["THE SHARED DATABASE ISN'T SET UP."]); return; }
+  if (!NAME_OK()) { isleSay(["PUT YOUR NAME ON THE SCORES TOPSIDE FIRST."]); return; }
+  const sc = islandScore(); if (sc <= 0) return;
+  try { const r = await fetch(LB.url + "/island.json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, s: sc, t: Date.now() }) });
+    isleSay([r.ok ? "POSTED: " + store.name + ", " + sc + "." : "THE DATABASE SAID NO. ITS RULES NEED UPDATING FOR THE BEST ISLAND BOARD."]); if (r.ok) play("fanfare"); }
+  catch (e) { isleSay(["COULDN'T REACH THE SHARED DATABASE."]); }
+}
+async function boardShow() {
+  if (!LB.url) { isleSay(["THE SHARED DATABASE ISN'T SET UP."]); return; }
+  try { const rows = await LB.top("/island"); if (!rows.length) { isleSay(["NOBODY HAS POSTED AN ISLAND YET. BE THE FIRST."]); return; } ISLE.list = { kind: "board", sel: 0, top: 0, rows }; play("select"); }
+  catch (e) { isleSay(["COULDN'T REACH THE SHARED DATABASE."]); }
+}
+const _buildArea9b = buildArea;
+buildArea = function (id) {
+  const m = _buildArea9b(id);
+  if (id === "aqua") m.objs.forEach(o => { if (o.k === "plaque") o.act = { kind: "plaque9" }; });
+  if (id === "port") m.objs.forEach(o => { if (o.k === "board") o.act = { kind: "board9" }; });
+  return m;
+};
+const _drawTankFish9 = drawTankFish;
+drawTankFish = function (o, cx, cy) {
+  if (!ISLE.visit) { _drawTankFish9(o, cx, cy); return; }
+  const s = isleSave(), keep = s.donated; s.donated = {}; ISLE.visit.d.forEach(id => s.donated[id] = 1);
+  try { _drawTankFish9(o, cx, cy); } finally { s.donated = keep; }
+};
+const _isleAct59b = isleAct5;
+isleAct5 = function (o) { if (ISLE.visit && o.act.kind === "donate") { isleSay(["THIS IS " + ISLE.visit.n + "'S DONATION BOX. DONATE AT YOUR OWN AQUARIUM."]); return; } _isleAct59b(o); };
+const _isleGo9 = isleGo;
+isleGo = function (id, x, y, dir) { if (ISLE && ISLE.visit && id !== "aqua") ISLE.visit = null; _isleGo9(id, x, y, dir); };
+const _drawIsleHud9 = drawIsleHud;
+drawIsleHud = function (s) { _drawIsleHud9(s); if (ISLE.visit && ISLE.map.id === "aqua") { const t_ = "VISITING " + ISLE.visit.n + "'S AQUARIUM", w = t_.length * 6 + 10; islePanel(Math.round((IW - w) / 2), 4, w, 14); text(t_, IW / 2, 11, 1, "#b4461e", "center", null); } };
+// ---- keep the save small: forget things that grew back long ago
+const _newDay59 = newDay5;
+newDay5 = function (s) { _newDay59(s); const d = DAYN(s); for (const k in s.cut) if (s.cut[k] < d) delete s.cut[k]; };
+// ---- topside: Bram at the Rusty Hook, and your island trophies on the bar
+const ISLE_TROPHIES = ["tro_crab", "tro_prism", "tro_frost", "tro_cinder", "tro_dream", "f_cup", "f_ribbon"];
+function wrapTavern9() {                                         // casino.js loads after this file, so this runs once the page has loaded
+  if (typeof decorDraw !== "function" || decorDraw.isle) return;
+  const _decorDraw9 = decorDraw;
+  decorDraw = function (wide, x0, eq) {
+    _decorDraw9(wide, x0, eq);
+    const q = store.isle && store.isle.g; if (eq || !store.isle || !store.isle.built || !q) return;
+    try {
+      const c = npcSprite(FOLK.bram, "down", 0); g.drawImage(c, (wide ? x0 + 34 : 28) - (c.width >> 1), (wide ? 72 : 60) - c.height + 1);
+      const has = id => (q.cave && q.cave.boss && ({ tro_crab: 1, tro_prism: 2, tro_frost: 3, tro_cinder: 4, tro_dream: 5 })[id] && q.cave.boss[({ tro_crab: 1, tro_prism: 2, tro_frost: 3, tro_cinder: 4, tro_dream: 5 })[id]]) || (q.fest && ((id === "f_cup" && q.fest.derby_prize) || (id === "f_ribbon" && q.fest.fair_prize)));
+      let k = 0;
+      for (const id of ISLE_TROPHIES) if (has(id)) { const p = plSprite(id); g.drawImage(p, (wide ? x0 + 96 : 58) + k * 8, (wide ? 72 : 60) - p.height + 1); k++; }
+      if (q.flags && q.flags.lit) { const x = wide ? x0 + 150 : 92, y = wide ? 40 : 34; rect("#5a3a22", x - 1, y - 1, 16, 14); rect("#2c3c5a", x, y, 14, 12); rect("#f0ecdc", x + 6, y + 3, 2, 8); rect("#ffe68c", x + 6, y + 2, 2, 1); rect("#5a8c46", x, y + 10, 14, 2); }
+    } catch (e) { /* the island hasn't been drawn yet */ }
+  };
+  decorDraw.isle = 1;
+}
+window.addEventListener("load", wrapTavern9);

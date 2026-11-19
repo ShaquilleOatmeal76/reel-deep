@@ -199,7 +199,7 @@ async def main():
         await page.keyboard.press("KeyE")
         check("reading a page", "KEEPER'S LOG, PAGE 1" in await ev(MSG))
         await ev(CLEAR)
-        r = await ev("[UPGRADES.map(u => u[0]).slice(-2), CRAFT.map(c => c[0]).slice(-5), ['tro_crab', 'sprinkler3', 'copper', 'ruby', 'lantern', 'pulse', 'page'].map(id => itemIcon(id).width > 0)]")
+        r = await ev("[UPGRADES.map(u => u[0]).filter(id => id === 'lantern' || id === 'pulse'), CRAFT.map(c => c[0]).slice(-5), ['tro_crab', 'sprinkler3', 'copper', 'ruby', 'lantern', 'pulse', 'page'].map(id => itemIcon(id).width > 0)]")
         check("bright lantern and strong pulse at the shipyard; five new recipes; icons", r[0] == ["lantern", "pulse"] and len(r[1]) == 5 and all(r[2]), r)
         r = await ev("""(() => { const s = isleSave(); s.placed.push({ a: 'flats', x: 30, y: 30, id: 'sprinkler3' }); s.farm['flats:32,32'] = { c: 'lettuce', d: 0, w: 0 }; s.farm['flats:33,32'] = { c: 'lettuce', d: 0, w: 0 }; sprinklersWater(s); return [s.farm['flats:32,32'].w, s.farm['flats:33,32'].w]; })()""")
         check("the iron sprinkler waters 5 x 5", r == [1, 0], r)
