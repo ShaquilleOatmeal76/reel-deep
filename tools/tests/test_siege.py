@@ -89,6 +89,29 @@ async def main():
         r = await ev("""(() => { const Q = SIEGE; REEL.store.siege = undefined; Q.startSiege('0.0', {}); const g = Q.SG; g.earned = 100; g.wave = g.waves.length - 1; g.spawn = []; g.en = []; Q.siegeStep(1/60);
             const q = REEL.store.siege; const out = { stars: q.stars['0.0'], xp: q.xp }; REEL.store.siege = undefined; return out; })()""")
         check("a real win saves stars and xp", r["stars"] == 3 and r["xp"] == 50 + 60, r)
+        # the campaign (part 3)
+        r = await ev("""(() => { const Q = SIEGE, st = REEL.store, out = {}; st.siege = undefined; Q.openCampaign();
+            out.camp = !!Q.SG.camp && REEL.S.state === 'siege'; out.firstOpen = Q.mapOpen('0.0') && !Q.mapOpen('0.1') && !Q.mapOpen('1.0');
+            st.siege.stars['0.0'] = 2; out.next = Q.mapOpen('0.1') && !Q.mapOpen('0.2');
+            st.siege.stars['0.1'] = 3; st.siege.stars['0.2'] = 1; out.zone = Q.zonesDone() === 1; out.stars = Q.starsTotal() === 6;
+            // research: in order, costs stars, resets
+            Q.SG.camp.tab = 'research'; const node = (i, j) => [104 + j * 75 + 5, 42 + i * 22 - 4];
+            Q.campClick(...node(0, 1)); out.order = !(st.siege.res.t0);
+            Q.campClick(...node(0, 0)); Q.campClick(...node(0, 1)); Q.campClick(...node(0, 2)); out.bought = st.siege.res.t0 === 3 && Q.starsSpent() === 6;
+            Q.campClick(...node(1, 0)); out.broke = !st.siege.res.t1;
+            // research shows up in a map: cheaper coral, more range; no specs without research
+            Q.startSiege('0.0', {}); const g = Q.SG; out.cost = Q.ringFor(0).find(b => b[7] === 0 && b[2] === 'build')[5] === 63;
+            g.towers[0] = {k: 0, lv: 3, spec: -1, x: 0, y: 0, cd: 0}; out.range = Math.abs(Q.towerStats(g.towers[0]).r - 72 * 1.08) < 0.01 && Math.abs(Q.towerStats(g.towers[0]).d - 13 * 1.12) < 0.01;
+            g.ring = 0; out.noSpec = !Q.ringFor(0).some(b => b[2] === 'spec') && Q.ringFor(0).some(b => b[2] === 'none');
+            g.result = {won: true, stars: 3}; Q.siegeClick(240 + 100 - 92 + 4, 135 + 48 - 24 + 4); out.back = !!(Q.SG && Q.SG.camp);
+            Q.SG.camp.tab = 'research'; Q.campClick(480 - 70 + 4, 238 + 4); out.reset = Object.keys(st.siege.res).length === 0;
+            st.siege = undefined; return out; })()""")
+        for k, v in r.items(): check("campaign: " + k, v, r)
+        await ev("(() => { REEL.store.siege = {stars: {'0.0': 3, '0.1': 2, '0.2': 3}, xp: 2600, kit: 0, res: {t0: 3, hero: 1}, seen: []}; SIEGE.openCampaign(); })()")
+        await pg.wait_for_timeout(150); await pg.screenshot(path=os.path.join(OUT, "campaign.png"))
+        await ev("SIEGE.SG.camp.tab = 'research'"); await pg.wait_for_timeout(150); await pg.screenshot(path=os.path.join(OUT, "research.png"))
+        await ev("SIEGE.SG.camp.tab = 'hero'"); await pg.wait_for_timeout(150); await pg.screenshot(path=os.path.join(OUT, "hero.png"))
+        await ev("REEL.store.siege = undefined")
         # bot play: a good bot wins the first two Shallows maps
         rs = [await ev("siegeBot('0.0', 1.0, 1200)") for _ in range(3)]
         check("good bot wins Sandbar Crossing", all(x["won"] for x in rs), rs)
