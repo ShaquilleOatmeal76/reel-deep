@@ -339,7 +339,9 @@ function startSiege(id, opts) {
   S.state = "siege"; S.overlay = null;
   SG = { id, M, R, bg: buildBg(M, R), D: mapIndex(id), test: !!opts.test, waves: buildWaves(id, M), wave: -1, spawn: [], waveT: 0, nextT: 0,
     shells: M.start, hull: 20, towers: M.pads.map(() => null), en: [], shots: [], fx: [], burns: [], pops: [], t: 0, speed: 1, paused: false,
-    ring: null, hover: null, result: null, menu: false, tip: null, seenNow: [], kills: 0, leaked: 0, hpK: hpScale(mapIndex(id)) };
+    ring: null, hover: null, result: null, menu: false, tip: null, seenNow: [], kills: 0, leaked: 0, hpK: hpScale(mapIndex(id)), earned: 0 };
+  SG.heroXp0 = opts.test ? (opts.xp || 0) : siegeSave().xp;
+  SG.hero = newHero(opts.kit !== undefined ? opts.kit : (siegeSave().kit | 0), SG.heroXp0);
   siegeResize();
   siegeTip(M.name + ": CLICK A PAD TO BUILD, THEN START.");
   play("select");
@@ -348,6 +350,7 @@ function siegeLeave() {
   SG = null; newDive(); resize(); play("back");
 }
 function siegeTip(s) { SG.tip = { s, t: 6 }; }
+function siegeAgain() { return { test: SG.test, kit: SG.hero ? SG.hero.kit : 0, xp: SG.test ? SG.heroXp0 || 0 : undefined }; }
 
 // ---------------------------------------------------------------------------------------------------- the simulation
 function callWave() {
@@ -368,6 +371,9 @@ function addEnemy(k, ri, s) {
 }
 function lit(x, y) {                                           // is this spot lit? (dark zones and hidden enemies need light)
   for (const t of SG.towers) if (t && TW[t.k].kind === "light" && inRange(t.x, t.y, x, y, towerStats(t).r)) return true;
+  const H = SG.hero;
+  if (H && !H.dead && H.kit === 2 && inRange(H.x, H.y, x, y, heroLight(H))) return true;
+  if (H && H.flareT > 0 && inRange(H.flareX, H.flareY, x, y, 84)) return true;
   return false;
 }
 function visibleTo(e) { return !(e.fl.includes("h") || SZ[SG.M.zone].dark > 0.5) || lit(e.x, e.y); }
@@ -383,7 +389,7 @@ function hurt(e, dmg, kind, src) {
   if (e.hp <= 0) killEnemy(e);
 }
 function killEnemy(e) {
-  SG.shells += e.bounty; SG.kills++;
+  SG.shells += e.bounty; SG.kills++; SG.earned += e.bounty;
   siegePop(e.x, e.y - 8, "+" + e.bounty, GOLD);
   SG.fx.push({ k: "pop", x: e.x, y: e.y, t: 0 });
   if (e.fl.includes("s")) for (let i = 0; i < 2; i++) { const n = addEnemy("leech", e.ri, Math.max(0, e.s - 6 + i * 10)); n.max = n.hp = Math.round(n.hp); }
@@ -416,12 +422,14 @@ function siegeStep(dt) {
       if (e.grabT <= 0) for (const t of G.towers) if (t && !t.off && Math.hypot(t.x - e.x, t.y - e.y) < 26 && !guarded(t)) { t.off = 3; e.grabT = 6; siegePop(t.x, t.y - 26, "GRABBED", RED); break; }
     }
     if (e.held > 0) { e.held -= dt; continue; }
+    if (e.block) { if (e.block.dead || e.block.block !== e) e.block = null; else { heroHit(e.block, eDps(e) * dt); continue; } }
     const pl = G.R.routes[e.ri];
     e.s += e.spd * (1 - e.slow) * dt;
     if (e.s >= pl.total) { e.hp = 0; G.hull -= e.hull; G.leaked += e.hull; siegePop(G.M.buoy[0], G.M.buoy[1] - 34, "-" + e.hull, RED); play("miss", 0.5); S.shake = 0.2; continue; }
     const [x, y, rt] = atS(pl, e.s); e.x = x; e.y = y; e.right = rt;
   }
   G.en = G.en.filter(e => e.hp > 0);
+  heroTick(dt);
   // towers
   for (const t of G.towers) if (t) towerTick(t, dt);
   // shots in flight
@@ -512,7 +520,9 @@ function towerTick(t, dt) {
 function siegeEnd(won) {
   const G = SG, stars = won ? (G.leaked <= 2 ? 3 : G.leaked <= 10 ? 2 : 1) : 0;
   G.result = { won, stars, t: 0 };
-  if (won && !G.test) { const q = siegeSave(); q.stars[G.id] = Math.max(q.stars[G.id] || 0, stars); saveStore(); }
+  const xp = Math.round(G.earned * 0.5 + (won ? 60 + 20 * G.D : 0));
+  G.result.xp = xp; G.result.lv0 = G.hero ? G.hero.lv : 1; G.result.lv1 = heroLevel(G.heroXp0 + xp);
+  if (!G.test) { const q = siegeSave(); q.xp += xp; if (won) q.stars[G.id] = Math.max(q.stars[G.id] || 0, stars); saveStore(); }
   play(won ? "fanfare" : "miss");
 }
 
@@ -548,6 +558,124 @@ function ringAct(b) {
   SG.ring = null;
 }
 
+
+// ---------------------------------------------------------------------------------------------------- the hero
+// Your angler swims onto the field in your topside look (every character fights the same). Click open seabed to send
+// them there. They stop the nearest creature and fight it; the Harpooner also throws harpoons from range. Knocked out,
+// they swim back in from the buoy after 15 s. Three kits, each with two abilities (Q and E). Levels 1-20 carry over.
+const KITS = [
+  { name: "HARPOONER", q: ["BIG CATCH", "CATCH", 18], e: ["HARPOON VOLLEY", "VOLLEY", 24], melee: 10, range: 58, throwD: 8, light: 0 },
+  { name: "NETCASTER", q: ["CAST NET", "NET", 16], e: ["HAUL IN", "HAUL", 24], melee: 14, range: 0, throwD: 0, light: 0 },
+  { name: "LAMPLIGHTER", q: ["FLARE", "FLARE", 18], e: ["PULSE", "PULSE", 22], melee: 11, range: 0, throwD: 0, light: 46 },
+];
+const heroXpFor = L => 50 * (L - 1) * L;                       // total xp to reach level L (level 20 = 19,000)
+function heroLevel(xp) { let L = 1; while (L < 20 && xp >= heroXpFor(L + 1)) L++; return L; }
+function kitsOpen() { if (SG && SG.test) return [0, 1, 2]; const d = siegeSave().done | 0; return [0].concat(d >= 2 ? [1] : [], d >= 4 ? [2] : []); }
+function newHero(kit, xp) {
+  const lv = heroLevel(xp), [bx, by] = SG.M.buoy, max = Math.round(120 * (1 + 0.06 * (lv - 1)));
+  return { kit, lv, x: bx, y: by + 20, tx: null, ty: null, hp: max, max, atkT: 0, cdQ: 0, cdE: 0, dead: 0, face: 1, walk: 0, block: null, calm: 0, flareT: 0, pet: { x: bx - 12, y: by + 20 }, flag: 0 };
+}
+const heroK = H => 1 + 0.05 * (H.lv - 1);                      // damage and ability strength by level
+function heroLight(H) { if (!H || H.dead) return 0; return Math.max(KITS[H.kit].light, 22); }
+function heroTick(dt) {
+  const G = SG, H = G.hero; if (!H) return;
+  H.cdQ = Math.max(0, H.cdQ - dt); H.cdE = Math.max(0, H.cdE - dt); H.flareT = Math.max(0, H.flareT - dt); H.flag = Math.max(0, H.flag - dt);
+  if (H.dead > 0) { H.dead -= dt; if (H.dead <= 0) { const [bx, by] = G.M.buoy; Object.assign(H, { dead: 0, hp: H.max, x: bx, y: by + 20, tx: null, block: null }); siegePop(bx, by - 30, "BACK IN!", LIME); } return; }
+  const d = KITS[H.kit], k = heroK(H);
+  if (H.tx !== null) {                                          // swimming to where you clicked
+    if (H.block) { H.block.block = null; H.block = null; }
+    const dx = H.tx - H.x, dy = H.ty - H.y, dist = Math.hypot(dx, dy), v = 58 * dt;
+    if (dist <= v) { H.x = H.tx; H.y = H.ty; H.tx = null; } else { H.x += dx / dist * v; H.y += dy / dist * v; H.face = dx >= 0 ? 1 : -1; H.walk += dt; }
+  } else {
+    if (H.block && (H.block.hp <= 0 || Math.hypot(H.block.x - H.x, H.block.y - H.y) > 26)) { H.block.block = null; H.block = null; }
+    if (!H.block) {                                             // stop the nearest creature that comes by
+      const e = G.en.filter(e => e.hp > 0 && !e.block && !e.fl.includes("f") && !e.boss && visibleTo(e) && Math.hypot(e.x - H.x, e.y - H.y) < 22).sort((a, b) => Math.hypot(a.x - H.x, a.y - H.y) - Math.hypot(b.x - H.x, b.y - H.y))[0];
+      if (e) { H.block = e; e.block = H; }
+    }
+  }
+  H.atkT = Math.max(0, H.atkT - dt);
+  if (H.block && H.atkT <= 0) { hurt(H.block, d.melee * k, H.kit === 2 ? "zap" : "phys"); H.atkT = 0.8; H.face = H.block.x >= H.x ? 1 : -1; H.swing = 0.2; H.calm = 0; }
+  else if (!H.block && d.range && H.atkT <= 0) {
+    const e = G.en.filter(e => e.hp > 0 && visibleTo(e) && inRange(H.x, H.y, e.x, e.y, d.range)).sort((a, b) => (b.s / G.R.routes[b.ri].total) - (a.s / G.R.routes[a.ri].total))[0];
+    if (e) { G.shots.push({ k: "bolt", x: H.x, y: H.y - 10, e, tx: e.x, ty: e.y, d: d.throwD * k, t: 0, harpoon: 1 }); H.atkT = 1.3; H.face = e.x >= H.x ? 1 : -1; }
+  }
+  H.calm += dt; H.swing = Math.max(0, (H.swing || 0) - dt);
+  if (H.calm > 3 && !H.block) H.hp = Math.min(H.max, H.hp + H.max * 0.04 * dt);
+  const P = H.pet, px = H.x - 12 * H.face, py = H.y - 2;      // the pet follows
+  if (Math.hypot(px - P.x, py - P.y) > 2) { const kk = Math.min(1, dt * 4); P.x += (px - P.x) * kk; P.y += (py - P.y) * kk; }
+}
+function heroHit(H, dmg) {
+  if (H.dead) return;
+  H.hp -= dmg; H.calm = 0;
+  if (H.hp <= 0) { H.hp = 0; H.dead = 15; if (H.block) { H.block.block = null; H.block = null; } siegePop(H.x, H.y - 20, "KNOCKED OUT", RED); play("miss"); }
+}
+const eDps = e => (2 + ETYPES[e.k][2] * 0.07) * Math.sqrt(SG.hpK);
+function heroAbility(which) {
+  const G = SG, H = G && G.hero; if (!H || H.dead || G.result || G.paused) return;
+  const cd = which === "q" ? "cdQ" : "cdE"; if (H[cd] > 0) { play("miss", 0.4); return; }
+  const k = heroK(H), near = r => G.en.filter(e => e.hp > 0 && inRange(H.x, H.y, e.x, e.y, r));
+  if (H.kit === 0 && which === "q") {                           // BIG CATCH: reel the furthest-along creature back down the current
+    const e = near(90).filter(e => !e.boss && visibleTo(e)).sort((a, b) => (b.s / G.R.routes[b.ri].total) - (a.s / G.R.routes[a.ri].total))[0];
+    if (!e) { play("miss", 0.4); return; }
+    G.fx.push({ k: "reel", x: H.x, y: H.y - 8, tx: e.x, ty: e.y, t: 0, dur: 0.5 });
+    e.s = Math.max(0, e.s - 80); hurt(e, 30 * k, "phys"); e.held = Math.max(e.held, 0.6); play("reel");
+  } else if (H.kit === 0) {                                     // HARPOON VOLLEY: everything nearby
+    const list = near(72); if (!list.length) { play("miss", 0.4); return; }
+    for (const e of list) { G.fx.push({ k: "harpoon", x: H.x, y: H.y - 10, tx: e.x, ty: e.y - 3, t: 0, dur: 0.3 }); hurt(e, 40 * k, "phys"); }
+    play("hit");
+  } else if (H.kit === 1 && which === "q") {                    // CAST NET: slow everything in an area
+    for (const e of near(56)) { e.slow = Math.max(e.slow, 0.6); e.slowT = 4; }
+    G.fx.push({ k: "net", x: H.x, y: H.y, r: 56, t: 0, dur: 0.6 }); play("plop");
+  } else if (H.kit === 1) {                                     // HAUL IN: drag a group back into a bunch and hold them
+    const list = near(64).filter(e => !e.boss); if (!list.length) { play("miss", 0.4); return; }
+    for (const e of list) { e.s = Math.max(0, e.s - 34); e.held = Math.max(e.held, 1.5); hurt(e, 20 * k, "phys"); }
+    G.fx.push({ k: "net", x: H.x, y: H.y, r: 64, t: 0, dur: 0.8, haul: 1 }); play("reel");
+  } else if (H.kit === 2 && which === "q") {                    // FLARE: light a wide area for 8 seconds
+    H.flareT = 8; H.flareX = H.x; H.flareY = H.y; play("chime");
+  } else {                                                      // PULSE: stun everything nearby
+    for (const e of near(58)) { e.held = Math.max(e.held, e.boss ? 0.8 : 2.5); hurt(e, 25 * k, "zap"); }
+    G.fx.push({ k: "pulse", x: H.x, y: H.y - 6, t: 0, dur: 0.5 }); play("pulse");
+  }
+  H[cd] = KITS[H.kit][which][2];
+}
+function drawHero(H) {
+  if (H.dead) return;
+  const legs = H.tx !== null ? Math.floor(H.walk * 8) % 2 : 0, c = isleChar(H.face > 0 ? "side" : "left", legs, false);
+  g.globalAlpha = 0.25; ell("#000000", H.x - 6, H.y - 1, 12, 4); g.globalAlpha = 1;
+  ring(GOLD, H.x, H.y, 7);
+  const bob = H.swing > 0 ? -1 : 0;
+  g.drawImage(c, Math.round(H.x - c.width / 2), Math.round(H.y - c.height + 1 + bob));
+  const h = store.eq.hat, a = h && DATA.atlas["hat" + h];
+  if (a) g.drawImage(atlas, a[0], a[1], a[2], a[3], Math.round(H.x - a[2] / 2), Math.round(H.y - 13 - a[3] + bob), a[2], a[3]);
+  if (H.kit === 0) line("#dcdce6", H.x + 5 * H.face, H.y - 9, H.x + 11 * H.face, H.y - 16 - (H.swing > 0 ? 3 : 0));
+  else if (H.kit === 1) { g.globalAlpha = 0.8; for (let i = 0; i < 3; i++) line("#dcd2aa", H.x - 7 * H.face, H.y - 8 + i * 2, H.x - 3 * H.face, H.y - 2 + i); g.globalAlpha = 1; }
+  else { rect("#6e5a46", H.x + 6 * H.face, H.y - 16, 1, 12); rect(INK, H.x + 6 * H.face - 2, H.y - 19, 5, 5); rect("#fff08c", H.x + 6 * H.face - 1, H.y - 18, 3, 3); }
+  if (H.hp < H.max) { rect(INK, H.x - 7, H.y - 20, 14, 3); rect(H.hp / H.max > 0.4 ? LIME : RED, H.x - 6, H.y - 19, Math.max(1, Math.round(12 * H.hp / H.max)), 1); }
+}
+function drawPet(H) {
+  const p = store.eq.pet, a = p && DATA.atlas["pet" + p]; if (!a || H.dead) return;
+  const P = H.pet, flip = H.x < P.x, hop = Math.hypot(H.x - P.x, H.y - P.y) > 14 ? Math.abs(Math.sin(SG.t * 10)) * 2 : 0;
+  g.save(); g.translate(Math.round(P.x), 0); if (flip) g.scale(-1, 1);
+  g.drawImage(atlas, a[0], a[1], a[2], a[3], -Math.round(a[2] / 2), Math.round(P.y - a[3] - 6 - hop), a[2], a[3]); g.restore();
+}
+const HERO_PANEL = [4, SIH - 31, 128, 27];
+const heroBtn = i => [HERO_PANEL[0] + 26 + i * 50, HERO_PANEL[1] + 15, 46, 10];
+function drawHeroPanel() {
+  const G = SG, H = G.hero; if (!H) return;
+  const [x, y, w, h] = HERO_PANEL, d = KITS[H.kit];
+  rect(INK, x, y, w, h); rect("#0e1a30", x + 1, y + 1, w - 2, h - 2); outline(x + 1, y + 1, w - 2, h - 2, "#78bee6");
+  const face = isleChar("front", 0, false); if (H.dead) g.globalAlpha = 0.35; g.drawImage(face, x + 6, y + 5); g.globalAlpha = 1;
+  text("LV " + H.lv, x + 26, y + 7, 1, GOLD, "left");
+  text(H.dead ? "BACK IN " + Math.ceil(H.dead) : d.name, x + w - 6, y + 7, 1, H.dead ? RED : "#aadcff", "right");
+  rect(INK, x + 5, y + 20, 16, 3); rect(H.hp / H.max > 0.4 ? LIME : RED, x + 6, y + 21, Math.max(0, Math.round(14 * H.hp / H.max)), 1);
+  ["q", "e"].forEach((wk, i) => {
+    const [bx, by, bw, bh] = heroBtn(i), cd = i ? H.cdE : H.cdQ, col = i ? ORANGE : CYAN;
+    rect(INK, bx, by, bw, bh); rect("#18284a", bx + 1, by + 1, bw - 2, bh - 2); outline(bx, by, bw, bh, col);
+    text(wk.toUpperCase() + " " + d[wk][1], bx + 3, by + 5, 1, col, "left", null);
+    if (cd > 0) { g.globalAlpha = 0.65; rect("#060a1e", bx + 1, by + 1, Math.round((bw - 2) * cd / d[wk][2]), bh - 2); g.globalAlpha = 1; }
+  });
+}
+
 // ---------------------------------------------------------------------------------------------------- drawing
 function sSprite(key, x, y, flip) {
   const a = SIEGE_ART[key]; if (!a) return;
@@ -575,6 +703,7 @@ function drawSiege() {
   G.towers.forEach(t => { if (t) items.push([t.y, 1, t]); });
   for (const e of G.en) items.push([e.y, 2, e]);
   items.push([G.M.buoy[1], 3]);
+  if (G.hero) { items.push([G.hero.y + 0.1, 4]); items.push([G.hero.pet.y, 5]); }
   items.sort((a, b) => a[0] - b[0]);
   const fl = fleshAtlas();
   for (const [, kind, o] of items) {
@@ -596,10 +725,13 @@ function drawSiege() {
       if (o.slowT > 0) rect(CYAN, o.x - 1, fy - 2, 2, 1);
       if (o.hp < o.max) { rect(INK, o.x - 6, fy - 4, 12, 3); rect(o.hp / o.max > 0.4 ? LIME : GOLD, o.x - 5, fy - 3, Math.max(1, Math.round(10 * o.hp / o.max)), 1); }
     } else if (kind === 3) drawBuoy(G.M.buoy[0], G.M.buoy[1]);
+    else if (kind === 4) drawHero(G.hero);
+    else if (kind === 5) drawPet(G.hero);
   }
   // shots and effects
   for (const s of G.shots) {
-    if (s.k === "bolt") { rect(s.big ? "#ff5040" : "#ffc896", s.x - 1, s.y - 1, s.big ? 3 : 2, s.big ? 3 : 2); }
+    if (s.k === "bolt" && s.harpoon) { const a = Math.atan2(s.ty - s.y, s.tx - s.x); line("#e6e6f0", s.x, s.y, s.x - Math.cos(a) * 6, s.y - Math.sin(a) * 6); }
+    else if (s.k === "bolt") { rect(s.big ? "#ff5040" : "#ffc896", s.x - 1, s.y - 1, s.big ? 3 : 2, s.big ? 3 : 2); }
     else { disc(INK, s.x, s.y, s.small ? 1 : 2); disc("#a064dc", s.x, s.y, s.small ? 0 : 1); }
   }
   for (const f of G.fx) {
@@ -609,9 +741,14 @@ function drawSiege() {
     else if (f.k === "pop") { g.globalAlpha = 1 - k; ring("#ff8ca0", f.x, f.y - 3, 2 + k * 6); g.globalAlpha = 1; }
     else if (f.k === "dust") { g.globalAlpha = 1 - k; ring("#f0e6d2", f.x, f.y, 6 + k * 10); g.globalAlpha = 1; }
     else if (f.k === "slam") { const u = Math.sin(Math.min(1, k * 2) * Math.PI); line("#963c6e", f.tx, f.ty - 4, lerp(f.tx, f.x, u), lerp(f.ty - 4, f.y - 2, u)); line("#963c6e", f.tx + 1, f.ty - 4, lerp(f.tx, f.x, u) + 1, lerp(f.ty - 4, f.y - 2, u)); if (k > 0.4) { g.globalAlpha = 1 - k; ring("#f0a0c8", f.x, f.y, 6 + k * 16); g.globalAlpha = 1; } }
+    else if (f.k === "reel" || f.k === "harpoon") { g.globalAlpha = 1 - k; line(f.k === "reel" ? "#dcd2aa" : "#e6e6f0", f.x, f.y, f.tx, f.ty); g.globalAlpha = 1; }
+    else if (f.k === "net") { g.globalAlpha = 0.8 * (1 - k); const r = f.r * (0.5 + 0.5 * Math.min(1, k * 2)); ring("#dcd2aa", f.x, f.y, r); for (let i = -2; i <= 2; i++) { line("#dcd2aa", f.x - r, f.y + i * r * 0.25, f.x + r, f.y + i * r * 0.25); line("#dcd2aa", f.x + i * r * 0.35, f.y - r * 0.7, f.x + i * r * 0.35, f.y + r * 0.7); } g.globalAlpha = 1; }
+    else if (f.k === "pulse") { g.globalAlpha = 1 - k; ring("#82f0ff", f.x, f.y, 6 + k * 52); ring("#ffffff", f.x, f.y, 4 + k * 40); g.globalAlpha = 1; }
     else if (f.k === "grab") { if (f.e.hp > 0) { g.globalAlpha = 0.7; line("#5ab464", f.tx, f.ty - 6, f.e.x, f.e.y - 2); g.globalAlpha = 1; } }
   }
   for (const p of G.pops) { g.globalAlpha = 1 - p.t; text(p.s, p.x, p.y, 1, p.col); g.globalAlpha = 1; }
+  if (G.hero && G.hero.flareT > 0) { g.globalAlpha = 0.5 + 0.3 * Math.sin(G.t * 9); disc("#ffdc78", G.hero.flareX, G.hero.flareY - 30, 2); g.globalAlpha = 1; }
+  if (G.hero && G.hero.flag > 0 && G.hero.tx !== null) { line(GOLD, G.hero.tx, G.hero.ty, G.hero.tx, G.hero.ty - 8); rect(GOLD, G.hero.tx + 1, G.hero.ty - 8, 4, 3); }
   // dark zones: a mask with holes where it's lit
   if (SZ[G.M.zone].dark > 0) drawDarkness();
   // the red markers where waves come in, while one is waiting
@@ -645,6 +782,8 @@ function drawDarkness() {
   const hole = (cx, cy, r) => { for (const [k, a] of [[1, 0.35], [0.8, 0.35], [0.6, 0.6], [0.45, 1]]) { x.fillStyle = "rgba(0,0,0," + a + ")"; x.beginPath(); x.ellipse(cx, cy, r * k, r * k * 0.7, 0, 0, 6.283); x.fill(); } };
   for (const t of G.towers) if (t && TW[t.k].kind === "light") hole(t.x, t.y - 4, towerStats(t).r);
   hole(G.M.buoy[0], G.M.buoy[1] - 10, 34);
+  if (G.hero && !G.hero.dead) hole(G.hero.x, G.hero.y - 6, heroLight(G.hero));
+  if (G.hero && G.hero.flareT > 0) hole(G.hero.flareX, G.hero.flareY, 84 * Math.min(1, G.hero.flareT));
   for (const t of G.towers) if (t && TW[t.k].kind !== "light") hole(t.x, t.y - 10, 14);
   for (const f of G.fx) if (f.k === "zap" || f.k === "boom") hole(f.tx || f.x, f.ty || f.y, 16);
   g.drawImage(DARKC, 0, 0);
@@ -690,6 +829,7 @@ function drawSiegeHud() {
   siegeBtn(...SIEGE_HUD.speed, G.speed === 2 ? "X2" : "X1", G.speed === 2 ? GOLD : null);
   siegeBtn(...SIEGE_HUD.pause, "II", G.paused ? GOLD : null);
   if (G.paused && !G.menu && !G.result) { box(SIW / 2 - 40, SIH / 2 - 10, 80, 20, GOLD); text("PAUSED", SIW / 2, SIH / 2, 1, GOLD); }
+  drawHeroPanel();
   if (G.tip) { const w = Math.min(SIW - 20, textW(G.tip.s, 1) + 14); g.globalAlpha = Math.min(1, G.tip.t); box(SIW / 2 - w / 2, SIH - 26, w, 16, GOLD); text(G.tip.s, SIW / 2, SIH - 18, 1, WHITE); g.globalAlpha = 1; }
 }
 function heart(x, y) { for (const [a, b] of [[1, 0], [2, 0], [5, 0], [6, 0]]) rect("#f04650", x + a, y + b, 1, 1); rect("#f04650", x, y + 1, 8, 2); rect("#f04650", x + 1, y + 3, 6, 1); rect("#f04650", x + 2, y + 4, 4, 1); rect("#f04650", x + 3, y + 5, 2, 1); }
@@ -701,7 +841,8 @@ function drawResult() {
   text(R_.won ? "ZONE HELD!" : "THE BUOY FELL", SIW / 2, y + 14, 2, R_.won ? GOLD : RED);
   if (R_.won) for (let i = 0; i < 3; i++) bigStar(SIW / 2 - 24 + i * 24, y + 40, i < R_.stars);
   else text("THE FLIPSIDE GOT THROUGH", SIW / 2, y + 40, 1, "#ffc8c8");
-  text("WAVES " + Math.max(0, SG.wave + 1) + "/" + SG.waves.length + "  HULL " + SG.hull + "/20", SIW / 2, y + 58, 1, "#c8e6ff");
+  text("WAVES " + Math.max(0, SG.wave + 1) + "/" + SG.waves.length + "  HULL " + SG.hull + "/20  +" + R_.xp + " XP", SIW / 2, y + 58, 1, "#c8e6ff");
+  if (R_.lv1 > R_.lv0 && !SG.test) text("HERO LEVEL " + R_.lv1 + "!", SIW / 2, y + 68, 1, GOLD);
   siegeBtn(x + 16, y + h - 24, 76, 16, "RETRY", null);
   siegeBtn(x + w - 92, y + h - 24, 76, 16, SG.test ? "QUIT" : "CONTINUE", GOLD);
 }
@@ -723,14 +864,14 @@ function siegeClick(x, y) {
   const G = SG; if (!G) return;
   if (G.result) {
     const w = 200, h = 96, bx = SIW / 2 - w / 2, by = SIH / 2 - h / 2;
-    if (hitR(x, y, [bx + 16, by + h - 24, 76, 16])) { const t = G.test; startSiege(G.id, { test: t }); }
+    if (hitR(x, y, [bx + 16, by + h - 24, 76, 16])) startSiege(G.id, siegeAgain());
     else if (hitR(x, y, [bx + w - 92, by + h - 24, 76, 16])) siegeLeave();
     return;
   }
   if (G.menu) {
     const w = 160, h = 82, bx = SIW / 2 - w / 2, by = SIH / 2 - h / 2;
     const i = [0, 1, 2].find(k => hitR(x, y, [bx + 16, by + 22 + k * 19, w - 32, 15]));
-    if (i === 0) { G.menu = false; G.paused = false; } else if (i === 1) startSiege(G.id, { test: G.test }); else if (i === 2) siegeLeave(); else { G.menu = false; G.paused = false; }
+    if (i === 0) { G.menu = false; G.paused = false; } else if (i === 1) startSiege(G.id, siegeAgain()); else if (i === 2) siegeLeave(); else { G.menu = false; G.paused = false; }
     play("tick"); return;
   }
   if (siegeCanCall() && hitR(x, y, SIEGE_HUD.next)) { callWave(); return; }
@@ -742,8 +883,11 @@ function siegeClick(x, y) {
     if (b) { ringAct(b); return; }
     G.ring = null;
   }
+  if (G.hero) for (const i of [0, 1]) if (hitR(x, y, heroBtn(i))) { heroAbility(i ? "e" : "q"); return; }
+  if (hitR(x, y, HERO_PANEL)) return;
   const pi = G.M.pads.findIndex(([px, py], i) => Math.hypot(x - px, (y - py) * 1.6) < 14 || (G.towers[i] && x > px - 10 && x < px + 10 && y > py - 30 && y < py + 4));
-  if (pi >= 0) { G.ring = pi; play("tick"); }
+  if (pi >= 0) { G.ring = pi; play("tick"); return; }
+  if (G.hero && !G.hero.dead && y > 22) { G.hero.tx = clamp(x, 6, SIW - 6); G.hero.ty = clamp(y, 26, SIH - 4); G.hero.flag = 1.2; play("tick", 0.5); }
 }
 function siegeTouch(e) { const [x, y] = siegePos(e); SG.hover = [x, y]; siegeClick(x, y); }
 function siegeMove(e) { if (SG) SG.hover = siegePos(e); }
@@ -751,9 +895,11 @@ function siegeKey(e, down) {
   if (!SG || !down) return;
   const c = e.code, G = SG;
   if (c === "Escape") { e.preventDefault(); if (G.result) return; if (G.ring !== null) { G.ring = null; return; } G.menu = !G.menu; G.paused = G.menu; play("tick"); return; }
-  if (G.result || G.menu) { if (c === "Space" || c === "Enter") { e.preventDefault(); if (G.result) { if (c === "Enter") siegeLeave(); else startSiege(G.id, { test: G.test }); } else { G.menu = false; G.paused = false; } } return; }
+  if (G.result || G.menu) { if (c === "Space" || c === "Enter") { e.preventDefault(); if (G.result) { if (c === "Enter") siegeLeave(); else startSiege(G.id, siegeAgain()); } else { G.menu = false; G.paused = false; } } return; }
   if (c === "Space") { e.preventDefault(); G.paused = !G.paused; return; }
   if (c === "KeyN") { callWave(); return; }
+  if (c === "KeyQ") { heroAbility("q"); return; }
+  if (c === "KeyE") { heroAbility("e"); return; }
   if (c === "Tab") { e.preventDefault(); G.speed = G.speed === 2 ? 1 : 2; play("tick"); return; }
   if (/^Digit[1-9]$/.test(c) && G.ring !== null) { const btns = ringFor(G.ring).filter(b => b[2] !== "sell"), b = btns[+c.slice(5) - 1]; if (b) ringAct(b); return; }
   if (c === "KeyX" && G.ring !== null && G.towers[G.ring]) { ringAct(ringFor(G.ring).find(b => b[2] === "sell")); return; }
@@ -766,5 +912,5 @@ function siegeUpdate(dt) {
   let left = dt * SG.speed;
   while (left > 0 && SG && !SG.result) { const h = Math.min(left, 1 / 60); siegeStep(h); left -= h; }
 }
-window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
-if (TEST_SIEGE) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); startSiege(SMAPS[TEST_SIEGE] ? TEST_SIEGE : "0.0", { test: true }); } }, 50); }
+window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
+if (TEST_SIEGE) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); let kit = 0; try { kit = clamp(parseInt(new URLSearchParams(location.search).get("kit"), 10) || 0, 0, 2); } catch (e) {} startSiege(SMAPS[TEST_SIEGE] ? TEST_SIEGE : "0.0", { test: true, kit }); } }, 50); }
