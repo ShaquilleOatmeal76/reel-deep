@@ -30,6 +30,22 @@ have found and holding the rewards that come with them. Secret rewards are never
 
 Some things also happen on their own, going by your device's clock: certain hours, certain nights and certain days of the year.
 
+## The Rusty Hook
+
+After 20 dives the tavern opens. Tavern chips come free every day and from every dive; they never turn into coins, and
+nothing bought with them changes your score. Every game pays back about 95% over time.
+
+- **TABLES:** Catch 21, Bigger Fish (heavier or lighter), Crown & Anchor (the sailors' dice), and the **weekly
+  tournament** (buy in, play the same 25 hands as everyone else, top 3 win titles and #1 a cup for the bar).
+- **MACHINES:** Plinko, Line Snap (cash out before the line snaps), the Reel Deal (slots, with a jackpot shared by
+  everyone that grows by the hour), the Ship's Wheel, Treasure Dive (dodge the jellies) and Net Haul (pick 5 fish).
+- **THE DERBY** and the **FIN PRIX PIT**.
+- **BUY THINGS:** the Captain's Locker (prestige gear), the Shady Dealer (three things a week), decorations for your own
+  bar, a round for the house (everyone at the bar sees your name that day), songs, stories and more.
+
+You can also bet on your next dive from the title screen. Bets are priced from your whole record, so a run of bad dives
+won't make them pay better, and a bet on a dive you threw away is void.
+
 ## The raft
 
 After 50 dives a shipwright waits on a little pier next to your boat. Planks drift in the sea: touch one and it's yours,

@@ -36,7 +36,7 @@ async def main():
         r = await ev("""(() => { let e = 0; for (let a = 0; a < 6; a++) for (let b = 0; b < 6; b++) for (let c = 0; c < 6; c++) e += CASINO.CA_PAY[[a, b, c].filter(d => d === 0).length]; return e / 216; })()""")
         check("crown & anchor: exactly 205/216 = 94.9%", abs(r - 205 / 216) < 1e-9, r)
         r = await ev("""(() => { const S = CASINO.RD_STRIPS; let e = 0, hit = 0, n = 0; for (const a of S[0]) for (const b of S[1]) for (const c of S[2]) { const x = CASINO.rdPays([a, b, c]); e += x; if (x > 1) hit++; n++; } return [e / n, hit / n, S.map(s => s.length)]; })()""")
-        check("reel deal: every stop counted, 94-96% back, ~25% of spins win", 0.94 < r[0] < 0.96 and 0.2 < r[1] < 0.3 and r[2] == [24, 24, 24], r)
+        check("reel deal: every stop counted, 93.5-96% back from the reels, ~25% of spins win", 0.935 < r[0] < 0.96 and 0.2 < r[1] < 0.3 and r[2] == [24, 24, 24], r)
         print("  reel deal exact payback %.4f, hit rate %.3f" % (r[0], r[1]))
         r = await ev("""(() => { const W = CASINO.WH_SEG, c = {}; W.forEach(v => c[v] = (c[v] || 0) + 1); return [W.reduce((a, v) => a + v, 0) / W.length, c]; })()""")
         check("ship's wheel: 24 x0, 8 x1, 5 x2, 2 x5, 1 x10 = 95%", abs(r[0] - 0.95) < 1e-9 and r[1] == {"0": 24, "1": 8, "2": 5, "5": 2, "10": 1}, r)
@@ -48,7 +48,7 @@ async def main():
         check("crown & anchor played 40,000 times: ~95% back", abs(r - 0.949) < 0.02, r)
         r = await ev("""(() => { CASINO.GAME_OPEN.reel(); const c = CASINO.rd; c.bet = 50; REEL.tav().chips = 1e9; let st = 0, back = 0;
             for (let i = 0; i < 40000; i++) { const c0 = REEL.tav().chips; CASINO.rdSpin(); for (let k = 0; k < 40 && c.phase === 'spin'; k++) CASINO.rdTick(0.05); st += 50; back += REEL.tav().chips - c0 + 50; } return back / st; })()""")
-        check("reel deal played 40,000 times: ~95% back", abs(r - 0.95) < 0.06, r)
+        check("reel deal played 40,000 times: ~94-95% back", abs(r - 0.945) < 0.06, r)
         r = await ev("""(() => { CASINO.GAME_OPEN.wheel(); const c = CASINO.wh; c.bet = 50; REEL.tav().chips = 1e9; let st = 0, back = 0, wrong = 0;
             for (let i = 0; i < 6000; i++) { const c0 = REEL.tav().chips; CASINO.whSpin(); for (let k = 0; k < 80 && c.phase === 'spin'; k++) CASINO.whTick(0.05);
               const a = ((Math.PI * 2 - (c.ang % (Math.PI * 2))) % (Math.PI * 2)), under = Math.floor(a / (Math.PI * 2) * 40) % 40; if (under !== c.seg) wrong++;
