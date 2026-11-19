@@ -51,7 +51,7 @@ async def main():
             if (v.events.length < 3 || v.lines.length < 5 || v.seasons.length !== 4) bad.push(v.id + ' short');
           }
           return [ISLE_FOLK.length, new Set(ISLE_FOLK.map(v => v.id)).size, new Set(ISLE_FOLK.map(v => v.birthday.join())).size, bad]; })()""")
-        check("twelve villagers, unique ids and birthdays", r[:3] == [12, 12, 12], r[:3])
+        check("thirteen villagers (Silas from part 8), unique ids and birthdays", r[:3] == [13, 13, 13], r[:3])
         check("every gift, reward and place is real", not r[3], r[3])
         r = await ev("""(() => { const out = []; for (const v of ISLE_FOLK) for (const p of v.events) for (const pg of p.pages) if (pg.includes('"')) out.push(v.id); return out; })()""")
         check("no double quotes in island text", not r, r)
@@ -174,7 +174,7 @@ async def main():
 
         # every schedule place, for everyone, can be walked to from where they come in
         r = await ev("""(() => { const bad = [], s = isleSave(), keep = [s.rest.inn, s.min];
-          for (const area of ['port', 'flats', 'lagoon', 'woods', 'innin', 'aqua']) {
+          for (const area of ['port', 'flats', 'lagoon', 'woods', 'innin', 'aqua', 'marsh']) {
             isleGo(area, 100, 100);
             for (const v of ISLE_FOLK) for (const k of ['sun', 'rain']) for (const [, sp] of v.sched[k] || []) {
               const t = spotFor(v, sp); if (t[0] !== area) continue;
@@ -216,7 +216,7 @@ async def main():
         # it's all in the save
         await ev("saveStore()")
         r = await ev("(() => { const q = JSON.parse(localStorage.getItem('reeldeep')).isle.g; return [Object.keys(q.arrived).length, q.folk.bram.pts > 0]; })()")
-        check("friendship and arrivals are saved", r == [12, True], r)
+        check("friendship and arrivals are saved", r == [13, True], r)
         check("no page errors", not errs, errs)
         await b.close()
 

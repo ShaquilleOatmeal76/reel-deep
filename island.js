@@ -1322,7 +1322,7 @@ ITEMS.rod = { name: "FISHING ROD", kind: "tool" }; ITEMS.net = { name: "NET", ki
 const LOG_PAGES = [["sea", "THE SEA", "SEA"], ["fresh", "LAGOON AND RIVER", "FRESH"], ["pool", "TIDE POOLS", "POOLS"], ["pot", "CRAB POTS", "POTS"],
   ["cave", "THE CAVES", "CAVES"], ["legend", "LEGENDS", "LGND"], ["special", "SPECIALS", "SPCL"]];
 const TIME_WIN = { a: [360, 1560], m: [360, 660], d: [660, 1020], e: [1020, 1260], n: [1260, 1560], w: [360, 420] };
-const LATER = /^(marsh|wreck|gull|fest_|light)/;                // places and days still to come (the caves opened in part 7)
+const LATER = /^(fest_|light)/;                                 // festival days and the lighthouse (caves opened in part 7, the last areas in part 8)
 function fishOk(f, s) {
   if (LATER.test(f.where) || !f.seasons.includes(String(s.season))) return false;
   const [a, b] = TIME_WIN[f.time]; if (s.min < a || s.min >= b) return false;
@@ -1346,6 +1346,7 @@ function isWaterAt(x, y) {
 function waterKind(x, y) {
   const M_ = ISLE.map, A = M_.A;
   if (A.cave) return "cave" + A.layer;
+  if (A.marsh) return "marsh";
   if (A.fresh) return riverNear(A, x, y) ? "river" : "lake";
   return M_.tiles[Math.floor(y / TS)][Math.floor(x / TS)] === "d" ? "deep" : "sea";
 }
@@ -2060,7 +2061,7 @@ function drawList() {
   });
   if (L.top > 0) text("-", x + w / 2, y + 15, 1, "#8c6c50", "center", null);
   const sel = rows[L.sel]; if (sel) wrap(sel.info, Math.floor((w - 16) / 6)).slice(0, 2).forEach((l, i) => text(l, x + 8, y + h - 24 + i * 9, 1, "#5a3c28", "left", null));
-  text(IW >= 300 ? "E: " + ({ craft: "MAKE", cook: "COOK", store: "BUY", yard: "UPGRADE" })[L.kind] + "   ESC: DONE" : "TAP TWICE: DO IT", x + 8, y + h - 6, 1, "#8c6c50", "left", null);
+  text(IW >= 300 ? "E: " + (({ craft: "MAKE", cook: "COOK", store: "BUY", yard: "UPGRADE", boat: "SAIL", lift: "GO", pages: "READ" })[L.kind] || "PICK") + "   ESC: DONE" : "TAP TWICE: DO IT", x + 8, y + h - 6, 1, "#8c6c50", "left", null);
 }
 function listPick() { const r = listRows()[ISLE.list.sel]; if (!r) return; if (!r.ok) { play("miss"); toast(ISLE.list.kind === "store" || ISLE.list.kind === "yard" ? "YOU CAN'T AFFORD IT YET" : "MISSING SOMETHING"); return; } r.act(); play("select"); saveStore(); }
 function listKey(e) {
@@ -2249,9 +2250,10 @@ const LINK = {};                                                // [parent, leav
 function folkLinks() {
   if (LINK.flats) return;
   const edge = (A, e) => { const W = A.w * TS, H = A.h * TS, m = (e.a + e.b) / 2; return e.side === "e" ? [W - 6, m] : e.side === "w" ? [6, m] : e.side === "n" ? [m, 6] : [m, H - 6]; };
-  for (const id of ["flats", "lagoon", "woods"]) {
-    const out = AREAS.port.exits.find(e => e.to === id), back = AREAS[id].exits.find(e => e.to === "port");
-    LINK[id] = { parent: "port", outPt: edge(AREAS.port, out), arriveA: [out.x, out.y], inPt: edge(AREAS[id], back), arriveP: [back.x, back.y] };
+  for (const [id, par] of [["flats", "port"], ["lagoon", "port"], ["woods", "port"], ["point", "lagoon"], ["marsh", "lagoon"], ["wreck", "woods"]]) {
+    const out = AREAS[par].exits.find(e => e.to === id), back = AREAS[id].exits.find(e => e.to === par);
+    if (!out || !back) continue;
+    LINK[id] = { parent: par, outPt: edge(AREAS[par], out), arriveA: [out.x, out.y], inPt: edge(AREAS[id], back), arriveP: [back.x, back.y] };
   }
   ISLE_FOLK.forEach(v => { if (typeof v.home === "number") { const d = [COT_X[v.home] + 24, 228]; LINK["home_" + v.id] = { parent: "port", outPt: d, arriveP: d, inPt: [96, 152], arriveA: [96, 134] }; } });
   LINK.innin = { parent: "port", outPt: [789, 416], arriveP: [789, 416], inPt: [160, 184], arriveA: [160, 168] };
@@ -2561,7 +2563,7 @@ isleSay = function (pages, choice) {
 
 // ---- the Villagers screen
 ISLE_MENU.splice(ISLE_MENU.length - 1, 0, ["VILLAGERS", () => { ISLE.menu = null; ISLE.folkUI = { sel: 0 }; }]);
-function folkGeo() { const w = Math.min(IW - 12, 330), h = Math.min(IH - 12, 12 * 11 + 52); return [Math.round((IW - w) / 2), Math.round((IH - h) / 2), w, h]; }
+function folkGeo() { const w = Math.min(IW - 12, 330), h = Math.min(IH - 12, ISLE_FOLK.length * 11 + 52); return [Math.round((IW - w) / 2), Math.round((IH - h) / 2), w, h]; }
 function drawFolkUI() {
   const [x, y, w, h] = folkGeo(), s = isleSave(), U = ISLE.folkUI, day = DAYN(s), wide = w >= 300;
   g.globalAlpha = 0.5; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
@@ -3191,4 +3193,211 @@ isleTouch = function (e) {
     if (x >= bx && x < bx + bw && y >= by && y < by + bh) { cavePulse(); return; }
   }
   _isleTouch7(e);
+};
+
+// =====================================================================================================================
+// Part 8a: the last of the map. Shipwreck Beach (west of the Woods: the old wreck, salvage to dig up with the hoe every day,
+// rarer finds while a storm is blowing out at sea), Mangrove Marsh (east of the Lagoon: marsh fish, boardwalks, and Silas the
+// hermit), the dock skiff (restore it for boat trips round the island) and Gull Rock, an islet you can only reach by boat.
+Object.assign(ITEMS, { scrap: { name: "SHIP SCRAP", kind: "mat", sell: 8 }, oldcoin: { name: "OLD COIN", kind: "forage", sell: 120 }, spyglass: { name: "BRASS SPYGLASS", kind: "forage", sell: 400 } });
+AREAS.wreck = {                                                // a long beach, sea along the bottom
+  name: "SHIPWRECK BEACH", w: 90, h: 35, outdoor: true,
+  grass: x => 150 + 18 * Math.sin(x / 110) + 8 * Math.sin(x / 41 + 2),
+  shore: x => 410 + 16 * Math.sin(x / 150 + 1) + 7 * Math.sin(x / 47),
+  paths: [[[1450, 200], [1100, 214], [700, 196], [300, 206], [40, 190]]],
+  exits: [{ side: "e", a: 160, b: 240, to: "woods", x: 14, y: 420 }],
+};
+AREAS.woods.exits.push({ side: "w", a: 380, b: 460, to: "wreck", x: 1426, y: 200 });
+AREAS.marsh = {                                                 // pools and channels between the mangroves
+  name: "MANGROVE MARSH", w: 60, h: 50, outdoor: true, fresh: true, forest: true, marsh: true,
+  lakes: [[300, 250, 120, 70], [640, 520, 150, 90], [220, 620, 90, 60], [470, 380, 60, 40]],
+  river: [[[0, 470], [180, 470], [330, 420], [470, 380]], [[470, 380], [560, 460], [640, 520]], [[640, 520], [760, 700], [820, 820]]], riverW: 14,
+  paths: [[[-10, 400], [120, 380], [260, 360], [420, 300], [600, 300], [740, 300], [780, 160]], [[420, 300], [440, 520], [400, 700]]],
+  dock: [[452, 352, 24, 76], [130, 456, 40, 30], [736, 292, 24, 34]],
+  exits: [{ side: "w", a: 360, b: 440, to: "lagoon", x: 1106, y: 600 }],
+};
+AREAS.lagoon.exits.push({ side: "e", a: 560, b: 640, to: "marsh", x: 14, y: 400 });
+AREAS.gull = {                                                  // a rocky islet out past the Port
+  name: "GULL ROCK", w: 30, h: 30, outdoor: true,
+  seaD: (x, y) => { const e = Math.sqrt(((x - 240) / 170) ** 2 + ((y - 230) / 150) ** 2); return (e - 1) * 160 + 8 * Math.sin(x / 23) + 6 * Math.sin(y / 17); },
+  paths: [[[240, 400], [240, 300], [200, 240]]],
+  dock: [[226, 360, 28, 100]], exits: [],
+};
+Object.assign(RESTORE, { dock: { name: "THE SKIFF", ruin: "A LITTLE SKIFF, HALF FULL OF RAINWATER. THE HULL NEEDS PATCHING AND THE MAST IS GONE.", need: [["wood", 150], ["fiber", 40], ["scrap", 20]], sd: 1500, done: "THE SKIFF IS SEAWORTHY. TAKE IT ROUND THE ISLAND, OR OUT TO GULL ROCK." } });
+SPOTS.hut = ["marsh", 760, 196]; SPOTS.marshpier = ["marsh", 464, 400];
+function artWreck() {
+  const P = paintCanvas(150, 80), H = "#6e4a30", D = "#4a3020", L = "#8c6440";
+  P.shadow(74, 72, 70, 5);
+  for (let i = 0; i < 140; i++) { const top = 34 + Math.round(10 * Math.sin(i / 140 * Math.PI) * -1 + (i > 100 ? (i - 100) * 0.5 : 0)), bot = 70 - Math.round(Math.abs(i - 70) / 70 * 18); for (let j = top; j < bot; j++) P.px(5 + i, j, j === top ? INK : (Math.floor(j / 5) + (i > 60 && i < 66 ? 1 : 0)) % 2 ? H : L); P.px(5 + i, bot, INK); }
+  for (let k = 0; k < 6; k++) P.rect(30 + k * 18, 30 - (k % 2) * 4, 3, 40 - (k % 3) * 8, D);
+  P.rect(70, 4, 4, 34, D); P.rect(60, 10, 26, 3, D); P.rect(72, 2, 1, 2, INK);
+  for (let k = 0; k < 4; k++) P.rect(40 + k * 22, 50, 8, 6, INK);
+  return P.c;
+}
+function artMangrove() {
+  const P = paintCanvas(34, 44);
+  P.shadow(16, 40, 14, 3);
+  for (const [a, b] of [[4, 0], [10, 1], [20, -1], [27, 0]]) for (let j = 0; j < 12; j++) P.px(a + Math.round(Math.sin(j / 3) * 1) + (b * j >> 2), 30 + j, j % 4 === 3 ? "#4a3a28" : "#6e5a3c");
+  P.rect(14, 18, 6, 14, "#6e5a3c"); P.rect(14, 18, 1, 14, "#4a3a28");
+  for (let j = 0; j < 22; j++) for (let i = 0; i < 34; i++) { const dx = (i - 17) / 17, dy = (j - 11) / 11; if (dx * dx + dy * dy < 1) P.px(i, j, (i * 3 + j * 5) % 7 === 0 ? "#5a8a46" : (i + j) % 5 === 0 ? "#2c5a2c" : "#3c6e38"); }
+  return P.c;
+}
+function artHut() {
+  const P = paintCanvas(56, 50);
+  P.shadow(27, 46, 26, 3);
+  for (const x of [6, 22, 34, 48]) P.rect(x, 34, 3, 14, "#4a3a28");
+  P.rect(2, 30, 52, 5, "#8c6440"); P.rect(2, 30, 52, 1, INK);
+  P.rect(8, 16, 40, 15, "#a07a50"); for (let k = 0; k < 4; k++) P.rect(8, 18 + k * 4, 40, 1, "#7a5a3a");
+  for (let j = 0; j < 14; j++) P.rect(4 + j, 16 - j, 48 - j * 2, 1, j % 3 ? "#b4a060" : "#96844a");
+  P.rect(24, 21, 9, 10, "#3c2c22"); P.rect(38, 20, 6, 5, "#ffd28c"); P.rect(12, 20, 6, 5, "#ffd28c");
+  return P.c;
+}
+function artGullRock() {
+  const P = paintCanvas(90, 70);
+  P.shadow(44, 64, 42, 4);
+  for (let j = 0; j < 60; j++) for (let i = 0; i < 90; i++) { const dx = (i - 45) / 44, dy = (j - 60) / 58; if (dx * dx + dy * dy < 1 && j > 4 + Math.abs(i - 42) * 0.6) P.px(i, j + 2, (Math.floor(i / 7) + Math.floor(j / 5)) % 3 === 0 ? "#8c8a96" : j < 20 && (i * 7 + j) % 9 === 0 ? "#f0f0f4" : "#a8a6b0"); }
+  for (const [a, b] of [[30, 20], [52, 14], [60, 30], [24, 38]]) P.rect(a, b, 4, 2, "#f6f6fa");
+  return P.c;
+}
+function artNest() { const P = paintCanvas(16, 10); P.rows(["..bbbbbbbb..", ".bbwwbbwwbb.", "bbbbbbbbbbbb", ".bbbbbbbbbb."], { b: "#a08050", w: "#f0ece0" }, 2, 3, true); return P.c; }
+function artGull() { const P = paintCanvas(12, 8); P.rows(["..ww....", ".wwwwo..", "wwggww..", "..ww...."], { w: "#f6f6fa", g: "#9aa0b4", o: "#ffa046" }, 1, 2, true); return P.c; }
+function artSkiff(fixed) {
+  const P = paintCanvas(40, 22);
+  for (let i = 0; i < 36; i++) { const d = Math.round(Math.abs(i - 18) / 18 * 5); P.rect(2 + i, 10 + d, 1, 9 - d * 1.4, fixed ? "#b47e4a" : "#7a5a3a"); P.px(2 + i, 10 + d, INK); }
+  if (fixed) { P.rect(19, 0, 2, 12, "#6e482a"); for (let j = 0; j < 9; j++) P.rect(21, 1 + j, 9 - j, 1, "#f0ecdc"); }
+  else { P.rect(10, 13, 20, 3, "#4a7894"); P.rect(14, 11, 3, 2, "#5a4a3a"); }
+  return P.c;
+}
+function areaArt8() {
+  if (IART.wreck) return;
+  Object.assign(IART, { wreck: artWreck(), mangrove: artMangrove(), hut: artHut(), gullrock: artGullRock(), nest: artNest(), gull: artGull(), skiff: artSkiff(false), skiff_r: artSkiff(true),
+    swreck: artSign("SHIPWRECK BEACH"), smarsh: artSign("MANGROVE MARSH"), sgull: artSign("GULL ROCK") });
+}
+const _isleArt8 = isleArt; isleArt = function () { _isleArt8(); areaArt8(); };
+function wreckObjects() {
+  const o = [], add = (k, x, y, solid, act) => o.push({ k, x, y, solid, act }), A = AREAS.wreck, r = seeded(812);
+  add("wreck", 640, 236, [6, 50, 138, 22], { kind: "say", text: ["THE WRECK OF A BIG SAILING SHIP, HALF SUNK IN THE SAND. THE NAME ON THE BOW HAS WORN AWAY TO '...ANT'.", "THINGS STILL WASH OUT OF HER. TRY DIGGING WHERE THE SAND LOOKS DISTURBED."] });
+  add("swreck", 1360, 160, [24, 10, 6, 8], { kind: "say", text: ["SHIPWRECK BEACH. LOOK FOR DISTURBED SAND AND DIG WITH YOUR HOE. MORE WASHES UP WHEN THERE'S A STORM OUT AT SEA."] });
+  const clear = (x, y, w, h) => !o.some(q => x + w > q.x - 6 && x < q.x + IART[q.k].width + 6 && y + h > q.y - 4 && y < q.y + IART[q.k].height + 4) && pathDist(A, x + w / 2, y + h - 4) > 18 && y + h < A.grass(x) - 4;
+  for (let i = 0; i < 300; i++) { const x = r.uniform(-10, 1430), y = r.uniform(-30, 150), palm = r.random() < 0.6, [w, h] = palm ? [28, 42] : [16, 12]; if (clear(x, y, w, h)) { if (palm) add("palm", x, y, [10, 30, 8, 6]); else add("bush", x, y, [3, 6, 10, 4]); } }
+  for (let i = 0; i < 40; i++) { const x = r.uniform(0, 1420), y = r.uniform(A.grass(x) + 14, A.shore(x) - 20); if (!o.some(q => Math.abs(q.x - x) < 40 && Math.abs(q.y - y) < 30)) add("rock", x, y, [1, 3, 8, 4]); }
+  for (let i = 0; i < 12; i++) { const x = r.uniform(0, 1400), y = r.uniform(A.grass(x) + 20, A.shore(x) - 30); if (!o.some(q => Math.abs(q.x - x) < 60 && Math.abs(q.y - y) < 40)) add("log", x, y, [2, 2, 22, 5]); }
+  return o;
+}
+function marshObjects() {
+  const o = [], add = (k, x, y, solid, act) => o.push({ k, x, y, solid, act }), A = AREAS.marsh, r = seeded(633);
+  add("hut", 732, 150, [2, 30, 52, 16], { kind: "say", text: ["A HUT ON STILTS. SMOKE COMES FROM THE CHIMNEY. A SIGN ON THE DOOR SAYS: GO AWAY (POLITELY)."] });
+  add("smarsh", 60, 330, [24, 10, 6, 8], { kind: "say", text: ["MANGROVE MARSH. KEEP TO THE BOARDWALKS."] });
+  const clear = (x, y, w, h) => !o.some(q => x + w > q.x - 4 && x < q.x + IART[q.k].width + 4 && y + h > q.y - 4 && y < q.y + IART[q.k].height + 4) && pathDist(A, x + w / 2, y + h - 4) > 16 && freshDepth(A, x + w / 2, y + h - 2) < -8 && !inDock(A, x + w / 2, y + h);
+  for (let i = 0; i < 700; i++) { const x = r.uniform(-12, 950), y = r.uniform(-30, 780); if (clear(x, y + 30, 34, 14)) add("mangrove", x, y, [12, 30, 10, 8]); }
+  for (let i = 0; i < 260; i++) { const x = r.uniform(0, 960), y = r.uniform(0, 800), d = freshDepth(A, x, y + 14); if (d > -7 && d < -1 && !inDock(A, x, y + 14)) add("reed", x - 4, y, null); }
+  for (let i = 0; i < 500 && o.filter(q => q.k === "lily").length < 30; i++) { const x = r.uniform(0, 960), y = r.uniform(0, 800); if (freshDepth(A, x, y) > 6 && freshDepth(A, x, y) < 24) add("lily", x - 5, y - 3, null); }
+  return o;
+}
+function gullObjects() {
+  const o = [], add = (k, x, y, solid, act) => o.push({ k, x, y, solid, act });
+  add("gullrock", 160, 120, [8, 40, 74, 26], { kind: "say", text: ["GULL ROCK. THOUSANDS OF GULLS, AND THE SMELL TO PROVE IT.", "THE OLD FISHERMEN SAY SOMETHING AS BIG AS A ROWBOAT LIVES IN THE DEEP WATER UNDER IT."] });
+  add("skiff_r", 236, 452, [2, 10, 36, 10], { kind: "boat" });
+  add("sgull", 270, 330, [24, 10, 6, 8], { kind: "say", text: ["GULL ROCK. NO SWIMMING. THE GULLS WILL JUDGE YOU."] });
+  [[120, 250], [320, 200], [300, 300], [150, 320]].forEach(([x, y], i) => add("nest", x, y, [1, 4, 14, 5], { kind: "nest", i }));
+  add("rock", 360, 260, [1, 3, 8, 4], { kind: "secret" });
+  for (const [x, y] of [[100, 200], [330, 160], [380, 300], [110, 340], [200, 360]]) add("gull", x, y, null);
+  return o;
+}
+const _buildArea8 = buildArea;
+buildArea = function (id) {
+  const m = _buildArea8(id);
+  if (id === "wreck") m.objs = wreckObjects();
+  if (id === "marsh") m.objs = marshObjects();
+  if (id === "gull") m.objs = gullObjects();
+  if (id === "woods" || id === "lagoon") m.objs = m.objs.filter(o => o.k !== "pile");     // the last driftwood piles are cleared
+  if (id === "port") m.objs.push({ k: "skiff", x: 600, y: 760, solid: [2, 10, 36, 10], act: { kind: "restore", b: "dock" } });
+  if (["wreck", "gull"].includes(id)) m.objs.forEach((o, i) => { if (o.k === "rock" && !o.act) o.res = { kind: "rock", key: id + ":" + i }; });
+  return m;
+};
+// ---- boat trips
+const BOAT_STOPS = [["port", "THE PORT", 620, 740], ["gull", "GULL ROCK", 240, 440], ["wreck", "SHIPWRECK BEACH", 700, 380], ["point", "LIGHTHOUSE POINT", 400, 560], ["marsh", "MANGROVE MARSH", 120, 400]];
+function boatAct() { ISLE.list = { kind: "boat", sel: 0, top: 0 }; play("select"); }
+const _listRows8 = listRows;
+listRows = function () {
+  if (ISLE.list.kind === "boat") return BOAT_STOPS.filter(b => b[0] !== ISLE.map.id).map(([id, name, x, y]) => ({ icon: "pot", name, info: id === "gull" ? "THE ROCK OUT PAST THE HARBOUR. ONLY THE SKIFF GOES THERE." : "SAIL ROUND TO " + name + ".", ok: true, act: () => { ISLE.list = null; isleGo(id, x, y, "up"); play("plop"); if (id === "marsh") marshSeen(); } }));
+  return _listRows8();
+};
+LIST_TITLE.boat = "THE SKIFF: WHERE TO?";
+const _listPick8 = listPick;
+listPick = function () { if (ISLE.list && ISLE.list.kind === "boat") { const r = listRows()[ISLE.list.sel]; if (r) r.act(); return; } _listPick8(); };
+const _restoredAct8 = restoredAct;
+restoredAct = function (b) { if (b === "dock") boatAct(); else _restoredAct8(b); };
+// ---- digging on the beach, the nests, the secret, the hermit
+function digSpots() {
+  const s = isleSave(), day = DAYN(s);
+  if (!s.digs || s.digs.day !== day) {
+    const r = seeded(day * 13 + 7), A = AREAS.wreck, list = [];
+    for (let k = 0, t = 0; k < 6 && t < 300; t++) { const x = r.uniform(40, 1400), y = r.uniform(A.grass(x) + 24, A.shore(x) - 10); if (terrainAt(A, x, y) === "s" && !list.some(q => Math.abs(q[0] - x) < 50)) { list.push([Math.round(x), Math.round(y), 0]); k++; } }
+    s.digs = { day, list };
+  }
+  return s.digs.list;
+}
+function digAt(tx, ty) { return ISLE.map.id === "wreck" ? digSpots().find(d => !d[2] && Math.floor(d[0] / TS) === tx && Math.floor(d[1] / TS) === ty) : null; }
+function digUp(d) {
+  const storm = typeof stormNow === "function" && stormNow(), q = Math.random();
+  const id = storm && q < 0.25 ? "spyglass" : q < (storm ? 0.45 : 0.12) ? "oldcoin" : q < 0.35 ? "glass" : q < 0.42 ? "pearl" : "scrap", n = id === "scrap" ? 2 + Math.floor(Math.random() * 3) : 1;
+  if (invAdd(id, n)) { toast("YOUR BAG IS FULL"); return; }
+  d[2] = 1; toast("+" + n + " " + ITEMS[id].name + (storm ? " (STORM SALVAGE!)" : ""), id === "scrap" ? "#d2b482" : GOLD); play(id === "scrap" ? "hit" : "chime"); splashDust(Math.floor(d[0] / TS), Math.floor(d[1] / TS), "#e6d2a0");
+}
+function marshSeen() { const s = isleSave(); if (!s.flags.marsh) { s.flags.marsh = 1; s.arrived.silas = DAYN(s); folkInit(); } }
+const _isleGo8 = isleGo;
+isleGo = function (id, x, y, dir) { _isleGo8(id, x, y, dir); if (id === "marsh") marshSeen(); };
+const _isleAct58 = isleAct5;
+isleAct5 = function (o) {
+  const a = o.act, s = isleSave();
+  if (a.kind === "boat") boatAct();
+  else if (a.kind === "nest") { const k = "nest" + a.i + ":" + DAYN(s); if (s.cut[k]) { isleSay(["AN EMPTY GULL NEST. A GULL GLARES AT YOU FROM THE ROCK."]); return; } s.cut[k] = DAYN(s) + 1; const id = Math.random() < 0.15 ? "pearl" : Math.random() < 0.5 ? "glass" : "shell"; if (invAdd(id, 1) === 0) toast("+1 " + ITEMS[id].name + " (FROM A GULL NEST)", GOLD); play("tick"); }
+  else if (a.kind === "secret") { if (s.flags.gullsecret) { isleSay(["JUST A ROCK NOW."]); return; } s.flags.gullsecret = 1; s.sd += 1000; if (invAdd("oldcoin", 3)) s.owed.push(["oldcoin", 3]); isleSay(["UNDER THE ROCK: A TIN BOX, RUSTED SHUT. YOU PRY IT OPEN.", "OLD COINS, A WAD OF SAND DOLLARS, AND A NOTE: 'FOR WHOEVER GETS THIS FAR. THE GROUPER IS REAL. I NEVER LANDED HER. - THE KEEPER'", "YOU GOT 1000 SAND DOLLARS AND 3 OLD COINS."]); play("fanfare"); saveStore(); }
+  else _isleAct58(o);
+};
+const _isleInteract8 = isleInteract;
+isleInteract = function () {
+  const I = ISLE, it = held();
+  if (I.map && I.map.id === "wreck" && !I.msg && !I.menu && !I.list && !I.inv && !I.chest && !I.shop && !I.card && !I.log && !I.fish && it && it[0] === "hoe") {
+    const [tx, ty] = facingTile(), d = digAt(tx, ty) || digAt(Math.floor(I.px / TS), Math.floor((I.py - 3) / TS)); if (d) { digUp(d); return; }
+  }
+  _isleInteract8();
+};
+const _placedSprites8 = placedSprites;
+placedSprites = function (list) {
+  _placedSprites8(list);
+  if (ISLE.map.id === "wreck") for (const d of digSpots()) if (!d[2]) list.push([d[1] - 8, { draw(cx, cy) { const x = d[0] - cx, y = d[1] - cy; if (x < -8 || x > IW + 8 || y < -8 || y > IH + 8) return; g.fillStyle = "#b49a6e"; for (let k = -3; k <= 3; k++) { g.fillRect(x + k - 1, y + k - 1, 2, 2); g.fillRect(x + k - 1, y - k - 1, 2, 2); } } }]);
+};
+// ---- fish: the marsh has its own, plus lagoon fish; the wreck and Gull Rock hide a legend each
+const _pickFish8 = pickFish;
+pickFish = function (where, s) {
+  if (where === "marsh" && Math.random() < 0.4) return _pickFish8("lake", s);
+  const id = ISLE && ISLE.map && ISLE.map.id, legend = id === "wreck" ? "wreck" : id === "gull" ? "gull" : null;
+  if (legend && (where === "sea" || where === "deep") && Math.random() < 0.07) { const sp = _pickFish8(legend, s); if (sp) return sp; }
+  return _pickFish8(where, s);
+};
+// ---- beach finds on the new beaches
+const _forageCheck8 = forageCheck;
+forageCheck = function () {
+  const s = isleSave(), was = s.forage && s.forage.day;
+  _forageCheck8();
+  if (s.forage.day === was) return;
+  const r = seeded(s.forage.day * 5 + 1);
+  for (const [id, n] of [["wreck", 5], ["gull", 3]]) { const A = AREAS[id]; for (let k = 0, t = 0; k < n && t < 300; t++) { const x = r.uniform(20, A.w * TS - 20), y = r.uniform(20, A.h * TS - 20); if (terrainAt(A, x, y) !== "s") continue; const v = r.random(); s.forage.items.push([id, Math.round(x), Math.round(y), v < 0.4 ? "shell" : v < 0.65 ? "drift" : v < 0.85 ? "glass" : v < 0.96 ? "starfish" : "pearl"]); k++; } }
+};
+const _isleSave8 = isleSave;
+isleSave = function () { const g_ = _isleSave8(); if (!g_.p8) { g_.p8 = 1; if (g_.intro) g_.areasMsg = 1; } return g_; };
+const _startIsland8 = startIsland;
+startIsland = function () {
+  _startIsland8();
+  const s = isleSave();
+  if (s.areasMsg) { s.areasMsg = 0; ISLE.msg.pages.push("THE SHIPWRIGHT CLEARED THE LAST DRIFTWOOD PILES: SHIPWRECK BEACH, WEST OF THE WOODS, AND MANGROVE MARSH, EAST OF THE LAGOON.", "BRAM: 'THAT OLD SKIFF AT THE END OF THE DOCK COULD BE PATCHED UP. THEN YOU COULD GET OUT TO GULL ROCK.'"); }
+};
+const _itemIcon8 = itemIcon;
+itemIcon = function (id) {
+  if (id === "scrap") return pix("icon_scrap", ["ss..", "sbss", ".sbs", "..ss"], { s: "#8c8c96", b: "#a0643c" });
+  if (id === "oldcoin") return pix("icon_oldcoin", [".yy.", "ybby", "ybby", ".yy."], { y: "#ffd246", b: "#c8a032" });
+  if (id === "spyglass") return pix("icon_spyglass", ["....yy", "...yby", "..yy..", ".yy...", "bb...."], { y: "#d2a03c", b: "#6e482a" });
+  return _itemIcon8(id);
 };
