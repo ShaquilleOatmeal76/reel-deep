@@ -79,6 +79,9 @@ fights off cave creatures. Mine rocks with the pick for stone, ore and gems, fis
 A boss waits on every tenth floor. Beating one gives you an extra heart. The elevator at the cave mouth stops every
 five floors. If you black out, you wake at the cave mouth having lost half of what you found on that trip. Twenty pages
 of the lighthouse keeper's log are hidden down there. Read them from the menu (**KEEPER'S LOG**).
+West of the Woods is **Shipwreck Beach**: dig the disturbed sand with your hoe for salvage (more when a storm is blowing
+out at sea). East of the Lagoon is **Mangrove Marsh**, where Silas the hermit lives. Patch up the skiff at the end of
+the dock to sail round the island and out to **Gull Rock**.
 
 ## Save codes
 
