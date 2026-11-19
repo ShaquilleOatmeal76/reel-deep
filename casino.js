@@ -253,7 +253,8 @@ for (const o of Object.keys(HUBS)) EXTRA_OV[o] = { draw: () => drawHub(o), tap: 
 // Stake controls ("stake" / "bet") also get a MAX button just left of the +: its step is STAKE_MAX, so every game's
 // existing handler (stakeStep(bet, v) or a CUP_BETS index + v) jumps straight to the most it allows.
 const isStakeId = id => id === "stake" || id === "bet";
-function stakeCtl(h, id, x, y, w) { h.push([id, x, y, 16, 15, -1]); if (isStakeId(id)) h.push([id, x + w - 42, y, 24, 15, STAKE_MAX]); h.push([id, x + w - 16, y, 16, 15, 1]); }
+// Tapping the amount opens the type-a-bet box (STAKE_TYPE; Nov 19, 2026). Not for the tournament's fixed chip sizes ("bet").
+function stakeCtl(h, id, x, y, w) { h.push([id, x, y, 16, 15, -1]); if (isStakeId(id)) { h.push([id, x + w - 42, y, 24, 15, STAKE_MAX]); if (id === "stake") h.push([id, x + 17, y, w - 60, 15, STAKE_TYPE]); } h.push([id, x + w - 16, y, 16, 15, 1]); }
 function drawStakeCtl(x, y, w, val, col, lab) {               // lab STAKE / BET = a stake control with a MAX button
   const mx = lab === "STAKE" || lab === "BET";
   box(x, y, 16, 15, col); text("-", x + 8, y + 7, 1, col, "center", null);
@@ -276,7 +277,7 @@ function snapCrash() { const u = Math.random(); return Math.min(1000, Math.max(1
 function snapGo() {
   const c = CZ.snap;
   if (c.phase === "reel") { snapCash(c.m); return; }
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet;
   c.crash = snapCrash(); c.m = 1; c.t = 0; c.phase = "reel"; c.win = 0; c.st = 0;
   c.fish = C21_POOL[Math.floor(Math.random() * C21_POOL.length)];
@@ -380,7 +381,7 @@ const bigP = (w, dir) => (1 - BF_LEG) * (dir > 0 ? BF_N - w : w - 1) / BF_N + BF
 const bigCashNow = c => Math.floor(c.staked * EDGE * c.M);
 function bigDeal() {
   const c = CZ.big;
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet;
   c.cur = bigCard(1 + Math.floor(Math.random() * BF_N)); c.seen = []; c.M = 1; c.n = 0; c.phase = "play"; c.win = 0; c.st = 0;
   c.msg = "HEAVIER OR LIGHTER?"; play("tick");
@@ -476,13 +477,13 @@ CZ.ca = null;
 function caOpen() { if (!CZ.ca) CZ.ca = { bet: 10, pick: 0, phase: "bet", dice: [0, 1, 2], t: 0, msg: "PICK ONE AND ROLL", win: 0, k: 0 }; }
 function caRoll() {
   const c = CZ.ca; if (c.phase === "roll") return;
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet; c.on = c.pick;
   c.final = [0, 1, 2].map(() => Math.floor(Math.random() * 6)); c.phase = "roll"; c.t = 0; c.win = 0; c.msg = "ROLLING..."; play("tick");
 }
 function caSettle() {
   const c = CZ.ca; c.dice = c.final; c.phase = "done";
-  const n = c.dice.filter(d => d === c.on).length; c.win = Math.floor(c.staked * CA_PAY[n]);
+  const n = c.dice.filter(d => d === c.on).length; c.win = Math.round(c.staked * CA_PAY[n]);
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (c.dice.every(d => d === 0)) tavAward("anchors");
   c.msg = n ? (n === 3 ? "THREE " + CA_FACES[c.on][1] + "S! +" : n === 2 ? "TWO! +" : "ONE! +") + c.win : "NO " + CA_FACES[c.on][1] + ". UNLUCKY"; play(n >= 2 ? "fanfare" : n ? "chime" : "miss");
@@ -551,13 +552,13 @@ CZ.rd = null;
 function rdOpen() { if (!CZ.rd) CZ.rd = { bet: 10, phase: "idle", stops: [0, 5, 10], off: [0, 0, 0], t: 0, msg: "PULL THE LEVER", win: 0, k: 0 }; }
 function rdSpin() {
   const c = CZ.rd; if (c.phase === "spin") return;
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet;
   c.final = [0, 1, 2].map(() => Math.floor(Math.random() * 24)); c.phase = "spin"; c.t = 0; c.win = 0; c.msg = ""; c.lever = 0.3; play("tick");
 }
 function rdSettle() {
   const c = CZ.rd, t = rdLine(c.final), x = rdPays(t);
-  c.phase = "done"; c.win = Math.floor(c.staked * x);
+  c.phase = "done"; c.win = Math.round(c.staked * x);
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (t.every(q => q === "L")) tavAward("reeldeal");
   if (Math.random() < Math.min(1, c.staked / BASE_STAKE / JP_ODDS)) { jpWin(c); return; }
@@ -635,7 +636,7 @@ CZ.wh = null;
 function whOpen() { if (!CZ.wh) CZ.wh = { bet: 10, phase: "idle", ang: 0, a0: 0, a1: 0, t: 0, msg: "SPIN THE WHEEL", win: 0, seg: 0, k: 0, last: -1 }; }
 function whSpin() {
   const c = CZ.wh; if (c.phase === "spin") return;
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet;
   c.seg = Math.floor(Math.random() * 40);
   const segA = (c.seg + 0.5) / 40 * Math.PI * 2, jitter = (Math.random() - 0.5) * 0.8 * (Math.PI * 2 / 40);
@@ -649,7 +650,7 @@ function whTick(dt) {
   const under = Math.floor(((Math.PI * 2 - (c.ang % (Math.PI * 2))) % (Math.PI * 2)) / (Math.PI * 2) * 40) % 40;
   if (under !== c.last) { c.last = under; play("tick", 0.6); }
   if (u >= 1) {
-    const x = WH_SEG[c.seg]; c.phase = "done"; c.win = Math.floor(c.staked * x);
+    const x = WH_SEG[c.seg]; c.phase = "done"; c.win = Math.round(c.staked * x);
     if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
     if (x === 10) tavAward("helmsman");
     c.msg = x === 10 ? "X10! TOP OF THE WHEEL! +" + c.win : x > 1 ? "X" + x + "! +" + c.win : x === 1 ? "X1: STAKE BACK" : "NOTHING. SPIN AGAIN?"; play(x >= 5 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
@@ -707,7 +708,7 @@ const tdMult = (k, j) => EDGE * tdChoose(25, k) / tdChoose(25 - j, k);
 function tdOpen() { if (!CZ.td) CZ.td = { bet: 10, j: 3, phase: "stake", jel: [], open: [], k: 0, msg: "PICK HOW MANY JELLIES", win: 0, boom: -1 }; }
 function tdStart() {
   const c = CZ.td; if (c.phase === "dive") return;
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet;
   const a = Array.from({ length: 25 }, (x, i) => i); for (let i = 24; i > 0; i--) { const q = Math.floor(Math.random() * (i + 1)); [a[i], a[q]] = [a[q], a[i]]; }
   c.jel = a.slice(0, c.j); c.open = []; c.k = 0; c.boom = -1; c.phase = "dive"; c.win = 0; c.msg = "OPEN A CRATE"; play("plop");
@@ -802,7 +803,7 @@ function nhToggle(i) {
 function nhCast() {
   const c = CZ.nh; if (c.phase === "draw") return;
   if (c.picks.length !== 5) { c.msg = "PICK 5 FISH FIRST"; play("miss"); return; }
-  if (tav().chips < c.bet || c.bet < 5) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
   addChips(-c.bet); c.staked = c.bet;
   const a = NH_FISH.map((f, i) => i); for (let i = a.length - 1; i > 0; i--) { const q = Math.floor(Math.random() * (i + 1)); [a[i], a[q]] = [a[q], a[i]]; }
   c.drawn = a.slice(0, 8); c.shown = 0; c.t = 0; c.phase = "draw"; c.win = 0; c.msg = "HAULING..."; play("plop");
@@ -814,7 +815,7 @@ function nhTick(dt) {
   while (c.shown < n) { const f = c.drawn[c.shown++]; play(c.picks.includes(f) ? "hit" : "tick"); }
   if (c.t > 8 * 0.22 + 0.3) {
     const m = c.drawn.filter(f => c.picks.includes(f)).length, x = NH_PAY[m];
-    c.phase = "done"; c.win = Math.floor(c.staked * x); if (c.win) addChips(c.win, "win");
+    c.phase = "done"; c.win = Math.round(c.staked * x); if (c.win) addChips(c.win, "win");
     if (m === 5) tavAward("fullnet");
     c.msg = m + " MATCHED" + (x ? "! +" + c.win : ". AGAIN?"); play(m === 5 ? "fanfare" : x ? "chime" : "miss");
   }

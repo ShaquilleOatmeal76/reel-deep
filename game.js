@@ -2019,8 +2019,18 @@ function claimDaily() {                                     // the free daily st
   return true;
 }
 const STAKE_MAX = 1e6;                                        // MAX BET buttons pass this as the step: stakeStep clamps it to the table max (or your chips)
-const stakeInc = st => st < 100 ? 5 : st < 500 ? 25 : st < 2000 ? 100 : st < 10000 ? 500 : 2500;   // bigger stakes move in bigger steps
-function stakeStep(st, d, max) { const big = Math.abs(d) > 1 ? 1 : stakeInc(d < 0 ? st - 1 : st); return clamp(st + d * big, 5, Math.max(5, Math.min(max || MAX_STAKE, Math.floor(tav().chips / 5) * 5))); }   // the back room allows bigger bets
+const stakeInc = st => st < 5 ? 1 : st < 100 ? 5 : st < 500 ? 25 : st < 2000 ? 100 : st < 10000 ? 500 : 2500;   // bigger stakes move in bigger steps
+const STAKE_TYPE = 0.5;     // a "step" that means: tap on the stake itself to type an amount (Nov 19, 2026; any whole number, not just 5s)
+function stakeStep(st, d, max) {
+  const top = Math.max(1, Math.min(max || MAX_STAKE, tav().chips));
+  if (d === STAKE_TYPE) { askStake(st, top); return st; }
+  let n;
+  if (Math.abs(d) > 1) n = st + d;                                         // MAX: all in
+  else if (d > 0) { const k = stakeInc(st); n = Math.floor(st / k) * k + k; }   // + and - land on the step grid (37 -> 40 / 35)
+  else if (d < 0) { const k = stakeInc(st - 1); n = Math.ceil(st / k) * k - k; }
+  else n = st;
+  return clamp(Math.round(n), 1, top);
+}
 
 // ---- betting on your own dive
 // Anti-tanking (Nov 18, 2026): players found that bets were priced from their last 20 dives, so they threw dives on purpose
@@ -2174,7 +2184,7 @@ function openBet() {
 }
 function placeBet() {
   const b = TAV.bet, q = tav(), [k, , pays] = b.opts[b.sel];
-  if (q.chips < b.stake || b.stake < 5 || betBlocked(k)) { play("miss"); return; }
+  if (q.chips < b.stake || b.stake < 1 || betBlocked(k)) { play("miss"); return; }
   q.chips -= b.stake; q.bet = { k, stake: b.stake, pays, line: betLine(), cast: false };
   saveStore(); play("select"); S.overlay = null;
 }
@@ -2191,7 +2201,7 @@ function settleBet(dive) {                                  // -> a popup line f
   const i = BET_I[b.k], won = i === undefined || dive.total < JUNK_K * b.line ? null : BETS[i][4](dive, b.line);   // a thrown dive: void
   if (won === null) { addChips(b.stake); return ["BET VOID: STAKE BACK", 4, CHIP]; }    // e.g. UNDER without a real dive
   if (!won) { saveStore(); return ["BET LOST", 3, ORANGE]; }
-  const pay = Math.floor(b.stake * b.pays);
+  const pay = Math.round(b.stake * b.pays);   // round, not floor: odd stakes are allowed since Nov 19, 2026
   addChips(pay, "win");
   if (b.pays >= 8) tavAward("longshot");
   return ["BET WON! +" + pay + " CHIPS", 4.5, CHIP];
@@ -2211,7 +2221,7 @@ const c21Sum = h => h.reduce((a, q) => a + (q[2] === "t" ? q[1] * 2 : q[1]), 0);
 function c21New(vip) { const max = MAX_STAKE; TAV.c21 = { vip: !!vip, max, phase: "stake", dealer: [], you: [], hide: true, bet: stakeStep(TAV.c21 && !!TAV.c21.vip === !!vip ? TAV.c21.bet : vip ? 50 : 10, 0, max), msg: "PLACE YOUR BET", t: 0, win: 0 }; }
 function c21Deal() {
   const c = TAV.c21;
-  if (tav().chips < c.bet || c.bet < 5) { play("miss"); c.msg = "NOT ENOUGH CHIPS"; return; }
+  if (tav().chips < c.bet || c.bet < 1) { play("miss"); c.msg = "NOT ENOUGH CHIPS"; return; }
   addChips(-c.bet);
   c.you = [c21Card(), c21Card()]; c.dealer = [c21Card(), c21Card()]; c.hide = true; c.phase = "play"; c.staked = c.bet;
   play("tick");
@@ -2247,7 +2257,7 @@ function c21Tick(dt) {                                       // the old man draw
   else c21End(0, "HE WINS, " + d + " TO " + y);
 }
 function c21End(mult, msg) {                                 // mult: what comes back for each chip staked (2 = even money)
-  const c = TAV.c21, back = Math.floor(c.staked * mult);
+  const c = TAV.c21, back = Math.round(c.staked * mult);
   c.phase = "stake"; c.msg = msg; c.win = back - c.staked;
   if (back) addChips(back, back > c.staked ? "win" : "");
   if (back > c.staked) { tav().stats.hands++; tavTitles(); play("chime"); } else if (!back) play("miss");
@@ -2514,15 +2524,16 @@ function plButtons() {
   const L = plLay(), p = TAV.plinko;
   if (L.wide) {
     const rx = L.cx + 4.5 * L.sx + 10, w = Math.min(96, LW - rx - 6);
-    return [["minus", rx, 78, 18, 15, "-"], ["plus", rx + w - 18, 78, 18, 15, "+"], ["max", rx, 96, w, 13, "MAX BET"], ["drop", rx, 113, w, 20, "DROP"], ["drop5", rx, 137, w, 14, "DROP 5"]];
+    return [["minus", rx, 78, 18, 15, "-"], ["plus", rx + w - 18, 78, 18, 15, "+"], ["stakebox", rx + 20, 78, w - 40, 15, ""], ["max", rx, 96, w, 13, "MAX BET"], ["drop", rx, 113, w, 20, "DROP"], ["drop5", rx, 137, w, 14, "DROP 5"]];
   }
-  return [["minus", OX + 2, 168, 14, 15, "-"], ["plus", OX + 36, 168, 14, 15, "+"], ["max", OX + 52, 168, 22, 15, "MAX"], ["drop", OX + 76, 168, 42, 15, "DROP"]];
+  return [["minus", OX + 2, 168, 14, 15, "-"], ["plus", OX + 36, 168, 14, 15, "+"], ["stakebox", OX + 17, 168, 18, 15, ""], ["max", OX + 52, 168, 22, 15, "MAX"], ["drop", OX + 76, 168, 42, 15, "DROP"]];
 }
 function plinkoTap(rx, ly) {
   const p = TAV.plinko;
   if (ly > 186) { closeOverlay(); return; }
   const hit = plButtons().find(([, x, y, w, h]) => rx >= x && rx < x + w && ly >= y && ly < y + h);
   if (!hit) return;
+  if (hit[0] === "stakebox") { p.bet = stakeStep(p.bet, STAKE_TYPE, p.max); return; }
   if (hit[0] === "minus" || hit[0] === "plus" || hit[0] === "max") { p.bet = stakeStep(p.bet, hit[0] === "max" ? STAKE_MAX : hit[0] === "plus" ? 1 : -1, p.max); play("tick"); }
   else if (hit[0] === "drop") plinkoDrop();
   else if (hit[0] === "drop5") { p.queue = 5; p.qT = 0; }
@@ -2574,6 +2585,7 @@ function drawPlinko() {
     text("STAKE", mid, 66, 1, "#c8e6d2", "center", null);
     text(p.bet, mid, 85, 1, WHITE, "center", null);
     plButtons().forEach(([id, x, y, bw2, h, lab]) => {
+      if (id === "stakebox") return;
       const ok = id.startsWith("drop") ? tav().chips >= p.bet : true, col = id === "drop" ? GOLD : id === "drop5" ? ORANGE : CHIP;
       box(x, y, bw2, h, ok ? col : "#3c6a54"); text(lab, x + bw2 / 2, y + (h >> 1), 1, ok ? col : "#5a8a74", "center", null);
     });
@@ -2581,7 +2593,7 @@ function drawPlinko() {
     text("UP: DROP 5", mid, 168, 1, GREY, "center", null);
     text("< > STAKE", mid, 178, 1, GREY, "center", null);
   } else {
-    plButtons().forEach(([id, x, y, bw2, h, lab]) => { const col = id === "drop" ? GOLD : CHIP; box(x, y, bw2, h, col); text(lab, x + bw2 / 2, y + 7, 1, col, "center", null); });
+    plButtons().forEach(([id, x, y, bw2, h, lab]) => { if (id === "stakebox") return; const col = id === "drop" ? GOLD : CHIP; box(x, y, bw2, h, col); text(lab, x + bw2 / 2, y + 7, 1, col, "center", null); });
     text(p.bet, OX + 26, 175, 1, WHITE, "center", null);
     const l = p.last[0];
     if (l && !(p.sayT > 0)) text("X" + plSlotLabel(PLINKO[l[0]]) + "  " + (l[1] > 0 ? "+" : "") + l[1], L.cx, 158, 1, l[1] > 0 ? GOLD : GREY, "center", null);
@@ -2683,7 +2695,7 @@ function stakeRow(y, stake, go) {                            // [-] stake [+] an
   box(76, y, 42, 15, GOLD); text(go, 97, y + 7, 1, GOLD, "center", null);
 }
 function stakeTap(lx, obj, key, go) {
-  const d = lx < 17 ? -1 : lx >= 35 && lx < 51 ? 1 : lx >= 51 && lx < 75 ? STAKE_MAX : 0;
+  const d = lx < 17 ? -1 : lx < 35 ? STAKE_TYPE : lx < 51 ? 1 : lx < 75 ? STAKE_MAX : 0;
   if (d) { obj[key] = stakeStep(obj[key], d, obj.max); play("tick"); } else if (lx >= 75) go();
 }
 function chipsLine(y) { const s = tav().chips + " CHIPS", x = 60 - (textW(s, 1) >> 1) + 3; chipIcon(x - 6, y); text(s, x, y, 1, CHIP, "left", null); }
@@ -2765,8 +2777,8 @@ function drawBet() {                                         // betting on the n
   text(b.stake < 1000 ? b.stake : fmtChips(b.stake), 60, 133, b.stake < 1000 ? 2 : 1, WHITE, "center");
   box(74, 126, 16, 15, CHIP); text("+", 82, 133, 1, CHIP, "center", null);
   box(94, 126, 22, 15, CHIP); text("MAX", 105, 133, 1, CHIP, "center", null);
-  text("WIN " + fmtChips(Math.floor(b.stake * b.opts[b.sel][2])), 60, 148, 1, GREY, "center", null);
-  const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk;
+  text("WIN " + fmtChips(Math.round(b.stake * b.opts[b.sel][2])), 60, 148, 1, GREY, "center", null);
+  const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 1 && !blk;
   box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
   text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids the bet
   text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
@@ -2999,7 +3011,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
   if (o === "bet") {
     const b = TAV.bet, i = Math.floor((ly - 29) / 17);
     if (ly >= 29 && i < b.opts.length) { b.sel = i; play("tick"); }
-    else if (ly >= 124 && ly < 143) { b.stake = stakeStep(b.stake, lx >= 93 ? STAKE_MAX : lx < 60 ? -1 : 1); play("tick"); }
+    else if (ly >= 124 && ly < 143) { b.stake = stakeStep(b.stake, lx >= 93 ? STAKE_MAX : lx < 31 ? -1 : lx < 74 ? STAKE_TYPE : 1); play("tick"); }
     else if (ly >= 154 && ly < 174) placeBet();
     else if (ly > 184) { S.overlay = null; play("back"); }
     return true;
@@ -3991,7 +4003,7 @@ function drawTavBoardWide() {
 // betting on your dive: the five bets with what they mean on the left, the stake on the right
 function betWideHits() {
   const x0 = WX(), b = TAV.bet, h = b.opts.map((o, i) => ["opt", x0, 24 + i * 28, 214, 24, i]);
-  h.push(["minus", x0 + 230, 60, 20, 18, -1], ["plus", x0 + 328, 60, 20, 18, 1], ["max", x0 + 230, 82, 118, 14, STAKE_MAX], ["place", x0 + 230, 112, 118, 20, 0]);
+  h.push(["minus", x0 + 230, 60, 20, 18, -1], ["plus", x0 + 328, 60, 20, 18, 1], ["max", x0 + 230, 82, 118, 14, STAKE_MAX], ["place", x0 + 230, 112, 118, 20, 0], ["stakebox", x0 + 252, 60, 74, 18, STAKE_TYPE]);
   return h;
 }
 function drawBetWide() {
@@ -4003,11 +4015,12 @@ function drawBetWide() {
     if (id === "opt") { const [k, lab, pays, desc] = b.opts[v], sel = v === b.sel, off = betBlocked(k); box(x, y, w, h, sel ? CHIP : "#2a4a3c"); text(lab, x + 6, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null); text(desc || "", x + 6, y + 17, 1, k === "under" ? ORANGE : sel ? "#c8e6d2" : "#5a8a74", "left", null); text("X" + pays, x + w - 6, y + 12, 1, sel ? GOLD : "#8a9a6a", "right", null); }
     else if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
     else if (id === "max") btn(x, y, w, h, "ALL IN", CHIP);
-    else { const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk; btn(x, y, w, h, ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
+    else if (id === "stakebox") outline(x, y, w, h, "#2a4a3c");
+    else { const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 1 && !blk; btn(x, y, w, h, ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
   }
   text("STAKE", px + 59, 48, 1, "#a0c8b4", "center", null);
   text(b.stake, px + 59, 69, 2, WHITE, "center");
-  text("WIN " + Math.floor(b.stake * b.opts[b.sel][2]), px + 59, 103, 1, GOLD, "center", null);
+  text("WIN " + Math.round(b.stake * b.opts[b.sel][2]), px + 59, 103, 1, GOLD, "center", null);
   text("NEW BETS", px + 59, 150, 1, "#5a8a74", "center", null); text("EVERY DIVE", px + 59, 160, 1, "#5a8a74", "center", null);
   text("HAUL UNDER " + Math.ceil(JUNK_K * betLine()) + " LB", px + 59, 174, 1, "#5a8a74", "center", null); text("= STAKE BACK", px + 59, 184, 1, "#5a8a74", "center", null);
   closeLine("TAP HERE FOR NO BET");
@@ -4025,7 +4038,7 @@ function betTapWide(rx, ly) {
 function c21WideHits() {
   const x0 = WX(), c = TAV.c21;
   if (c.phase === "play") return [["hit", x0, 134, 70, 20, 0], ["stand", x0 + 76, 134, 70, 20, 0], ["double", x0 + 152, 134, 70, 20, 0]];
-  if (c.phase === "stake") return [["minus", x0, 134, 24, 20, -1], ["plus", x0 + 92, 134, 24, 20, 1], ["max", x0 + 122, 134, 44, 20, STAKE_MAX], ["deal", x0 + 172, 134, 50, 20, 0]];
+  if (c.phase === "stake") return [["minus", x0, 134, 24, 20, -1], ["plus", x0 + 92, 134, 24, 20, 1], ["max", x0 + 122, 134, 44, 20, STAKE_MAX], ["deal", x0 + 172, 134, 50, 20, 0], ["stakebox", x0 + 26, 134, 64, 20, STAKE_TYPE]];
   return [];
 }
 function drawC21Wide() {
@@ -4045,6 +4058,7 @@ function drawC21Wide() {
     if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
     else if (id === "deal") btn(x, y, w, h, "DEAL", GOLD);
     else if (id === "max") btn(x, y, w, h, "MAX", CHIP);
+    else if (id === "stakebox") outline(x, y, w, h, "#2a4a3c");
     else { const ok = id !== "double" || (c.you.length === 2 && tav().chips >= c.staked); btn(x, y, w, h, id.toUpperCase(), ok ? WHITE : "#3c6a54"); }
   }
   if (c.phase === "stake") text(c.bet, x0 + 58, 144, 1, WHITE, "center", null);
@@ -4475,6 +4489,33 @@ function closeName(ok) {
   nameDone = null;
 }
 document.getElementById("nameOk").addEventListener("click", () => closeName(true));
+// Type a bet (Nov 19, 2026): tap the stake on any betting screen. The amount goes to whichever game is open; the game's own
+// phase checks already ran (the tap only reaches stakeStep when betting is allowed), and it's clamped to 1..your chips.
+const stakeModal = document.getElementById("stakeModal"), stakeIn = document.getElementById("stakeIn"), stakeNote = document.getElementById("stakeNote");
+const STAKE_REF = { bet: () => [TAV.bet, "stake"], c21: () => [TAV.c21, "bet"], derby: () => [TAV.derby, "bet"], plinko: () => [TAV.plinko, "bet"],
+  snap: () => [CZ.snap, "bet"], bigger: () => [CZ.big, "bet"], crown: () => [CZ.ca, "bet"], reel: () => [CZ.rd, "bet"], wheel: () => [CZ.wh, "bet"],
+  treasure: () => [CZ.td, "bet"], net: () => [CZ.nh, "bet"] };
+let stakeAt = null;
+function askStake(st, top) {
+  const ref = STAKE_REF[S.overlay] && STAKE_REF[S.overlay]();
+  if (!ref || !ref[0]) return;
+  stakeAt = { obj: ref[0], key: ref[1], top };
+  stakeIn.value = st; stakeNote.textContent = "Any amount from 1 to " + top.toLocaleString("en-US") + ".";
+  stakeModal.classList.add("open"); play("tick"); setTimeout(() => { stakeIn.focus(); stakeIn.select(); }, 30);
+}
+function closeStake(how) {
+  stakeModal.classList.remove("open");
+  const a = stakeAt; stakeAt = null;
+  if (!a || !how) return;
+  const n = how === "all" ? a.top : parseInt(stakeIn.value.replace(/[^0-9]/g, ""), 10);
+  if (n > 0) { a.obj[a.key] = clamp(n, 1, a.top); play("tick"); }
+}
+document.getElementById("stakeOk").addEventListener("click", () => closeStake("ok"));
+document.getElementById("stakeAll").addEventListener("click", () => closeStake("all"));
+document.getElementById("stakeCancel").addEventListener("click", () => closeStake(null));
+stakeModal.addEventListener("pointerdown", e => { if (e.target === stakeModal) closeStake(null); });
+stakeIn.addEventListener("input", () => { stakeIn.value = stakeIn.value.replace(/[^0-9]/g, ""); });
+stakeIn.addEventListener("keydown", e => { if (e.key === "Enter") closeStake("ok"); else if (e.key === "Escape") closeStake(null); e.stopPropagation(); });
 document.getElementById("nameSkip").addEventListener("click", () => closeName(false));
 nameInput.addEventListener("keydown", e => { if (e.key === "Enter") closeName(true); e.stopPropagation(); });
 
@@ -4641,7 +4682,7 @@ function toggleFullscreen() {
 }
 document.getElementById("fsBtn").addEventListener("click", toggleFullscreen);
 window.addEventListener("keydown", e => {
-  if (modal.classList.contains("open") || saveModal.classList.contains("open") || !S) return;
+  if (modal.classList.contains("open") || saveModal.classList.contains("open") || stakeModal.classList.contains("open") || !S) return;
   const c = e.code;
   if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Space"].includes(c)) e.preventDefault();
   if (DIR_KEYS[c] && !HELD.includes(c)) { HELD.push(c); syncKeys(); }
