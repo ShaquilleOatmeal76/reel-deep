@@ -87,7 +87,7 @@ const SZ = [
   { name: "VENT FIELDS", sand: "#5c4440", sand2: "#4e3834", sand3: "#6c504a", deep: "#2a0e0e", trench: "#3e2a26", edge: "#2c1c1a", rock: "#4a3a36", rockTop: "#6a5048", grass: "#6a5a3c", deco: ["vent", "rock"], dark: 0.5 },
   { name: "BONE YARD", sand: "#5a5650", sand2: "#4c4842", sand3: "#6a665e", deep: "#161414", trench: "#3e3a34", edge: "#2c2a26", rock: "#58544c", rockTop: "#7a7468", grass: "#4c5040", deco: ["bone", "bone", "rock"], dark: 0.55 },
   { name: "THE TRENCH", sand: "#3e3a4c", sand2: "#343042", sand3: "#4a4658", deep: "#08080e", trench: "#2a2636", edge: "#1c1a26", rock: "#34303e", rockTop: "#4c4858", grass: "#3a4048", deco: ["rock", "glow"], dark: 0.7 },
-  { name: "THE FLOOR", sand: "#4c3440", sand2: "#402a36", sand3: "#5a404c", deep: "#1a0610", trench: "#38222c", edge: "#28161e", rock: "#4a3440", rockTop: "#684a58", grass: "#5a3c48", deco: ["flesh", "rock", "glow"], dark: 0.6 },
+  { name: "THE FLOOR", sand: "#4c3440", sand2: "#402a36", sand3: "#5a404c", deep: "#1a0610", trench: "#38222c", edge: "#28161e", rock: "#4a3440", rockTop: "#684a58", grass: "#5a3c48", deco: ["flesh", "rock", "glow"], dark: 0.45 },   // lit red by the crack: dim, not dark
 ];
 
 // ---------------------------------------------------------------------------------------------------- enemies
@@ -101,20 +101,21 @@ const ETYPES = {
   split: ["SPLITTER", "fc_boilleech", 40, 21, 0, 0, 1, 6, "s"],
   leech: ["LEECHLING", "fc_gapgrub", 12, 30, 0, 0, 1, 2, ""],
   float: ["FLOATER", "flurker", 30, 25, 0, 0.2, 1, 7, "f"],
-  healer: ["HEALER", "fc_drownedangler", 55, 18, 0.2, 0, 2, 11, "H"],
+  healer: ["HEALER", "fc_drownedangler", 50, 18, 0.2, 0, 1, 11, "H"],
   shield: ["SHIELD", "fc_eyecluster", 50, 19, 0, 0.3, 1, 11, "S"],
-  hidden: ["HIDDEN", "fc_shadowshark", 40, 30, 0, 0, 1, 9, "h"],
+  hidden: ["HIDDEN", "fc_shadowshark", 34, 28, 0, 0, 1, 9, "h"],
   grab: ["GRABBER", "fc_barnaclehand", 60, 20, 0.3, 0, 2, 11, "g"],
   brute: ["BRUTE", "fc_marrowworm", 260, 12, 0.3, 0.2, 5, 30, "b"],
 };
-const E_COST = { crawler: 1, runner: 1, armour: 2.4, slimy: 2, split: 2.4, float: 2, healer: 3, shield: 3, hidden: 2, grab: 3, brute: 9 };
+for (let z = 0; z < 11; z++) ETYPES["g" + z] = ["GUARDIAN", null, 1000, 9, 0.1, 0.1, 10, 150, "b"];
+const E_COST = { crawler: 1, runner: 1, armour: 2.4, slimy: 2, split: 2.4, float: 2, healer: 3.6, shield: 3.2, hidden: 2.8, grab: 3.5, brute: 9 };
 // Which enemies each zone brings (new ones get a popup the first time).
 const Z_ROSTER = [
   ["crawler", "runner", "armour"], ["crawler", "runner", "armour", "slimy"], ["crawler", "runner", "slimy", "split", "float"],
   ["runner", "armour", "split", "float", "hidden"], ["crawler", "armour", "slimy", "float", "hidden", "grab"],
   ["runner", "armour", "hidden", "healer", "grab"], ["armour", "slimy", "split", "shield", "hidden", "float"],
   ["runner", "slimy", "split", "healer", "shield", "grab"], ["armour", "split", "healer", "shield", "grab", "hidden"],
-  ["runner", "float", "hidden", "healer", "shield", "grab"], ["armour", "slimy", "split", "float", "healer", "shield", "hidden", "grab"],
+  ["runner", "float", "hidden", "healer", "shield", "grab"], ["armour", "split", "float", "healer", "hidden", "grab"],
 ];
 const E_TIPS = {
   runner: "RUNNERS ARE FAST. A JELLY COIL SLOWS THEM.", armour: "ARMOURED: SPINES AND SHELLS BOUNCE OFF. ZAP IT.",
@@ -149,9 +150,9 @@ const TW = [
     S: [{ name: "PEARL BANK", note: "MORE SHELLS", cost: 220, r: 0, inc: 26, t: 8 },
         { name: "BLACK PEARL", note: "SHELLS + GUARDS NEARBY TOWERS", cost: 220, r: 54, inc: 16, t: 8, guard: 1 }] },
   { id: "lantern", name: "LANTERN BUOY", note: "LIGHT + RANGE BOOST", cost: 80, up: [80, 100], kind: "light",
-    L: [{ r: 54, boost: 0.1 }, { r: 62, boost: 0.12 }, { r: 72, boost: 0.15 }],
-    S: [{ name: "LIGHTHOUSE BUOY", note: "BIG LIGHT, CRITICAL HITS", cost: 200, r: 100, boost: 0.15, crit: 0.2 },
-        { name: "SONAR BUOY", note: "LIT ENEMIES TAKE MORE", cost: 200, r: 74, boost: 0.15, mark: 0.25 }] },
+    L: [{ r: 64, boost: 0.1 }, { r: 74, boost: 0.12 }, { r: 86, boost: 0.15 }],
+    S: [{ name: "LIGHTHOUSE BUOY", note: "BIG LIGHT, CRITICAL HITS", cost: 200, r: 120, boost: 0.15, crit: 0.2 },
+        { name: "SONAR BUOY", note: "LIT ENEMIES TAKE MORE", cost: 200, r: 90, boost: 0.15, mark: 0.25 }] },
   { id: "kraken", name: "KRAKEN PIT", note: "HUGE SLAMS", cost: 200, up: [180, 220], kind: "slam", dmg: "phys",
     L: [{ r: 52, d: 60, t: 3.5, a: 20 }, { r: 54, d: 90, t: 3.4, a: 21 }, { r: 58, d: 130, t: 3.3, a: 22 }],
     S: [{ name: "KRAKEN", note: "CRUSHES GUARDIANS", cost: 380, r: 62, d: 260, t: 3.3, a: 24, boss: 2 },
@@ -200,6 +201,203 @@ function mapRoutes(M) {                                        // smoothed segme
   for (const k in M.seg) seg[k] = catmull(M.seg[k], 12);
   const routes = M.routes.map(r => { let pts = []; r.forEach((k, i) => { pts = pts.concat(i ? seg[k].slice(1) : seg[k]); }); return polyline(pts); });
   return { seg, routes };
+}
+
+
+// ---------------------------------------------------------------------------------------------------- zones 2-11 (parts 4-6)
+// The other 30 maps are built from layout templates (mirrored and nudged so no two look alike), with pools and pads
+// placed by the same rules everywhere (pads clear of the currents, in reach of them, spaced apart, off the HUD) and
+// checked by tools/tests/test_siege.py. Each zone adds its twist; the third map of each ends with its guardian.
+const TPL = {
+  fork: () => ({ seg: SMAPS["0.0"].seg, routes: SMAPS["0.0"].routes, buoy: SMAPS["0.0"].buoy }),
+  twin: () => ({ seg: SMAPS["0.1"].seg, routes: SMAPS["0.1"].routes, buoy: SMAPS["0.1"].buoy }),
+  tri: () => ({ seg: SMAPS["0.2"].seg, routes: SMAPS["0.2"].routes, buoy: SMAPS["0.2"].buoy }),
+  snake: () => ({ seg: { A: [[490, 40], [430, 44], [390, 70], [400, 108]], u: [[400, 108], [380, 150], [320, 162], [270, 134], [220, 108], [170, 112]],
+    s: [[400, 108], [330, 96], [270, 78], [220, 76], [170, 112]], t: [[170, 112], [130, 142], [120, 182], [150, 214], [110, 236], [60, 232], [36, 214]] },
+    routes: [["A", "u", "t"], ["A", "s", "t"]], buoy: [38, 214] }),
+  cross: () => ({ seg: { L: [[-10, 120], [60, 116], [120, 142], [180, 128], [240, 122]], R: [[490, 150], [420, 146], [360, 120], [300, 122], [240, 122]], d: [[240, 122], [236, 158]],
+    a: [[236, 158], [186, 184], [196, 222], [240, 236]], b: [[236, 158], [290, 184], [282, 222], [240, 236]] },
+    routes: [["L", "d", "a"], ["L", "d", "b"], ["R", "d", "a"], ["R", "d", "b"]], buoy: [240, 238] }),
+  spiral: () => ({ seg: { A: [[-10, 44], [80, 40], [200, 36], [330, 40], [430, 64], [450, 130]], B: [[490, 124], [450, 130]],
+    C: [[450, 130], [432, 204], [330, 234], [200, 234], [96, 218], [64, 160], [96, 104], [180, 88], [298, 94], [356, 132], [326, 170], [262, 176], [228, 150], [250, 138]] },
+    routes: [["A", "C"], ["B", "C"]], buoy: [252, 140] }),
+  lanes: () => ({ seg: { U: [[490, 50], [400, 56], [330, 92], [250, 72], [170, 92], [100, 112], [40, 136]], D: [[490, 222], [410, 214], [340, 180], [260, 204], [180, 180], [100, 160], [40, 136]] },
+    routes: [["U"], ["D"]], buoy: [38, 136] }),
+  walls: () => ({ seg: { a: [[80, -10], [90, 40], [140, 70], [200, 96], [240, 110]], b: [[240, -10], [252, 40], [230, 80], [240, 110]], c: [[400, -10], [390, 40], [340, 70], [280, 96], [240, 110]],
+    m: [[240, 110], [196, 150], [270, 182], [222, 212], [240, 236]] }, routes: [["a", "m"], ["b", "m"], ["c", "m"]], buoy: [240, 236] }),
+  crack: () => ({ seg: { l: [[240, 132], [180, 150], [120, 192], [60, 172], [52, 110], [100, 70], [170, 56], [240, 44]], r: [[240, 132], [300, 150], [360, 192], [420, 172], [428, 110], [380, 70], [310, 56], [240, 44]] },
+    routes: [["l"], ["r"]], buoy: [240, 44], crack: [240, 132] }),
+  hook: () => ({ seg: { a: [[440, 282], [430, 222], [400, 162], [340, 112]], B: [[490, 60], [430, 80], [340, 112]], u: [[340, 112], [300, 72], [230, 58], [180, 92]],
+    l: [[340, 112], [290, 142], [230, 142], [180, 92]], t: [[180, 92], [120, 112], [90, 160], [110, 210], [70, 236], [36, 230]] },
+    routes: [["a", "u", "t"], ["a", "l", "t"], ["B", "u", "t"], ["B", "l", "t"]], buoy: [38, 228] }),
+};
+// [template, flip x, flip y, name, waves]
+const ZMAPS = [
+  null,
+  [["snake", 1, 0, "SWAYING STRANDS"], ["hook", 0, 0, "THE GREEN MAZE"], ["cross", 0, 0, "THE WITCH'S GROVE"]],
+  [["fork", 0, 1, "ANEMONE ALLEY"], ["spiral", 0, 0, "THE RAINBOW RING"], ["tri", 1, 0, "MANTIS HEIGHTS"]],
+  [["twin", 1, 0, "THE DIMMING"], ["snake", 0, 0, "LAST LIGHT LANE"], ["hook", 1, 0, "GLOOM RAY'S DEEP"]],
+  [["lanes", 0, 0, "BROKEN HULL"], ["lanes", 1, 1, "THE CARGO HOLD"], ["tri", 0, 0, "GHOST SHIP'S GRAVE"]],
+  [["twin", 0, 1, "BLACK WATER", 0.85], ["fork", 1, 0, "THE LONG DARK"], ["spiral", 1, 0, "THE GULPER'S MAW"]],
+  [["fork", 0, 0, "PRISM PASS"], ["twin", 0, 0, "GEODE GALLERY"], ["cross", 1, 0, "THE QUEEN'S WEB"]],
+  [["twin", 1, 1, "SMOKER ROW"], ["lanes", 0, 1, "THE SCALDING"], ["tri", 0, 1, "THE BOILING POT"]],
+  [["spiral", 0, 1, "RIBCAGE ROAD"], ["tri", 1, 1, "SKULL HOLLOW"], ["fork", 1, 1, "THE OSSUARY"]],
+  [["walls", 0, 0, "THE DROP"], ["walls", 1, 0, "SHEER WALLS"], ["walls", 0, 0, "THE MAW'S THROAT"]],
+  [["crack", 0, 0, "THE SEAM"], ["crack", 0, 1, "UNDER THE EYE"], ["crack", 0, 0, "THE SLEEPER WAKES", 0.85]],
+];
+function tplMap(z, m) {
+  const [tp, fx, fy, name] = ZMAPS[z][m], T = TPL[tp](), r = seeded(5000 + z * 10 + m), jit = {};
+  const tf = ([x, y]) => {                                          // mirror, then nudge interior points (the same nudge wherever a point is shared)
+    let X = fx ? SIW - x : x, Y = fy ? SIH - y : y;
+    const key = x + "," + y, edge = x < 0 || x > SIW || y < 0 || y > SIH;
+    if (!edge) { if (!jit[key]) jit[key] = [r.randint(-7, 7), r.randint(-6, 6)]; X += jit[key][0]; Y += jit[key][1]; }
+    return [X, Y];
+  };
+  const seg = {}; for (const k in T.seg) seg[k] = T.seg[k].map(tf);
+  const last = T.seg[T.routes[0][T.routes[0].length - 1]], end = tf(last[last.length - 1]);
+  const M = { name, zone: z, waves: 10 + (m === 2 ? 2 : m), start: 280 + z * 25 + m * 10 + (SZ[z].dark > 0.5 || z === 3 ? 140 : 0), seg, routes: T.routes, buoy: [end[0], end[1] + (fy ? -2 : 2)], seed: 700 + z * 31 + m * 7, auto: 1 };
+  if (T.crack) M.crack = tf(T.crack);
+  M.ease = ({ lanes: 0.56, crack: 0.6, walls: 0.8 }[tp] || 1) * (ZMAPS[z][m][4] || 1);
+  if (tp === "crack" || tp === "lanes") M.start += 200;          // two fronts to hold from the start                 // routes that never meet until the buoy spread your towers thin
+  return M;
+}
+const HUD_KEEP = [[0, 0, 170, 24], [350, 0, 130, 24], [0, 236, 138, 34]];   // pads and buoys stay off the HUD
+function autoLayout(M) {                                            // pools in the open, then pads where they cover the most current
+  const R = mapRoutes(M), r = seeded(M.seed + 3), pts = []; for (const k in R.seg) for (const p of R.seg[k]) pts.push(p);
+  const dRoad = (x, y) => { let d = 1e9; for (const p of pts) { const q = Math.hypot(p[0] - x, p[1] - y); if (q < d) d = q; } return d; };
+  M.pools = [];
+  for (let tries = 0; tries < 400 && M.pools.length < 3; tries++) {
+    const x = r.randint(30, SIW - 30), y = r.randint(40, SIH - 24), d = dRoad(x, y);
+    if (d < 46 || M.pools.some(([a, b, rx, ry]) => Math.hypot(a - x, b - y) < rx + 50) || HUD_KEEP.some(([a, b, w, h]) => x > a - 20 && x < a + w + 20 && y > b - 20 && y < b + h + 20)) continue;
+    const rx = Math.min(70, d - 14), ry = Math.round(rx * 0.45); if (rx < 22) continue;
+    M.pools.push([x, y, rx, ry]);
+  }
+  const cands = [];
+  for (const k in R.seg) {
+    const pl = polyline(R.seg[k]);
+    for (let s = 6; s < pl.total; s += 7) {
+      const [x, y] = atS(pl, s), [x2, y2] = atS(pl, s + 2), a = Math.atan2(y2 - y, x2 - x);
+      for (const sd of [-1, 1]) for (const d of [25, 31]) cands.push([x + Math.cos(a + sd * Math.PI / 2) * d, y + Math.sin(a + sd * Math.PI / 2) * d * 0.85]);
+    }
+  }
+  const ok = ([x, y]) => x > 14 && x < SIW - 14 && y > 34 && y < SIH - 10 && dRoad(x, y) >= 19 && !inPool(M, x, y, 6) && Math.hypot(M.buoy[0] - x, M.buoy[1] - y) > 26 && !(M.crack && Math.hypot(M.crack[0] - x, M.crack[1] - y) < 30)
+    && !HUD_KEEP.some(([a, b, w, h]) => x > a - 12 && x < a + w + 12 && y > b - 6 && y < b + h + 8);
+  const cover = ([x, y]) => { let n = 0; for (const pl of R.routes) for (let s = 0; s < pl.total; s += 6) { const [px, py] = atS(pl, s); if (inRange(x, y - 4, px, py, 62)) n++; } return n + r.random() * 2; };
+  const pool = cands.filter(ok).map(c => [c, cover(c)]).sort((a, b) => b[1] - a[1]);
+  M.pads = [];
+  for (const [c] of pool) { if (M.pads.length >= 15) break; if (M.pads.some(([a, b]) => Math.hypot(a - c[0], (b - c[1]) * 1.4) < 30)) continue; M.pads.push([Math.round(c[0]), Math.round(c[1])]); }
+  // the zone's twist, placed along the currents
+  const along = (f, k) => { const pl = R.routes[k % R.routes.length]; return atS(pl, pl.total * f).slice(0, 2).map(Math.round); };
+  if (M.zone === 1) M.kelp = [along(0.32, 0), along(0.58, 1), along(0.78, 0)];
+  if (M.zone === 2) M.rush = [along(0.3, 0), along(0.62, 1)];
+  if (M.zone === 7) M.vents = [along(0.25, 0), along(0.5, 1), along(0.72, 0)].map(([x, y], i) => [x, y, i * 2.1]);
+  if (M.zone === 4) M.doors = 1;
+}
+for (let z = 1; z < 11; z++) for (let m = 0; m < 3; m++) { const id = z + "." + m; SMAPS[id] = tplMap(z, m); autoLayout(SMAPS[id]); }
+
+// ---- the guardians: one per zone, at the end of its third map. [hp at the zone's scale, speed, what it does every few seconds]
+const GUARD = [
+  { hp: 900, spd: 9, every: 7, name: "KING CRAB" }, { hp: 1100, spd: 9, every: 8, name: "KELP WITCH" }, { hp: 1300, spd: 10, every: 5, name: "MANTIS KING" },
+  { hp: 1400, spd: 10, every: 12, name: "GLOOM RAY" }, { hp: 1700, spd: 8, every: 8, name: "GHOST SHIP" }, { hp: 1800, spd: 9, every: 6, name: "THE GULPER" },
+  { hp: 1900, spd: 10, every: 7, name: "GLASS SPIDER QUEEN" }, { hp: 2100, spd: 9, every: 10, name: "THE BOIL" }, { hp: 1500, spd: 8, every: 99, name: "THE OSSUARY" },
+  { hp: 2400, spd: 9, every: 9, name: "THE MAW" }, { hp: 3600, spd: 6, every: 7, name: "THE SLEEPER" },
+];
+function addGuardian(ri) {
+  const z = SG.M.zone, d = GUARD[z], e = addEnemy("crawler", ri);
+  Object.assign(e, { k: "g" + z, boss: z + 1, hp: Math.round(d.hp * SG.hpK * TUNE.gK), spd: d.spd, arm: z >= 8 ? 0.2 : 0.1, slime: z >= 8 ? 0.2 : 0.1, hull: 10, bounty: 150 + z * 25, fl: "b", gT: d.every * 0.6, lives: z === 8 ? 2 : 0, phase: 1 });
+  e.max = e.hp; SG.guard = e;
+  siegeTip(d.name + " IS COMING!"); play("growl"); S.shake = 0.6;
+  return e;
+}
+function guardTick(e, dt) {                                         // each guardian breaks a rule
+  const G = SG, z = e.boss - 1, d = GUARD[z]; e.gT -= dt;
+  if (z === 10) { const ph = e.hp > e.max * 0.66 ? 1 : e.hp > e.max * 0.33 ? 2 : 3; if (ph !== e.phase) { e.phase = ph; siegeTip(ph === 2 ? "THE SLEEPER IS ANGRY!" : "THE SLEEPER IS FURIOUS!"); S.shake = 0.8; play("thunder"); e.spd = 6 + ph * 2; } }
+  if (z === 7 && e.heat > 0) e.heat -= dt;
+  if (e.gT > 0) return;
+  e.gT = z === 10 ? 7 - e.phase : d.every;
+  const towers = G.towers.map((t, i) => [t, i]).filter(([t]) => t && !t.gone), near = r => towers.filter(([t]) => inRange(e.x, e.y, t.x, t.y, r)).sort((a, b) => Math.hypot(a[0].x - e.x, a[0].y - e.y) - Math.hypot(b[0].x - e.x, b[0].y - e.y));
+  const fxAt = (t, s, col) => { G.fx.push({ k: "dust", x: t.x, y: t.y, t: 0 }); siegePop(t.x, t.y - 28, s, col || RED); };
+  if (z === 0) { const n = near(80)[0]; if (n) { n[0].gone = 20; fxAt(n[0], "SNIPPED!"); play("hit"); } }
+  else if (z === 1) { const pads = G.M.pads.map((p, i) => i).filter(i => !(G.overgrown || {})[i]); if (pads.length) { const i = pads.sort((a, b) => Math.hypot(G.M.pads[a][0] - e.x, G.M.pads[a][1] - e.y) - Math.hypot(G.M.pads[b][0] - e.x, G.M.pads[b][1] - e.y))[0]; G.overgrown = G.overgrown || {}; G.overgrown[i] = 1; siegePop(G.M.pads[i][0], G.M.pads[i][1] - 20, "OVERGROWN", LIME); } }
+  else if (z === 2) { for (const [t] of near(54)) { t.off = Math.max(t.off || 0, 3); } if (near(54).length) { siegePop(e.x, e.y - 40, "PUNCH!", ORANGE); S.shake = 0.2; play("hit"); } }
+  else if (z === 3) { G.dim = 5; siegeTip("THE GLOOM RAY DIMS EVERY LIGHT!"); }
+  else if (z === 4) { for (let i = 0; i < 3; i++) { const n = addEnemy(i ? "crawler" : "armour", e.ri, Math.max(0, e.s - 4 - i * 6)); n.max = n.hp; } siegePop(e.x, e.y - 40, "BOOM!", ORANGE); play("thunder", 0.5); }
+  else if (z === 5) {
+    const H = G.hero;
+    if (H && !H.dead && Math.hypot(H.x - e.x, H.y - e.y) < 30) { heroHit(H, 9999); siegePop(e.x, e.y - 40, "GULP!", RED); }
+    else { const v = G.en.filter(o => o !== e && o.hp > 0 && Math.hypot(o.x - e.x, o.y - e.y) < 40)[0]; if (v) { v.hp = 0; e.hp = Math.min(e.max, e.hp + e.max * 0.12); siegePop(e.x, e.y - 40, "GULP!", RED); } }
+  }
+  else if (z === 6) { const n = near(80)[0]; if (n) { n[0].off = Math.max(n[0].off || 0, 5); fxAt(n[0], "WEBBED", "#c8e6ff"); } for (let i = 0; i < 2; i++) addEnemy("leech", e.ri, Math.max(0, e.s - 8 - i * 6)); }
+  else if (z === 7) { e.heat = 4; siegePop(e.x, e.y - 40, "THE CURRENT BOILS!", ORANGE); }
+  else if (z === 9) { const list = G.M.pads.map((p, i) => i).filter(i => !(G.eaten || {})[i]); if (list.length) { const i = list[Math.floor(Math.random() * list.length)]; G.eaten = G.eaten || {}; G.eaten[i] = 15; siegePop(G.M.pads[i][0], G.M.pads[i][1] - 20, "EATEN!", RED); play("growl", 0.5); } }
+  else if (z === 10) {
+    for (const [t] of near(70 + e.phase * 15)) t.off = Math.max(t.off || 0, 2 + e.phase);
+    G.fx.push({ k: "shock", x: e.x, y: e.y, t: 0, dur: 0.8, r: 70 + e.phase * 15 }); S.shake = 0.5; play("thunder", 0.6);
+    for (let i = 0; i < e.phase + 1; i++) { const n = addEnemy(e.phase >= 3 ? "armour" : "crawler", e.ri, Math.max(0, e.s - 8 - i * 7)); n.max = n.hp; }
+  }
+}
+const towerBlocked = (t, i) => t.gone > 0 || (SG.overgrown && SG.overgrown[i]) || (SG.eaten && SG.eaten[i] > 0);
+function zoneTick(dt) {                                             // the zone's own rules, every step
+  const G = SG, M = G.M;
+  if (G.dim > 0) G.dim -= dt;
+  G.towers.forEach((t, i) => { if (t && t.gone > 0) { t.gone -= dt; if (t.gone <= 0) { t.gone = 0; siegePop(t.x, t.y - 26, "BACK!", LIME); } } });
+  if (G.eaten) for (const i in G.eaten) { G.eaten[i] -= dt; if (G.eaten[i] <= 0) delete G.eaten[i]; }
+  if (G.overgrown && G.hero && !G.hero.dead) for (const i in G.overgrown) { const [px, py] = M.pads[i]; if (Math.hypot(G.hero.x - px, G.hero.y - py) < 16) { delete G.overgrown[i]; siegePop(px, py - 20, "CUT FREE", LIME); play("tick"); } }
+  if (M.doors) { G.doorT = (G.doorT || 0) + dt; const open = Math.floor(G.doorT / 20) % 2; if (open !== G.door) { if (G.door !== undefined) siegePop(SIW / 2, 40, "THE DOORS SWING!", GOLD); G.door = open; } }
+  if (M.vents) for (const v of M.vents) {
+    const ph = (G.t + v[2]) % 6, erupt = ph > 4.5;
+    if (erupt) { for (const e of G.en) if (e.hp > 0 && !e.fl.includes("f") && Math.hypot(e.x - v[0], (e.y - v[1]) / 0.7) < 16) hurt(e, (e.boss ? 4 : 24) * dt * G.hpK, "phys"); const H = G.hero; if (H && !H.dead && Math.hypot(H.x - v[0], (H.y - v[1]) / 0.7) < 16) heroHit(H, 30 * dt); }
+  }
+  for (const b of G.bones || []) { b.t -= dt; if (G.hero && !G.hero.dead && Math.hypot(G.hero.x - b.x, G.hero.y - b.y) < 18) { b.t = -1; b.shattered = 1; siegePop(b.x, b.y - 10, "CRUNCH", WHITE); } if (b.t <= 0 && !b.shattered) { const n = addEnemy(b.k, b.ri, b.s); n.hp = n.max = Math.round(n.max * 0.5); n.risen = 1; G.fx.push({ k: "pop", x: b.x, y: b.y, t: 0 }); b.shattered = 1; } }
+  if (G.bones) G.bones = G.bones.filter(b => b.t > 0 && !b.shattered);
+  const g_ = G.en.find(e => e.boss); if (g_) guardTick(g_, dt);
+}
+function zoneSpeed(e) {                                             // currents that rush (reef), the Boil's heat
+  let k = 1;
+  if (SG.M.rush) for (const [x, y] of SG.M.rush) if (Math.hypot(e.x - x, e.y - y) < 26) k *= 1.6;
+  const b = SG.guard; if (b && b.hp > 0 && b.heat > 0 && b !== e) k *= 1.3;
+  return k;
+}
+function zoneDark() {                                               // how dark it is now: Twilight darkens wave by wave
+  const z = SG.M.zone; let d = SZ[z].dark;
+  if (z === 3) d = clamp(0.15 + Math.max(0, SG.wave) * 0.08, 0.15, 0.85);
+  if (SG.dim > 0) d = Math.max(d, 0.85);
+  return d;
+}
+function inKelp(e) { return SG.M.kelp && SG.M.kelp.some(([x, y]) => Math.hypot(e.x - x, (e.y - y) / 0.8) < 22); }
+function drawZoneUnder() {                                          // twist art under the towers
+  const G = SG, M = G.M;
+  if (M.rush) for (const [x, y] of M.rush) for (let i = 0; i < 6; i++) { const k = ((G.t * 1.5 + i / 6) % 1); g.globalAlpha = 0.6 * (1 - k); line("#c8f0ff", x - 18 + k * 30, y - 6 + i * 2, x - 12 + k * 30, y - 6 + i * 2); g.globalAlpha = 1; }
+  if (M.vents) for (const [x, y, o] of M.vents) {
+    const ph = (G.t + o) % 6; ell(INK, x - 9, y - 4, 18, 8); ell("#5a3c34", x - 8, y - 3, 16, 6); ell(ph > 3.5 ? "#ff8c3c" : "#a0503c", x - 4, y - 2, 8, 3);
+    if (ph > 3.5 && ph <= 4.5) for (let i = 0; i < 3; i++) disc("#ffb478", x + Math.sin(G.t * 9 + i) * 4, y - 4 - ((G.t * 20 + i * 5) % 10), 1);
+    if (ph > 4.5) { g.globalAlpha = 0.75; for (let i = 0; i < 8; i++) disc(i % 2 ? "#ffc864" : "#ff6428", x + Math.sin(i * 2 + G.t * 7) * 5, y - 6 - i * 4, 3 - i * 0.3); g.globalAlpha = 1; }
+  }
+  if (M.crack) { const [x, y] = M.crack; ell("#ff3c50", x - 16, y - 5, 32, 10); ell("#3c0a14", x - 13, y - 4, 26, 8); g.globalAlpha = 0.4 + 0.3 * Math.sin(G.t * 3); ell("#ff6e78", x - 10, y - 2, 20, 4); g.globalAlpha = 1; }
+  for (const b of G.bones || []) { line("#e0d6bc", b.x - 4, b.y, b.x + 4, b.y - 2); line("#e0d6bc", b.x - 3, b.y - 3, b.x + 3, b.y + 1); }
+  if (M.doors) {                                                    // the wreck's doors on each route's second half
+    G.R.routes.forEach((pl, i) => { const [x, y] = atS(pl, pl.total * 0.18), open = doorOpen(i); rect(INK, x - 6, y - 12, 12, 12); rect(open ? "#3c6e46" : "#6e2832", x - 5, y - 11, 10, 10); rect("#7a5a3c", x - 5, y - 11, 10, 2); text(open ? "OPEN" : "SHUT", x, y - 18, 1, open ? LIME : RED); });
+  }
+}
+function drawZoneOver() {                                           // kelp thickets over the current
+  const G = SG, M = G.M;
+  if (M.kelp) for (const [x, y] of M.kelp) { const r = seeded(x * 7 + y); for (let i = 0; i < 16; i++) { const px = x + r.randint(-20, 20), py = y + r.randint(-12, 14), h = r.randint(12, 24); for (let j = 0; j < h; j++) rect(j % 5 === 4 ? "#5ab464" : "#2c7a44", px + Math.sin(j / 3 + G.t * 1.4 + i) * 1.5, py - j, 2, 1); } }
+}
+const doorOpen = ri => !SG.M.doors || ri % 2 === (SG.door | 0);
+// the Sleeper, drawn for the siege: the arena's horned, many-eyed hulk, rising through the crack
+function drawSleeperSiege(e) {
+  const x = Math.round(e.x), y = Math.round(e.y), t = SG.t, ph = e.phase, BODY = "#2a2040", DARKB = "#140e22", LIGHTB = "#3c2c5c";
+  g.globalAlpha = 0.3; ell("#000000", x - 34, y - 4, 68, 10); g.globalAlpha = 1;
+  for (const sd of [-1, 1]) for (let j = 0; j < 12; j++) { const u = j / 11; disc(j % 3 ? "#1c1430" : "#2a1e44", x + sd * (30 + j * 1.2) + Math.sin(t * 1.6 + j * 0.5 + sd) * (2 + u * 6), y - 6 - j * 4, Math.max(1, Math.round(5 - u * 4))); }
+  const pts = []; for (let i = 0; i <= 20; i++) { const u = i / 20 * 2 - 1, k = Math.pow(1 - u * u, 0.6); pts.push([x + u * 30, y - 6 - k * 40 + Math.sin(i * 1.3) * 1.2]); }
+  poly(DARKB, [[x - 32, y]].concat(pts.map(([a, b]) => [a + (a < x ? -2 : 2), b - 2]), [[x + 32, y]])); poly(BODY, [[x - 30, y]].concat(pts, [[x + 30, y]]));
+  for (const u of [-0.7, -0.4, 0, 0.4, 0.7]) { const px = x + u * 30, py = y - 6 - Math.pow(1 - u * u, 0.6) * 40; poly(LIGHTB, [[px - 3, py + 2], [px, py - 9], [px + 3, py + 2]]); rect("#b4a4d4", px, py - 8, 1, 3); }
+  for (const sd of [-1, 1]) for (let j = 0; j < 10; j++) { const u = j / 9; disc(j % 3 === 2 ? "#a89c84" : "#d8ccb0", x + sd * (10 + j * 1.6 - u * u * 6), y - 42 - j * 1.8 + u * u * 3, Math.max(1, Math.round(3 - u * 2))); }
+  const eyes = [[-12, -30, 4], [12, -30, 4], [0, -22, 3], [-20, -18, 2], [20, -18, 2], [0, -36, 2]].slice(0, 2 + ph * 1 + (ph >= 3 ? 1 : 0));
+  for (const [ex, ey, r] of eyes) { disc(INK, x + ex, y + ey, r + 1); disc("#ff503c", x + ex, y + ey, r); rect("#ffdcc8", x + ex - 1, y + ey - 1, 1, 1); }
+  if (ph >= 2) { g.globalAlpha = 0.45 + 0.35 * Math.sin(t * (ph >= 3 ? 9 : 4)); for (const fx of [-18, 16]) line("#c83c64", x + fx, y - 12, x + fx + 4, y - 26); g.globalAlpha = 1; }
+  const mw = 9, open = ph >= 2 ? 3 : 1; ell("#0a0612", x - mw, y - 12 - open, mw * 2, open * 2);
+  for (let k = -mw + 1; k < mw; k += 3) { rect("#f0e6dc", x + k, y - 12 - open, 1, 2); }
 }
 
 // ---- the seabed, painted once
@@ -294,11 +492,13 @@ function decoArt(kind, seed, z) {
 // Waves are built from a threat budget that grows wave by wave and map by map, from the zone's roster, the same for
 // everyone (seeded by the map). Each wave: groups of [type, count, route, gap seconds, delay].
 function mapIndex(id) { const [z, m] = id.split(".").map(Number); return z * 3 + m; }
+// Difficulty: every map starts from scratch, so most of the climb is wave by wave inside a map, plus a gentle rise map by map.
+const TUNE = { b0: 8, b1: 3.5, b2: 0.15, bD: 0.01, hD: 0.03, hW: 0.025, gK: 0.6 };
 function buildWaves(id, M) {
   const D = mapIndex(id), r = seeded(1000 + D), roster = Z_ROSTER[M.zone], out = [];
   const pool = D === 0 ? ["crawler", "runner"] : roster;
   for (let w = 0; w < M.waves; w++) {
-    const budget = (12 + w * 7.5) * (1 + D * 0.14), groups = [];
+    const budget = (TUNE.b0 + TUNE.b1 * w + TUNE.b2 * w * w) * (1 + TUNE.bD * D * Math.min(1, w / 4)) * (M.ease || 1), groups = [];   // the zone's extra weight comes in over the first four waves
     let left = budget, delay = 0;
     const kinds = w < 2 ? ["crawler"] : pool.filter(k => w >= 3 || E_COST[k] <= 2.4);
     while (left > 1 && groups.length < 4) {
@@ -306,12 +506,13 @@ function buildWaves(id, M) {
       groups.push([k, n, r.randint(0, M.routes.length - 1), k === "runner" ? 0.7 : 1.1, delay]);
       left -= n * c; delay += n * (k === "runner" ? 0.7 : 1.1) * 0.6 + 1.5;
     }
-    if (w === M.waves - 1 && D >= 1) groups.push(["brute", 1 + Math.floor(D / 4), r.randint(0, M.routes.length - 1), 4, delay + 2]);
+    if (w === M.waves - 1 && D >= 1 && D % 3 !== 2) groups.push(["brute", 1 + Math.min(3, Math.floor(M.zone / 3)), r.randint(0, M.routes.length - 1), 4, delay + 2]);
+    if (w === M.waves - 1 && D % 3 === 2) groups.push(["GUARD", 1, r.randint(0, M.routes.length - 1), 1, delay + 3]);
     out.push(groups);
   }
   return out;
 }
-const hpScale = D => 1 + 0.16 * D + 0.01 * D * D;
+const hpScale = D => 1 + TUNE.hD * D;
 
 // ---------------------------------------------------------------------------------------------------- start and leave
 function fleshAtlas() {                                        // the Flipside sprites recoloured into the invaders' flesh tones
@@ -371,39 +572,48 @@ function callWave() {
   SG.wave++; SG.waveT = 0; SG.nextT = 0;
   for (const [k, n, ri, gap, delay] of SG.waves[SG.wave]) for (let i = 0; i < n; i++) SG.spawn.push([delay + i * gap, k, ri]);
   SG.spawn.sort((a, b) => a[0] - b[0]);
-  const fresh = [...new Set(SG.waves[SG.wave].map(g_ => g_[0]))].filter(k => E_TIPS[k] && !siegeSave().seen.includes(k) && !SG.seenNow.includes(k));
+  const fresh = [...new Set(SG.waves[SG.wave].map(g_ => g_[0]).filter(k => k !== "GUARD"))].filter(k => E_TIPS[k] && !siegeSave().seen.includes(k) && !SG.seenNow.includes(k));
   if (fresh.length) { SG.seenNow.push(fresh[0]); if (!SG.test) siegeSave().seen.push(fresh[0]); siegeTip("NEW: " + E_TIPS[fresh[0]]); }
   play("chime");
 }
 function addEnemy(k, ri, s) {
-  const E = ETYPES[k], hp = Math.round(E[2] * SG.hpK);
-  const e = { k, ri, s: s || 0, hp, max: hp, spd: E[3], arm: E[4], slime: E[5], hull: E[6], bounty: E[7], fl: E[8], slow: 0, slowT: 0, held: 0, poison: 0, poisonT: 0, x: 0, y: 0, right: true, hitT: 0, grabT: 0, id: Math.random() };
+  const w = Math.max(0, SG.wave), E = ETYPES[k], hp = Math.round(E[2] * (1 + (SG.hpK - 1) * Math.min(1, w / 4)) * (1 + TUNE.hW * w));
+  const e = { k, ri, s: s || 0, hp, max: hp, spd: E[3], arm: E[4], slime: E[5], hull: E[6], bounty: Math.round(E[7] * (1 + 0.02 * SG.D)),   // deeper zones pay more
+    fl: E[8], slow: 0, slowT: 0, held: 0, poison: 0, poisonT: 0, x: 0, y: 0, right: true, hitT: 0, grabT: 0, id: Math.random() };
   const [x, y, rt] = atS(SG.R.routes[ri], e.s); e.x = x; e.y = y; e.right = rt;
   SG.en.push(e); return e;
 }
 function lit(x, y) {                                           // is this spot lit? (dark zones and hidden enemies need light)
-  for (const t of SG.towers) if (t && TW[t.k].kind === "light" && inRange(t.x, t.y, x, y, towerStats(t).r)) return true;
+  if (!(SG.dim > 0)) for (const t of SG.towers) if (t && !t.gone && TW[t.k].kind === "light" && inRange(t.x, t.y, x, y, towerStats(t).r)) return true;
   const H = SG.hero;
   if (H && !H.dead && H.kit === 2 && inRange(H.x, H.y, x, y, heroLight(H))) return true;
   if (H && H.flareT > 0 && inRange(H.flareX, H.flareY, x, y, 84)) return true;
   return false;
 }
-function visibleTo(e) { return !(e.fl.includes("h") || SZ[SG.M.zone].dark > 0.5) || lit(e.x, e.y); }
+function visibleTo(e) {                                         // hidden ones need real light; in the dark, every tower also glows a little
+  if (e.boss) return true;
+  if (e.fl.includes("h")) return lit(e.x, e.y) || SG.towers.some(t => t && !t.gone && Math.hypot(t.x - e.x, (t.y - e.y) / 0.7) < 24);   // spotted right next to a tower
+  return true;
+}
+const darkK = t => zoneDark() > 0.5 && !lit(t.x, t.y - 4) ? 0.65 : 1;   // in the dark, towers outside a light see 35% less far
 function hurt(e, dmg, kind, src) {
   if (e.hp <= 0) return;
   let k = 1;
   if (kind === "phys" && !(src && src.pierce)) k *= 1 - e.arm;
   if (kind === "zap") k *= 1 - e.slime;
-  if (SG.en.some(o => o !== e && o.hp > 0 && o.fl.includes("S") && Math.hypot(o.x - e.x, o.y - e.y) < 34)) k *= 0.5;   // a shield nearby
+  if (SG.en.some(o => o !== e && o.hp > 0 && o.fl.includes("S") && Math.hypot(o.x - e.x, o.y - e.y) < 34)) k *= 0.6;   // a shield nearby
   for (const t of SG.towers) if (t && t.spec === 1 && TW[t.k].id === "lantern" && inRange(t.x, t.y, e.x, e.y, towerStats(t).r)) { k *= 1.25; break; }   // sonar marks
   if (src && src.crit && Math.random() < src.crit) { k *= 2; siegePop(e.x, e.y - 12, "CRIT", ORANGE); }
   e.hp -= dmg * k; e.hitT = 0.1;
+  if (e.hp <= 0 && e.lives > 0) { e.lives--; e.hp = e.max * 0.5; e.held = 2; siegePop(e.x, e.y - 50, "IT REBUILDS ITSELF!", RED); S.shake = 0.4; play("growl"); return; }
   if (e.hp <= 0) killEnemy(e);
 }
 function killEnemy(e) {
   SG.shells += e.bounty; SG.kills++; SG.earned += e.bounty;
   siegePop(e.x, e.y - 8, "+" + e.bounty, GOLD);
   SG.fx.push({ k: "pop", x: e.x, y: e.y, t: 0 });
+  if (SG.M.zone === 8 && !e.risen && !e.boss && e.k !== "leech") (SG.bones = SG.bones || []).push({ x: e.x, y: e.y, k: e.k, ri: e.ri, s: e.s, t: 3 });
+  if (e.boss) { SG.fx.push({ k: "shock", x: e.x, y: e.y, t: 0, dur: 1, r: 60 }); S.shake = 0.8; siegeTip(GUARD[e.boss - 1].name + " IS BEATEN!"); play("fanfare"); }
   if (e.fl.includes("s")) for (let i = 0; i < 2; i++) { const n = addEnemy("leech", e.ri, Math.max(0, e.s - 6 + i * 10)); n.max = n.hp = Math.round(n.hp); }
   play("hit", 0.4);
 }
@@ -415,9 +625,9 @@ function siegeStep(dt) {
   // spawning
   if (G.wave >= 0) {
     G.waveT += dt;
-    while (G.spawn.length && G.spawn[0][0] <= G.waveT) { const [, k, ri] = G.spawn.shift(); addEnemy(k, ri); }
+    while (G.spawn.length && G.spawn[0][0] <= G.waveT) { let [, k, ri] = G.spawn.shift(); if (!doorOpen(ri)) ri = (ri + 1) % G.R.routes.length; if (k === "GUARD") addGuardian(ri); else addEnemy(k, ri); }
     if (!G.spawn.length && G.wave < G.waves.length - 1) {
-      if (G.nextT <= 0) G.nextT = 18; else { G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 0; callWave(); } }
+      if (G.nextT <= 0) G.nextT = 25; else { G.nextT -= dt; if (G.nextT <= 0) { G.nextT = 0; callWave(); } }
     }
   }
   // enemies
@@ -428,22 +638,23 @@ function siegeStep(dt) {
     if (e.poisonT > 0) { e.poisonT -= dt; hurt(e, e.poison * dt, "zap"); if (e.hp <= 0) continue; }
     for (const b of G.burns) if (Math.hypot(b.x - e.x, (b.y - e.y) / 0.7) < b.r) { hurt(e, b.dps * dt, "phys"); if (e.hp <= 0) break; }
     if (e.hp <= 0) continue;
-    if (e.fl.includes("H")) for (const o of G.en) if (o !== e && o.hp > 0 && Math.hypot(o.x - e.x, o.y - e.y) < 40) o.hp = Math.min(o.max, o.hp + 6 * dt);
+    if (e.fl.includes("H")) for (const o of G.en) if (o !== e && o.hp > 0 && o.healT !== G.t && Math.hypot(o.x - e.x, o.y - e.y) < 40) { o.hp = Math.min(o.max, o.hp + o.max * 0.03 * dt); o.healT = G.t; }   // one healer at a time
     if (e.fl.includes("g")) {                                   // grabbers latch onto a tower they pass
       e.grabT -= dt;
-      if (e.grabT <= 0) for (const t of G.towers) if (t && !t.off && Math.hypot(t.x - e.x, t.y - e.y) < 26 && !guarded(t)) { t.off = 3; e.grabT = 6; siegePop(t.x, t.y - 26, "GRABBED", RED); break; }
+      if (e.grabT <= 0) for (const t of G.towers) if (t && !t.off && !(t.grabbedAt > G.t - 6) && Math.hypot(t.x - e.x, t.y - e.y) < 26 && !guarded(t)) { t.off = 2.5; t.grabbedAt = G.t; e.grabT = 8; siegePop(t.x, t.y - 26, "GRABBED", RED); break; }
     }
     if (e.held > 0) { e.held -= dt; continue; }
     if (e.block) { if (e.block.dead || e.block.block !== e) e.block = null; else { heroHit(e.block, eDps(e) * dt); continue; } }
     const pl = G.R.routes[e.ri];
-    e.s += e.spd * (1 - e.slow) * dt;
-    if (e.s >= pl.total) { e.hp = 0; G.hull -= e.hull; G.leaked += e.hull; siegePop(G.M.buoy[0], G.M.buoy[1] - 34, "-" + e.hull, RED); play("miss", 0.5); S.shake = 0.2; continue; }
+    e.s += e.spd * (1 - e.slow) * zoneSpeed(e) * dt;
+    if (e.s >= pl.total) { e.hp = 0; G.hull -= e.hull; G.leaked += e.hull; (G.leakBy = G.leakBy || {})[e.k] = (G.leakBy[e.k] || 0) + 1; siegePop(G.M.buoy[0], G.M.buoy[1] - 34, "-" + e.hull, RED); play("miss", 0.5); S.shake = 0.2; continue; }
     const [x, y, rt] = atS(pl, e.s); e.x = x; e.y = y; e.right = rt;
   }
   G.en = G.en.filter(e => e.hp > 0);
   heroTick(dt);
+  zoneTick(dt);
   // towers
-  for (const t of G.towers) if (t) towerTick(t, dt);
+  G.towers.forEach((t, i) => { if (t && !towerBlocked(t, i)) towerTick(t, dt); });
   // shots in flight
   for (const s of G.shots) {
     s.t += dt;
@@ -482,12 +693,12 @@ function towerBoost(t) {                                        // lanterns leng
 }
 function targets(t, r, opts) {                                  // enemies in range, the furthest along first
   opts = opts || {};
-  const list = SG.en.filter(e => e.hp > 0 && inRange(t.x, t.y - 4, e.x, e.y, r) && visibleTo(e) && !(opts.ground && e.fl.includes("f")) && !(opts.free && e.held > 0));
+  const list = SG.en.filter(e => e.hp > 0 && inRange(t.x, t.y - 4, e.x, e.y, r) && visibleTo(e) && !inKelp(e) && !(opts.ground && e.fl.includes("f")) && !(opts.free && e.held > 0));
   list.sort((a, b) => (b.s / SG.R.routes[b.ri].total) - (a.s / SG.R.routes[a.ri].total));
   return list;
 }
 function towerTick(t, dt) {
-  const d = TW[t.k], st = towerStats(t), [boost, crit] = towerBoost(t), r = st.r * (1 + boost);
+  const d = TW[t.k], st = towerStats(t), [boost, crit] = towerBoost(t), r = st.r * (1 + boost) * darkK(t);
   t.cd = Math.max(0, (t.cd || 0) - dt); t.anim = Math.max(0, (t.anim || 0) - dt);
   if (t.off) { t.off -= dt; if (t.off <= 0) t.off = 0; return; }
   if (d.kind === "clam") { t.acc = (t.acc || 0) + dt; if (t.acc >= st.t) { t.acc = 0; SG.shells += st.inc; siegePop(t.x, t.y - 26, "+" + st.inc, GOLD); t.anim = 0.4; } return; }
@@ -506,10 +717,10 @@ function towerTick(t, dt) {
     for (const e of list.slice(0, st.n)) { e.held = st.hold; e.poison = Math.max(e.poison, st.d); e.poisonT = Math.max(e.poisonT, st.hold); SG.fx.push({ k: "grab", x: e.x, y: e.y, t: 0, dur: st.hold, tx: t.x, ty: t.y, e }); }
     t.cd = st.t + st.hold; t.anim = 0.3;
   } else if (d.kind === "zap") {
-    const list = targets(t, r); if (!list.length) return;
+    const crys = SG.M.zone === 6, list = targets(t, r * (crys ? 1.15 : 1)); if (!list.length) return;
     let prev = [t.x, t.y - 24], cur = list[0];
     const hit = [];
-    for (let i = 0; i < st.chain && cur; i++) {
+    for (let i = 0; i < st.chain + (crys ? 2 : 0) && cur; i++) {
       hit.push(cur); SG.fx.push({ k: "zap", x: prev[0], y: prev[1], tx: cur.x, ty: cur.y - 3, t: 0, dur: 0.15 });
       cur.slow = Math.max(cur.slow, st.slow); cur.slowT = 1.2;
       if (st.poison) { cur.poison = Math.max(cur.poison, st.poison); cur.poisonT = 4; }
@@ -534,6 +745,7 @@ function siegeEnd(won) {
   G.result = { won, stars, t: 0 };
   const xp = Math.round(G.earned * 0.5 + (won ? 60 + 20 * G.D : 0));
   G.result.xp = xp; G.result.lv0 = G.hero ? G.hero.lv : 1; G.result.lv1 = heroLevel(G.heroXp0 + xp);
+  if (won && G.id === "10.2") G.result.ending = 1;
   if (!G.test) { const q = siegeSave(), before = q.done | 0; q.xp += xp; if (won) q.stars[G.id] = Math.max(q.stars[G.id] || 0, stars); q.done = zonesDone(); if (q.done > before) G.result.zone = SZ[q.done - 1].name + " RECLAIMED!"; saveStore(); }
   play(won ? "fanfare" : "miss");
 }
@@ -541,6 +753,7 @@ function siegeEnd(won) {
 // ---------------------------------------------------------------------------------------------------- building
 function ringFor(pi) {                                          // the ring menu's buttons around pad pi: [x, y, act, label, icon, cost, ok]
   const [px, py] = SG.M.pads[pi], t = SG.towers[pi], out = [];
+  if ((SG.overgrown && SG.overgrown[pi]) || (SG.eaten && SG.eaten[pi] > 0) || (t && t.gone > 0)) return out;
   const put = (list, rad) => list.forEach((b, i) => { const a = -Math.PI / 2 + (i - (list.length - 1) / 2) * (list.length > 4 ? 0.78 : 1.0); b[0] = px + Math.cos(a) * rad; b[1] = py - 10 + Math.sin(a) * rad * 0.9; out.push(b); });
   if (!t) {
     const list = siegeTowersOpen().map(k => [0, 0, "build", TW[k].name, "t" + k + "_1", buildCost(k), SG.shells >= buildCost(k), k]);
@@ -711,8 +924,9 @@ function drawSiege() {
     for (let s = off; s < pl.total; s += 24) { const [x, y] = atS(pl, s), [x2, y2] = atS(pl, s + 2), a = Math.atan2(y2 - y, x2 - x); for (const sg of [-1, 1]) { line("#ff8c9a", x, y, x - Math.cos(a + sg * 0.7) * 3, y - Math.sin(a + sg * 0.7) * 3); } }
   }
   for (const b of G.burns) { g.globalAlpha = 0.5 * Math.min(1, b.t); ell("#ff7828", b.x - b.r, b.y - b.r * 0.6, b.r * 2, b.r * 1.2); g.globalAlpha = 1; }
+  drawZoneUnder();
   // range ellipse for the ring's tower
-  if (G.ring !== null && G.towers[G.ring]) { const t = G.towers[G.ring], st = towerStats(t), r = st.r * (1 + towerBoost(t)[0]); if (r) { g.globalAlpha = 0.18; ell("#96dcff", t.x - r, t.y - r * 0.7, r * 2, r * 1.4); g.globalAlpha = 1; } }
+  if (G.ring !== null && G.towers[G.ring]) { const t = G.towers[G.ring], st = towerStats(t), r = st.r * (1 + towerBoost(t)[0]) * (TW[t.k].kind === "light" ? 1 : darkK(t)); if (r) { g.globalAlpha = 0.18; ell("#96dcff", t.x - r, t.y - r * 0.7, r * 2, r * 1.4); g.globalAlpha = 1; } }
   // everything that stands up, sorted by depth
   const items = [];
   for (const d of G.M._deco) items.push([d[2], 0, d]);
@@ -725,6 +939,7 @@ function drawSiege() {
   for (const [, kind, o] of items) {
     if (kind === 0) g.drawImage(decoArt(o[0], o[3], G.M.zone), o[1] - 20, o[2] - 36);
     else if (kind === 1) {
+      if (o.gone > 0) { text("SNIPPED " + Math.ceil(o.gone), o.x, o.y - 8, 1, RED); continue; }
       const a = SIEGE_ART[towerKey(o)], bob = o.anim > 0 ? -1 : 0;
       if (o.off) g.globalAlpha = 0.5;
       sSprite(towerKey(o), o.x - a[2] / 2, o.y - a[3] + 5 + bob);
@@ -732,6 +947,7 @@ function drawSiege() {
       if (o.off) text("ZZ", o.x, o.y - a[3] - 2, 1, RED);
       if (TW[o.k].kind === "light") { g.globalAlpha = 0.5 + 0.3 * Math.sin(G.t * 4); disc("#fff0a0", o.x, o.y - a[3] + 6, 2); g.globalAlpha = 1; }
     } else if (kind === 2) {
+      if (o.boss) { drawGuardian(o); continue; }
       const E = ETYPES[o.k], vis = visibleTo(o), [w, h] = sprSize(E[1]);
       if (!vis) { rect("#ff5050", o.x - 2, o.y - 4, 1, 1); rect("#ff5050", o.x + 1, o.y - 4, 1, 1); continue; }
       g.globalAlpha = 0.25; ell("#000000", o.x - w / 2, o.y + 1, w, 3); g.globalAlpha = 1;
@@ -759,14 +975,17 @@ function drawSiege() {
     else if (f.k === "slam") { const u = Math.sin(Math.min(1, k * 2) * Math.PI); line("#963c6e", f.tx, f.ty - 4, lerp(f.tx, f.x, u), lerp(f.ty - 4, f.y - 2, u)); line("#963c6e", f.tx + 1, f.ty - 4, lerp(f.tx, f.x, u) + 1, lerp(f.ty - 4, f.y - 2, u)); if (k > 0.4) { g.globalAlpha = 1 - k; ring("#f0a0c8", f.x, f.y, 6 + k * 16); g.globalAlpha = 1; } }
     else if (f.k === "reel" || f.k === "harpoon") { g.globalAlpha = 1 - k; line(f.k === "reel" ? "#dcd2aa" : "#e6e6f0", f.x, f.y, f.tx, f.ty); g.globalAlpha = 1; }
     else if (f.k === "net") { g.globalAlpha = 0.8 * (1 - k); const r = f.r * (0.5 + 0.5 * Math.min(1, k * 2)); ring("#dcd2aa", f.x, f.y, r); for (let i = -2; i <= 2; i++) { line("#dcd2aa", f.x - r, f.y + i * r * 0.25, f.x + r, f.y + i * r * 0.25); line("#dcd2aa", f.x + i * r * 0.35, f.y - r * 0.7, f.x + i * r * 0.35, f.y + r * 0.7); } g.globalAlpha = 1; }
+    else if (f.k === "shock") { g.globalAlpha = 1 - k; ring("#ff6e78", f.x, f.y - 10, f.r * k); ring("#ffc8c8", f.x, f.y - 10, f.r * k * 0.8); g.globalAlpha = 1; }
     else if (f.k === "pulse") { g.globalAlpha = 1 - k; ring("#82f0ff", f.x, f.y, 6 + k * 52); ring("#ffffff", f.x, f.y, 4 + k * 40); g.globalAlpha = 1; }
     else if (f.k === "grab") { if (f.e.hp > 0) { g.globalAlpha = 0.7; line("#5ab464", f.tx, f.ty - 6, f.e.x, f.e.y - 2); g.globalAlpha = 1; } }
   }
+  drawZoneOver();
+  drawPadMarks();
   for (const p of G.pops) { g.globalAlpha = 1 - p.t; text(p.s, p.x, p.y, 1, p.col); g.globalAlpha = 1; }
   if (G.hero && G.hero.flareT > 0) { g.globalAlpha = 0.5 + 0.3 * Math.sin(G.t * 9); disc("#ffdc78", G.hero.flareX, G.hero.flareY - 30, 2); g.globalAlpha = 1; }
   if (G.hero && G.hero.flag > 0 && G.hero.tx !== null) { line(GOLD, G.hero.tx, G.hero.ty, G.hero.tx, G.hero.ty - 8); rect(GOLD, G.hero.tx + 1, G.hero.ty - 8, 4, 3); }
   // dark zones: a mask with holes where it's lit
-  if (SZ[G.M.zone].dark > 0) drawDarkness();
+  if (zoneDark() > 0) drawDarkness();
   // the red markers where waves come in, while one is waiting
   if (siegeCanCall()) entryMarkers();
   if (G.ring !== null) drawRing();
@@ -789,18 +1008,18 @@ function drawBuoy(x, y) {
 }
 let DARKC = null;
 function drawDarkness() {
-  const G = SG, Z = SZ[G.M.zone];
+  const G = SG, dk = zoneDark();
   if (!DARKC) { DARKC = document.createElement("canvas"); DARKC.width = SIW; DARKC.height = SIH; }
   const x = DARKC.getContext("2d");
   x.globalCompositeOperation = "source-over"; x.clearRect(0, 0, SIW, SIH);
-  x.fillStyle = "rgba(4,4,14," + (0.55 + Z.dark * 0.35) + ")"; x.fillRect(0, 0, SIW, SIH);
+  x.fillStyle = "rgba(4,4,14," + (dk > 0.5 ? 0.35 + dk * 0.35 : dk * 0.8) + ")"; x.fillRect(0, 0, SIW, SIH);
   x.globalCompositeOperation = "destination-out";
   const hole = (cx, cy, r) => { for (const [k, a] of [[1, 0.35], [0.8, 0.35], [0.6, 0.6], [0.45, 1]]) { x.fillStyle = "rgba(0,0,0," + a + ")"; x.beginPath(); x.ellipse(cx, cy, r * k, r * k * 0.7, 0, 0, 6.283); x.fill(); } };
-  for (const t of G.towers) if (t && TW[t.k].kind === "light") hole(t.x, t.y - 4, towerStats(t).r);
+  if (!(G.dim > 0)) for (const t of G.towers) if (t && !t.gone && TW[t.k].kind === "light") hole(t.x, t.y - 4, towerStats(t).r);
   hole(G.M.buoy[0], G.M.buoy[1] - 10, 34);
   if (G.hero && !G.hero.dead) hole(G.hero.x, G.hero.y - 6, heroLight(G.hero));
   if (G.hero && G.hero.flareT > 0) hole(G.hero.flareX, G.hero.flareY, 84 * Math.min(1, G.hero.flareT));
-  for (const t of G.towers) if (t && TW[t.k].kind !== "light") hole(t.x, t.y - 10, 14);
+  for (const t of G.towers) if (t && !t.gone && TW[t.k].kind !== "light") hole(t.x, t.y - 4, 26);
   for (const f of G.fx) if (f.k === "zap" || f.k === "boom") hole(f.tx || f.x, f.ty || f.y, 16);
   g.drawImage(DARKC, 0, 0);
 }
@@ -846,6 +1065,7 @@ function drawSiegeHud() {
   siegeBtn(...SIEGE_HUD.pause, "II", G.paused ? GOLD : null);
   if (G.paused && !G.menu && !G.result) { box(SIW / 2 - 40, SIH / 2 - 10, 80, 20, GOLD); text("PAUSED", SIW / 2, SIH / 2, 1, GOLD); }
   drawHeroPanel();
+  drawBossBar();
   if (G.tip) { const w = Math.min(SIW - 20, textW(G.tip.s, 1) + 14); g.globalAlpha = Math.min(1, G.tip.t); box(SIW / 2 - w / 2, SIH - 26, w, 16, GOLD); text(G.tip.s, SIW / 2, SIH - 18, 1, WHITE); g.globalAlpha = 1; }
 }
 function heart(x, y) { for (const [a, b] of [[1, 0], [2, 0], [5, 0], [6, 0]]) rect("#f04650", x + a, y + b, 1, 1); rect("#f04650", x, y + 1, 8, 2); rect("#f04650", x + 1, y + 3, 6, 1); rect("#f04650", x + 2, y + 4, 4, 1); rect("#f04650", x + 3, y + 5, 2, 1); }
@@ -854,7 +1074,8 @@ function drawResult() {
   const R_ = SG.result, w = 200, h = 96, x = SIW / 2 - w / 2, y = SIH / 2 - h / 2;
   g.globalAlpha = 0.6; rect("#060a1e", 0, 0, SIW, SIH); g.globalAlpha = 1;
   box(x, y, w, h, R_.won ? GOLD : RED);
-  text(R_.won ? "ZONE HELD!" : "THE BUOY FELL", SIW / 2, y + 14, 2, R_.won ? GOLD : RED);
+  text(R_.ending ? "THE CRACK IS SEALED!" : R_.won ? "ZONE HELD!" : "THE BUOY FELL", SIW / 2, y + 14, R_.ending ? 1 : 2, R_.won ? GOLD : RED);
+  if (R_.ending) text("THE OCEAN IS YOURS AGAIN. THE ADMIRAL SALUTES.", SIW / 2, y - 22, 1, WHITE);
   if (R_.won) for (let i = 0; i < 3; i++) bigStar(SIW / 2 - 24 + i * 24, y + 40, i < R_.stars);
   else text("THE FLIPSIDE GOT THROUGH", SIW / 2, y + 40, 1, "#ffc8c8");
   text("WAVES " + Math.max(0, SG.wave + 1) + "/" + SG.waves.length + "  HULL " + SG.hull + "/" + SG.hullMax + "  +" + R_.xp + " XP", SIW / 2, y + 58, 1, "#c8e6ff");
@@ -937,8 +1158,8 @@ function siegeUpdate(dt) {
 // The ocean from the Shallows down: each zone has three maps, the third ends with its guardian. Win a map to open the
 // next; win all three to reclaim the zone (it turns from red to blue) and open the one below. Stars buy research.
 // SG.camp is set while you're on the campaign screen (SG.M is not), so every handler checks it first.
-const Z_TWIST = ["THE TUTORIAL ZONE", "KELP HIDES CREATURES FROM TOWERS", "SIDE CURRENTS SPEED THEM UP", "LIGHT FADES WAVE BY WAVE",
-  "TWO PATHS: THE DOORS SWITCH THEM", "DARK UNLESS YOU LIGHT IT", "CRYSTALS BOUNCE ZAPS", "VENTS ERUPT ON A TIMER",
+const Z_TWIST = ["THE TUTORIAL ZONE", "KELP HIDES CREATURES FROM TOWERS", "SIDE CURRENTS SPEED THEM UP", "LIGHT FADES: LIGHT YOUR TOWERS",
+  "TWO PATHS: THE DOORS SWITCH THEM", "DARK: UNLIT TOWERS SEE LESS", "CRYSTALS BOUNCE ZAPS", "VENTS ERUPT ON A TIMER",
   "THE FALLEN RISE ONCE", "THEY COME DOWN THE WALLS", "THEY POUR FROM THE CRACK"];
 const Z_GUARD = ["KING CRAB", "KELP WITCH", "MANTIS KING", "GLOOM RAY", "GHOST SHIP", "THE GULPER", "GLASS SPIDER QUEEN", "THE BOIL", "THE OSSUARY", "THE MAW", "THE SLEEPER"];
 // Research, bought with stars, one node at a time along each row. [id, label, what it does, stars]
@@ -1130,5 +1351,25 @@ function campKey(e) {
 function campWheel(e) { if (SG && SG.camp && SG.camp.tab === "map") SG.camp.scroll = clamp(SG.camp.scroll + Math.sign(e.deltaY) * CB.BH, 0, 11 * CB.BH - 236); }
 canvas.addEventListener("wheel", e => { if (S && S.state === "siege" && SG && SG.camp) { e.preventDefault(); campWheel(e); } }, { passive: false });
 
-window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, openCampaign, campClick, mapOpen, zonesDone, starsTotal, starsSpent, RES, resHas, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
+function drawGuardian(e) {
+  const z = e.boss - 1;
+  g.globalAlpha = 0.3; ell("#000000", e.x - 26, e.y - 3, 52, 8); g.globalAlpha = 1;
+  if (z === 10) drawSleeperSiege(e);
+  else { const a = SIEGE_ART["g" + z], bob = Math.round(Math.sin(SG.t * 3) * 1.5); if (e.hitT > 0) g.globalAlpha = 0.75; sSprite("g" + z, e.x - a[2] / 2, e.y - a[3] + 4 + bob, !e.right); g.globalAlpha = 1; }
+  if (e.held > 0) { g.globalAlpha = 0.6; ring("#82f0ff", e.x, e.y - 16, 20); g.globalAlpha = 1; }
+  if (z === 7 && e.heat > 0) { g.globalAlpha = 0.4 + 0.3 * Math.sin(SG.t * 10); ring("#ff8c3c", e.x, e.y - 20, 28); g.globalAlpha = 1; }
+}
+function drawBossBar() {
+  const e = SG.en.find(o => o.boss && o.hp > 0); if (!e) return;
+  const w = 180, x = SIW / 2 - w / 2, y = 24;
+  rect(INK, x, y, w, 12); rect("#3c0a14", x + 1, y + 1, w - 2, 10); rect("#e63c50", x + 1, y + 1, Math.round((w - 2) * e.hp / e.max), 10);
+  text(GUARD[e.boss - 1].name + (e.lives ? " x" + (e.lives + 1) : ""), SIW / 2, y + 6, 1, WHITE);
+}
+function drawPadMarks() {
+  const G = SG;
+  for (const i in G.overgrown || {}) { const [x, y] = G.M.pads[i], r = seeded(i * 17); for (let k = 0; k < 9; k++) { const px = x + r.randint(-10, 10), h = r.randint(10, 20); for (let j = 0; j < h; j++) rect(j % 4 === 3 ? "#5ab464" : "#2c7a44", px + Math.sin(j / 3 + G.t * 2 + k) * 1.5, y + 3 - j, 2, 1); } text("WALK HERE", x, y + 12, 1, LIME); }
+  for (const i in G.eaten || {}) { const [x, y] = G.M.pads[i]; ell("#3c0a14", x - 12, y - 6, 24, 12); for (let k = -10; k <= 10; k += 4) { rect("#f0e6dc", x + k, y - 5, 2, 3); rect("#f0e6dc", x + k + 1, y + 3, 2, 3); } text(Math.ceil(G.eaten[i]), x, y - 14, 1, RED); }
+}
+
+window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, TUNE, GUARD, addGuardian, zoneDark, doorOpen, inKelp, ZMAPS, autoLayout, HUD_KEEP, openCampaign, campClick, mapOpen, zonesDone, starsTotal, starsSpent, RES, resHas, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
 if (TEST_SIEGE) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); if (TEST_SIEGE === "campaign") { openCampaign(); return; } let kit = 0; try { kit = clamp(parseInt(new URLSearchParams(location.search).get("kit"), 10) || 0, 0, 2); } catch (e) {} startSiege(SMAPS[TEST_SIEGE] ? TEST_SIEGE : "0.0", { test: true, kit }); } }, 50); }
