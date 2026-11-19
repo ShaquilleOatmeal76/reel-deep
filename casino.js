@@ -259,11 +259,12 @@ function drawStakeCtl(x, y, w, val, col, lab) {               // lab STAKE / BET
   box(x, y, 16, 15, col); text("-", x + 8, y + 7, 1, col, "center", null);
   box(x + w - 16, y, 16, 15, col); text("+", x + w - 8, y + 7, 1, col, "center", null);
   if (mx) { box(x + w - 42, y, 24, 15, col); text("MAX", x + w - 30, y + 7, 1, col, "center", null); }
+  if (typeof val === "number") val = fmtChips(val);
   text(mx ? "BET " + val : lab ? lab + " " + val : val, mx ? x + 16 + (w - 58) / 2 : x + w / 2, y + 7, 1, WHITE, "center", null);
 }
 const fmtX = m => "X" + (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.floor(m));
 function czTitle(L, t, col) { if (L.w) { text(t, L.X, 8, 1, col || GOLD, "left", null); chipsAt(L.X + 348, 8, "right"); } else { text(t, L.X + 60, 8, 1, col || GOLD, "center", null); g.save(); g.translate(L.X, 0); chipsLine(19); g.restore(); } }
-const MAX_WIN = 5000;                                         // one bet never pays more than this
+const MAX_WIN = 5000, maxWin = st => Math.max(MAX_WIN, Math.floor(st * MAX_WIN / BASE_STAKE));   // a big bet keeps the room a 75 bet had (x66)                                         // one bet never pays more than this
 
 // ---- LINE SNAP. You hook a fish and the multiplier climbs as you reel; cash out any time, but the line can snap at any
 // moment. The snap point M has P(M >= m) = 0.95 / m (5% snap at once), so cashing out at any m, or any auto cash-out,
@@ -300,7 +301,7 @@ function snapTick(dt) {
   c.st += dt;
   if (c.phase !== "reel") return;
   c.t += dt; c.k += dt;
-  const m = Math.exp(SNAP_R * c.t), cap = MAX_WIN / c.staked;
+  const m = Math.exp(SNAP_R * c.t), cap = maxWin(c.staked) / c.staked;
   const stop = [c.auto || Infinity, cap].reduce((a, b) => Math.min(a, b));
   if (stop <= c.crash && m >= stop) snapCash(stop);           // auto cash-out (or the max win) comes before a later snap
   else if (m >= c.crash) snapBreak();
@@ -395,11 +396,11 @@ function bigCall(dir) {
   c.M /= p; c.n++;
   if (c.n >= 10) tavAward("biggerfish");
   c.msg = next.leg ? "A LEGEND! COUNTS AS RIGHT" : "RIGHT! " + c.n + " IN A ROW"; play(next.leg ? "fanfare" : "hit");
-  if (EDGE * c.M >= BF_CAP || bigCashNow(c) >= MAX_WIN) bigCash(true);
+  if (EDGE * c.M >= BF_CAP || bigCashNow(c) >= maxWin(c.staked)) bigCash(true);
 }
 function bigCash(capped) {
   const c = CZ.big; if (c.phase !== "play" || !c.n) { play("miss"); return; }
-  c.win = Math.min(MAX_WIN, bigCashNow(c), Math.floor(c.staked * BF_CAP)); c.phase = "done";
+  c.win = Math.min(maxWin(c.staked), bigCashNow(c), Math.floor(c.staked * BF_CAP)); c.phase = "done";
   addChips(c.win, c.win > c.staked ? "win" : "");
   c.msg = (capped ? "MAXED OUT! +" : "CASHED OUT +") + c.win; play("chime");
 }
@@ -559,7 +560,7 @@ function rdSettle() {
   c.phase = "done"; c.win = Math.floor(c.staked * x);
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (t.every(q => q === "L")) tavAward("reeldeal");
-  if (Math.random() < c.staked / MAX_STAKE / JP_ODDS) { jpWin(c); return; }
+  if (Math.random() < Math.min(1, c.staked / BASE_STAKE / JP_ODDS)) { jpWin(c); return; }
   c.msg = x >= 25 ? "BIG CATCH! +" + c.win : x > 1 ? "WIN! +" + c.win : x === 1 ? "BAIT: STAKE BACK" : "NOTHING. AGAIN?";
   play(x >= 25 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
 }
@@ -711,7 +712,7 @@ function tdStart() {
   const a = Array.from({ length: 25 }, (x, i) => i); for (let i = 24; i > 0; i--) { const q = Math.floor(Math.random() * (i + 1)); [a[i], a[q]] = [a[q], a[i]]; }
   c.jel = a.slice(0, c.j); c.open = []; c.k = 0; c.boom = -1; c.phase = "dive"; c.win = 0; c.msg = "OPEN A CRATE"; play("plop");
 }
-const tdCashNow = c => Math.min(MAX_WIN, Math.floor(c.staked * tdMult(c.k, c.j)));
+const tdCashNow = c => Math.min(maxWin(c.staked), Math.floor(c.staked * tdMult(c.k, c.j)));
 function tdPick(i) {
   const c = CZ.td; if (c.phase !== "dive" || c.open.includes(i)) return;
   c.open.push(i);
@@ -719,7 +720,7 @@ function tdPick(i) {
   c.k++; play("hit");
   if (c.j === 10 && c.k >= 5) tavAward("treasure");
   c.msg = "SAFE! " + fmtX(tdMult(c.k, c.j)).replace(".00", "");
-  if (c.k >= 25 - c.j || tdCashNow(c) >= MAX_WIN) tdCash(true);
+  if (c.k >= 25 - c.j || tdCashNow(c) >= maxWin(c.staked)) tdCash(true);
 }
 function tdCash(auto) {
   const c = CZ.td; if (c.phase !== "dive" || !c.k) { play("miss"); return; }

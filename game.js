@@ -1995,7 +1995,9 @@ function draw() {
 // A betting side game with its own currency, tavern chips. Chips and coins never convert, and nothing chips buy
 // changes your score. The tavern opens after a player's 20th dive; betting on a dive works from the start.
 const CHIP = "#5ad2a0", WOOD = "#7a5232", FELT = "#0e4a2e";
-const TAV_OPEN_AT = 20, DAILY_CHIPS = 50, MAX_STAKE = 75, EDGE = 0.95;     // the house keeps about 5% over time
+const TAV_OPEN_AT = 20, DAILY_CHIPS = 50, MAX_STAKE = Infinity, EDGE = 0.95;     // no table limit since Nov 19, 2026 (Kade: "let them play how they will"; was 75, VIP 200)
+const BASE_STAKE = 75;    // the old limit: jackpot odds and win caps are still scaled from it, so a big bet keeps the same odds as a 75 bet
+const fmtChips = (n, room) => n < (room || 10000) ? String(n) : n < 1e6 ? (n < 1e5 && room ? (Math.floor(n / 100) / 10) : Math.floor(n / 1000)) + "K" : (Math.floor(n / 1e5) / 10) + "M";     // the house keeps about 5% over time
 const tav = () => store.tav;
 const tavOpen = () => store.dives >= TAV_OPEN_AT;
 let TAV = { say: "WHAT'LL IT BE?", c21: null, derby: null, bet: null, shopSel: 0, songSel: 0, board: 0, boards: {}, story: 0, ticker: 0 };
@@ -2017,7 +2019,8 @@ function claimDaily() {                                     // the free daily st
   return true;
 }
 const STAKE_MAX = 1e6;                                        // MAX BET buttons pass this as the step: stakeStep clamps it to the table max (or your chips)
-function stakeStep(st, d, max) { const big = (max || MAX_STAKE) > 100 ? 10 : 5; return clamp(st + d * big, 5, Math.max(5, Math.min(max || MAX_STAKE, Math.floor(tav().chips / 5) * 5))); }   // the back room allows bigger bets
+const stakeInc = st => st < 100 ? 5 : st < 500 ? 25 : st < 2000 ? 100 : st < 10000 ? 500 : 2500;   // bigger stakes move in bigger steps
+function stakeStep(st, d, max) { const big = Math.abs(d) > 1 ? 1 : stakeInc(d < 0 ? st - 1 : st); return clamp(st + d * big, 5, Math.max(5, Math.min(max || MAX_STAKE, Math.floor(tav().chips / 5) * 5))); }   // the back room allows bigger bets
 
 // ---- betting on your own dive
 // Anti-tanking (Nov 18, 2026): players found that bets were priced from their last 20 dives, so they threw dives on purpose
@@ -2204,8 +2207,8 @@ function c21Card() {
   return [C21_POOL[Math.floor(Math.random() * C21_POOL.length)], w, Math.random() < 0.08 ? "t" : ""];
 }
 const c21Sum = h => h.reduce((a, q) => a + (q[2] === "t" ? q[1] * 2 : q[1]), 0);
-// VIP rules (the back room): bets to 200, a legendary card pays 2 to 1, ties push. House edge about 0.5-2.6%.
-function c21New(vip) { const max = vip ? 200 : MAX_STAKE; TAV.c21 = { vip: !!vip, max, phase: "stake", dealer: [], you: [], hide: true, bet: stakeStep(TAV.c21 && !!TAV.c21.vip === !!vip ? TAV.c21.bet : vip ? 50 : 10, 0, max), msg: "PLACE YOUR BET", t: 0, win: 0 }; }
+// VIP rules (the back room): no bet limit (was 200), a legendary card pays 2 to 1, ties push. House edge about 0.5-2.6%.
+function c21New(vip) { const max = MAX_STAKE; TAV.c21 = { vip: !!vip, max, phase: "stake", dealer: [], you: [], hide: true, bet: stakeStep(TAV.c21 && !!TAV.c21.vip === !!vip ? TAV.c21.bet : vip ? 50 : 10, 0, max), msg: "PLACE YOUR BET", t: 0, win: 0 }; }
 function c21Deal() {
   const c = TAV.c21;
   if (tav().chips < c.bet || c.bet < 5) { play("miss"); c.msg = "NOT ENOUGH CHIPS"; return; }
@@ -2609,7 +2612,7 @@ function tavPost() {                                         // post a new perso
     const v = k === "fast" ? (q.stats.fast ? Math.max(1, FAST_BASE - q.stats.fast) : 0) : q.stats[k];
     if (v <= (q.posted[k] || 0) || (k !== "fast" && v < 100)) continue;
     q.posted[k] = v; q.postedAt = now; saveStore();
-    fetch(LB.url + "/tavern/" + k + ".json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, s: v, t: now }) }).catch(() => {});
+    fetch(LB.url + "/tavern/" + k + ".json", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ n: store.name, s: Math.min(v, 1000000), t: now }) }).catch(() => {});
   }
 }
 async function tavLoad(k) {
@@ -2674,7 +2677,7 @@ function tavernBg() {
 }
 function stakeRow(y, stake, go) {                            // [-] stake [+] and a go button; taps handled by stakeTap
   box(2, y, 14, 15, CHIP); text("-", 9, y + 7, 1, CHIP, "center", null);
-  text(stake, 26, y + 7, 1, WHITE, "center", null);
+  text(stake < 1000 ? stake : stake < 1e5 ? Math.floor(stake / 1000) + "K" : stake < 1e6 ? "." + Math.floor(stake / 1e5) + "M" : Math.floor(stake / 1e6) + "M", 26, y + 7, 1, WHITE, "center", null);   // 3 characters fit
   box(36, y, 14, 15, CHIP); text("+", 43, y + 7, 1, CHIP, "center", null);
   box(52, y, 22, 15, CHIP); text("MAX", 63, y + 7, 1, CHIP, "center", null);
   box(76, y, 42, 15, GOLD); text(go, 97, y + 7, 1, GOLD, "center", null);
@@ -2759,10 +2762,10 @@ function drawBet() {                                         // betting on the n
   });
   text(b.opts[b.sel][3] || "STAKE", 60, 120, 1, b.opts[b.sel][0] === "under" ? ORANGE : "#c8e6d2", "center", null);
   box(14, 126, 16, 15, CHIP); text("-", 22, 133, 1, CHIP, "center", null);
-  text(b.stake, 60, 133, 2, WHITE, "center");
+  text(b.stake < 1000 ? b.stake : fmtChips(b.stake), 60, 133, b.stake < 1000 ? 2 : 1, WHITE, "center");
   box(74, 126, 16, 15, CHIP); text("+", 82, 133, 1, CHIP, "center", null);
   box(94, 126, 22, 15, CHIP); text("MAX", 105, 133, 1, CHIP, "center", null);
-  text("MAX " + MAX_STAKE + "  WIN " + Math.floor(b.stake * b.opts[b.sel][2]), 60, 148, 1, GREY, "center", null);
+  text("WIN " + fmtChips(Math.floor(b.stake * b.opts[b.sel][2])), 60, 148, 1, GREY, "center", null);
   const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk;
   box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
   text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids the bet
@@ -2873,7 +2876,7 @@ function drawVip() {
   rect("#2a0a10", 0, 48, 120, 4);
   text(TAV.vipSay || "", 60, 60, 1, WHITE, "center", null);
   chipsLine(72);
-  [["VIP CATCH 21", GOLD, "BETS UP TO 200"], ["VIP DERBY", GOLD, "7 RACERS, LONGER"], ["RENAME A FISH", "#ff8cd2", RENAME + " CHIPS"]].forEach(([lab, col, sub], i) => {
+  [["VIP CATCH 21", GOLD, "BETTER ODDS"], ["VIP DERBY", GOLD, "7 RACERS, LONGER"], ["RENAME A FISH", "#ff8cd2", RENAME + " CHIPS"]].forEach(([lab, col, sub], i) => {
     const y = 82 + i * 28; box(10, y, 100, 25, col); text(lab, 60, y + 7, 1, col, "center", null); text(sub, 60, y + 17, 1, "#d8b4b4", "center", null);
   });
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
@@ -3999,7 +4002,7 @@ function drawBetWide() {
   for (const [id, x, y, w, h, v] of betWideHits()) {
     if (id === "opt") { const [k, lab, pays, desc] = b.opts[v], sel = v === b.sel, off = betBlocked(k); box(x, y, w, h, sel ? CHIP : "#2a4a3c"); text(lab, x + 6, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null); text(desc || "", x + 6, y + 17, 1, k === "under" ? ORANGE : sel ? "#c8e6d2" : "#5a8a74", "left", null); text("X" + pays, x + w - 6, y + 12, 1, sel ? GOLD : "#8a9a6a", "right", null); }
     else if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
-    else if (id === "max") btn(x, y, w, h, "MAX BET " + MAX_STAKE, CHIP);
+    else if (id === "max") btn(x, y, w, h, "ALL IN", CHIP);
     else { const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk; btn(x, y, w, h, ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
   }
   text("STAKE", px + 59, 48, 1, "#a0c8b4", "center", null);
@@ -4048,7 +4051,7 @@ function drawC21Wide() {
   else if (c.phase !== "play") text("...", x0 + 111, 144, 1, WHITE, "center", null);
   rect("#0a3a24", px, 24, 112, 110); outline(px, 24, 112, 110, "#2a6a4a");
   text("HOUSE RULES", px + 56, 33, 1, GOLD, "center", null);
-  ["TROPHIES COUNT X2", c.vip ? "LEGENDS PAY 2:1" : "LEGENDS WIN NOW", "HE STOPS AT 17", c.vip ? "TIES PUSH" : "TIES GO TO YOU", "NATURAL PAYS 3:2", "MAX BET " + c.max].forEach((l, i) => text(l, px + 56, 50 + i * 13, 1, i === 1 && c.vip ? GOLD : "#8cc8a8", "center", null));
+  ["TROPHIES COUNT X2", c.vip ? "LEGENDS PAY 2:1" : "LEGENDS WIN NOW", "HE STOPS AT 17", c.vip ? "TIES PUSH" : "TIES GO TO YOU", "NATURAL PAYS 3:2", "NO BET LIMIT"].forEach((l, i) => text(l, px + 56, 50 + i * 13, 1, i === 1 && c.vip ? GOLD : "#8cc8a8", "center", null));
   text("HANDS WON " + tav().stats.hands, px + 56, 148, 1, "#5a8a74", "center", null);
   closeLine(c.phase === "play" || c.phase === "dealer" ? "" : "TAP HERE TO LEAVE");
 }
@@ -4115,7 +4118,7 @@ function drawVipWide() {
   rect("#1e060a", x0 + 4, 80, 164, 30); outline(x0 + 4, 80, 164, 30, "#c8a03c");
   wrap(TAV.vipSay || "", 26).slice(0, 2).forEach((l, i, a) => text(l, cx, 95 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
   chipsAt(x0 + 348, 10, "right");
-  const L = [["VIP CATCH 21", GOLD, "BETS UP TO 200"], ["VIP DERBY", GOLD, "7 RACERS, LONGER"], ["RENAME A FISH", "#ff8cd2", RENAME + " CHIPS"]];
+  const L = [["VIP CATCH 21", GOLD, "BETTER ODDS"], ["VIP DERBY", GOLD, "7 RACERS, LONGER"], ["RENAME A FISH", "#ff8cd2", RENAME + " CHIPS"]];
   for (const [, x, y, w, h, i] of vipWideHits()) btn(x, y, w, h, L[i][0], L[i][1], L[i][2], "#d8b4b4");
   closeLine("TAP HERE TO GO BACK");
 }

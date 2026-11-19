@@ -26,7 +26,7 @@ const STABLE = [
 const TRAITS = { steady: "STEADY", closer: "STRONG FINISH", moody: "MOODY", sprinter: "FAST STARTER", kelp: "LOVES KELP", storm: "STORM CHASER", current: "RIDES CURRENTS", dodger: "DODGES JELLIES" };
 const CONDS = [["calm", "CALM WATER"], ["current", "STRONG CURRENT"], ["kelp", "KELP BEDS"], ["jelly", "JELLYFISH"], ["storm", "STORM SURGE"]];
 const BET_TYPES = [["WIN", 1, 100], ["PLACE", 1, 50], ["SHOW", 1, 25], ["EXACTA", 2, 1000], ["TRIFECTA", 3, 5000]];   // [name, picks, top multiplier]
-const derbyMaxWin = d => d.vip ? 10000 : 5000;             // the house pays at most this on one bet (so one wild trifecta can't buy the whole shop; VIP was 20,000 until Nov 18, 2026)
+const derbyMaxWin = (d, st) => Math.max(d.vip ? 10000 : 5000, (st || 0) * (d.vip ? 50 : 5000 / BASE_STAKE));   // big bets keep the room a max bet had (x66, VIP x50)             // the house pays at most this on one bet (so one wild trifecta can't buy the whole shop; VIP was 20,000 until Nov 18, 2026)
 const DERBY_SIMS = 2000, PTS = [10, 6, 4, 3, 2, 1];
 const ORDN = n => n + (n === 1 ? "ST" : n === 2 ? "ND" : n === 3 ? "RD" : "TH");
 
@@ -105,14 +105,14 @@ function derbyNew(_, vip) {                                  // (the first argum
     ex[o[0] + "-" + o[1]] = (ex[o[0] + "-" + o[1]] || 0) + 1; const t = o[0] + "-" + o[1] + "-" + o[2]; tri[t] = (tri[t] || 0) + 1;
   }
   racers.forEach(r => { r.pos = 0; r.burst = 0; r.stall = 0; r.len = len; r.m = racerMods(r, cond); });
-  const max = vip ? 200 : MAX_STAKE, old = TAV.derby;
+  const max = MAX_STAKE, old = TAV.derby;
   TAV.derby = { vip: !!vip, max, phase: "pick", racers, cond, counts: { win, top2, top3, ex, tri }, type: old && !!old.vip === !!vip ? old.type : 0, picks: [], focus: 0,
     bet: stakeStep(old && !!old.vip === !!vip ? old.bet : vip ? 50 : 10, 0, max), call: CONDS.find(c => c[0] === cond)[1] + " TODAY. PLACE YOUR BET", t: 0, lead: -1, rng, cheer: 0, cam: 0, slow: 0 };
 }
 function derbyPays(d, type, picks, stake) {                  // the price of a bet: type, picked fish (field indexes), stake
   const c = d.counts, [, need, typeCap] = BET_TYPES[type], N = DERBY_SIMS, n = d.racers.length;
   if (picks.length < need) return 0;
-  const cap = Math.max(1.1, Math.min(typeCap, Math.floor(derbyMaxWin(d) / Math.max(5, stake || d.bet || 5))));
+  const cap = Math.max(1.1, Math.min(typeCap, Math.floor(derbyMaxWin(d, stake || d.bet) / Math.max(5, stake || d.bet || 5))));
   if (type < 3) { const h = [c.win, c.top2, c.top3][type][picks[0]]; return derbyPay((h + 0.5) / (N + 1), cap); }
   // exotics: 2,000 practice races can't see the rare combinations clearly, so blend the count with the standard
   // Harville estimate built from each fish's chance to win (p(a then b) = pa * pb / (1 - pa), and so on)
