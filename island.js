@@ -1324,7 +1324,7 @@ const LOG_PAGES = [["sea", "THE SEA", "SEA"], ["fresh", "LAGOON AND RIVER", "FRE
 const TIME_WIN = { a: [360, 1560], m: [360, 660], d: [660, 1020], e: [1020, 1260], n: [1260, 1560], w: [360, 420] };
 const LATER = /^(fest_|light)/;                                 // festival days and the lighthouse (caves opened in part 7, the last areas in part 8)
 function fishOk(f, s) {
-  if (LATER.test(f.where) || !f.seasons.includes(String(s.season))) return false;
+  if ((LATER.test(f.where) && !(typeof laterOpen === "function" && laterOpen(f, s))) || !f.seasons.includes(String(s.season))) return false;
   const [a, b] = TIME_WIN[f.time]; if (s.min < a || s.min >= b) return false;
   const w = weatherOf(s);
   if ((f.weather === "r" && w !== "rain") || (f.weather === "s" && w !== "sun") || (f.weather === "n" && w !== "snow")) return false;
@@ -3401,3 +3401,243 @@ itemIcon = function (id) {
   if (id === "spyglass") return pix("icon_spyglass", ["....yy", "...yby", "..yy..", ".yy...", "bb...."], { y: "#d2a03c", b: "#6e482a" });
   return _itemIcon8(id);
 };
+
+// =====================================================================================================================
+// Part 8b: festivals. Eight, two a season. On the day the villagers gather, the place is decorated, and a booth runs the
+// event: a show, a kite contest, a fishing derby, lanterns on the sea, a salvage dig, a potluck, ice fishing and a gift
+// exchange. Ribbons pay sand dollars; gold also wins that festival's decoration. Festival fish only bite on their day.
+// [id, name, season, day, start, end, place, what you do, fish key]
+const FESTS = [
+  { id: "fair", name: "THE TIDE FAIR", season: 0, day: 13, start: 540, end: 960, at: ["port", 520, 474], kind: "show", prize: "f_ribbon", col: "#4a8cdc",
+    intro: "THE TIDE FAIR! STALLS ALL ROUND THE SQUARE, AND A JUDGE FOR THE BEST THING GROWN, CAUGHT OR FOUND ON THE ISLAND.", how: "SHOW THE JUDGE ONE THING FROM YOUR BAG: HOLD IT AND TALK TO THE BOOTH. THE BETTER IT IS, THE BETTER THE RIBBON." },
+  { id: "kite", name: "KITE DAY", season: 0, day: 24, start: 600, end: 960, at: ["flats", 760, 520], kind: "kite", prize: "f_kite", col: "#f05050",
+    intro: "KITE DAY! THE WHOLE TOWN IS ON THE BEACH WITH KITES.", how: "HOLD E TO PULL THE KITE UP, LET GO TO LET IT DRIFT DOWN. KEEP IT IN THE WIND (THE BRIGHT BAND) FOR 20 SECONDS." },
+  { id: "derby", name: "THE FISHING DERBY", season: 1, day: 11, start: 540, end: 900, at: ["lagoon", 520, 682], kind: "derby", prize: "f_cup", col: "#ffbe3c", fish: "fest_derby",
+    intro: "THE FISHING DERBY! THE BIGGEST TOTAL CATCH IN 90 SECONDS WINS. DERBY CARP ARE IN THE LAGOON TODAY ONLY.", how: "90 SECONDS. EVERY INCH OF FISH YOU LAND COUNTS." },
+  { id: "lantern", name: "LANTERN NIGHT", season: 1, day: 25, start: 1080, end: 1440, at: ["port", 600, 646], kind: "lantern", prize: "f_lantern", col: "#ffa046", fish: "fest_lantern",
+    intro: "LANTERN NIGHT. EVERYONE SENDS A PAPER LANTERN OUT ON THE SEA, FOR SOMEONE THEY MISS.", how: "RELEASE YOUR LANTERN AT THE BOOTH. LANTERN FISH COME UP TO SEE THE LIGHTS: FISH THE SEA TONIGHT." },
+  { id: "salvage", name: "SALVAGE DAY", season: 2, day: 16, start: 540, end: 960, at: ["wreck", 900, 300], kind: "dig", prize: "f_bell", col: "#a07a50",
+    intro: "SALVAGE DAY! THE BIG FALL TIDES HAVE DUG UP THE BEACH. WHO CAN FIND THE MOST IN 60 SECONDS?", how: "60 SECONDS. DIG EVERY X YOU CAN FIND WITH YOUR HOE. YOU KEEP WHAT YOU DIG UP." },
+  { id: "supper", name: "THE HARVEST SUPPER", season: 2, day: 27, start: 1020, end: 1320, at: ["innin", 160, 104], alt: ["port", 520, 474], kind: "potluck", prize: "f_basket", col: "#dc8c32",
+    intro: "THE HARVEST SUPPER. ONE LONG TABLE, AND EVERYONE BRINGS A DISH.", how: "HOLD A DISH YOU COOKED AND TALK TO THE BOOTH TO ADD IT TO THE TABLE. A GOOD DISH MAKES EVERYONE HAPPY." },
+  { id: "ice", name: "ICE FISHING MORNING", season: 3, day: 8, start: 420, end: 720, at: ["lagoon", 520, 682], kind: "icefish", prize: "f_ice", col: "#9ad2ec",
+    intro: "ICE FISHING MORNING! THE LAGOON IS FROZEN AT THE EDGES. MOST FISH IN 90 SECONDS WINS.", how: "90 SECONDS. EVERY FISH YOU LAND COUNTS, BIG OR SMALL." },
+  { id: "midwinter", name: "THE MIDWINTER FEAST", season: 3, day: 25, start: 600, end: 1080, at: ["innin", 160, 104], alt: ["port", 520, 474], kind: "exchange", prize: "f_tree", col: "#3c9a5a", fish: "fest_midwinter",
+    intro: "THE MIDWINTER FEAST! A TREE, A FIRE, AND A SECRET GIFT EXCHANGE. MIDWINTER COD ARE RUNNING IN THE SEA TODAY.", how: "THE BOOTH TELLS YOU WHOSE NAME YOU DREW. GIVE THEM A GIFT TODAY: IT COUNTS FOUR TIMES OVER, AND THEY'LL HAVE ONE FOR YOU." },
+];
+[["f_ribbon", "BLUE RIBBON", ["bbb", "bwb", "bbb", "b.b"], { b: "#4a8cdc", w: "#ffd246" }, 0], ["f_kite", "PRIZE KITE", ["..r..", ".ryr.", "ryyyr", ".ryr.", "..r..", "...w."], { r: "#f05050", y: "#ffd246", w: "#f0ecdc" }, 0],
+ ["f_cup", "DERBY CUP", ["y...y", "yyyyy", ".yyy.", "..y..", ".sss."], { y: "#ffd246", s: "#8c8c96" }, 0], ["f_lantern", "PAPER LANTERN", ["..k..", ".ooo.", "oyyyo", ".ooo."], { k: INK, o: "#ffa046", y: "#ffe68c" }, 1],
+ ["f_bell", "SHIP'S BELL", [".kk.", ".yy.", "yyyy", "yyyy", ".kk."], { k: "#6e482a", y: "#d2a03c" }, 0], ["f_basket", "HARVEST BASKET", [".b.b.", "rgoyr", "bbbbb", ".bbb."], { b: "#a07a50", r: "#f05050", g: "#5ac85a", o: "#ff8c32", y: "#ffd246" }, 0],
+ ["f_ice", "ICE SCULPTURE", ["..w..", ".www.", "wwbww", ".www.", ".sss."], { w: "#e6faff", b: "#9ad2ec", s: "#8c8c96" }, 0], ["f_tree", "MIDWINTER TREE", ["..y..", ".ggg.", "grggg", "ggggb", "..k.."], { y: "#ffd246", g: "#2c7a46", r: "#f05050", b: "#5aaadc", k: "#6e482a" }, 1],
+].forEach(([id, name, rows, pal, light]) => { const row = [id, name, 1, 0, light, rows, pal]; PLACE.push(row); PL[id] = { id, name, solid: 1, flat: 0, light, rows, pal }; ITEMS[id] = { name, kind: "place", sell: 0 }; });
+const festOn = s => FESTS.find(f => f.season === s.season && f.day === s.day) || null;
+const festPlace = f => (f.alt && isleSave().rest.inn !== "done") ? f.alt : f.at;
+const festLive = s => { const f = festOn(s); return f && s.min >= f.start && s.min < f.end ? f : null; };
+const festKey = (f, s) => f.id + ":" + s.year;
+function laterOpen(f, s) { const F = festOn(s); return !!(F && F.fish && f.where === F.fish && s.min >= F.start - 60 && s.min < F.end + 120); }
+// the festival's weather is always kind
+const _weatherOf8 = weatherOf;
+weatherOf = function (s) { const f = festOn(s); return f ? (s.season === 3 ? "snow" : "sun") : _weatherOf8(s); };
+// festival fish
+const _pickFish8b = pickFish;
+pickFish = function (where, s) {
+  const F = festOn(s);
+  if (F && F.fish && s.min >= F.start - 60 && s.min < F.end + 120) {
+    const fit = (F.fish === "fest_derby" && where === "lake") || (F.fish === "fest_lantern" && (where === "sea" || where === "deep") && s.min >= 1080) || (F.fish === "fest_midwinter" && (where === "sea" || where === "deep"));
+    if (fit && Math.random() < 0.3) { const sp = _pickFish8b(F.fish, s); if (sp) return sp; }
+  }
+  return _pickFish8b(where, s);
+};
+// villagers come to the festival
+const _folkTarget8 = folkTarget;
+folkTarget = function (v) {
+  const s = isleSave(), f = festLive(s);
+  if (!f || v.hermit && f.id !== "lantern") return _folkTarget8(v);
+  const [a, x, y] = festPlace(f), k = v.i, ang = k / ISLE_FOLK.length * Math.PI * 2;
+  return [a, Math.round(x + Math.cos(ang) * (a === "innin" ? 70 : 60)), Math.round(y + 16 + Math.sin(ang) * (a === "innin" ? 34 : 30))];
+};
+// news the day before and on the morning
+const _newDay58 = newDay5;
+newDay5 = function (s) {
+  _newDay58(s);
+  const t = festOn(s); if (t) { const [a] = festPlace(t); s.news.push("TODAY: " + t.name + "! " + (AREAS[a] ? AREAS[a].name : "") + ", " + clockText(t.start) + " TO " + clockText(t.end) + ".");
+    if (t.kind === "exchange") { const pool = folkHere().filter(v => !v.cat); if (pool.length) { const v = pool[seeded(s.year * 77 + 5).randint(0, pool.length - 1)]; s.secret = { y: s.year, id: v.id }; } } }
+  const nd = s.day === SEASON_DAYS ? { season: (s.season + 1) % 4, day: 1 } : { season: s.season, day: s.day + 1 }, tm = FESTS.find(f => f.season === nd.season && f.day === nd.day);
+  if (tm) s.news.push("TOMORROW: " + tm.name + ".");
+};
+// the booth
+function artBooth(col) {
+  const P = paintCanvas(40, 38);
+  P.shadow(19, 35, 18, 3);
+  P.rect(3, 12, 2, 22, "#6e482a"); P.rect(35, 12, 2, 22, "#6e482a");
+  for (let i = 0; i < 40; i++) P.rect(i, 6 + (i % 8 < 4 ? 0 : 1), 1, 8, Math.floor(i / 5) % 2 ? col : "#f0ecdc");
+  P.rect(0, 13, 40, 1, INK); P.rect(2, 24, 36, 10, "#a07a50"); P.rect(2, 24, 36, 2, "#c89a64"); P.rect(2, 33, 36, 1, INK);
+  return P.c;
+}
+const _objAt8 = objAt;
+objAt = function (x, y) {
+  const s = ISLE && isleSave(), f = ISLE && festLive(s);
+  if (f) { const [a, bx, by] = festPlace(f); if (ISLE.map.id === a && x >= bx - 20 && x < bx + 20 && y >= by - 30 && y < by + 14) return { k: "booth", x: bx - 20, y: by - 30, solid: [0, 22, 40, 12], act: { kind: "fest" } }; }
+  return _objAt8(x, y);
+};
+const _isleSolidAt8 = isleSolidAt;
+isleSolidAt = function (x, y) {
+  const s = isleSave(), f = ISLE && festLive(s);
+  if (f) { const [a, bx, by] = festPlace(f); if (ISLE.map.id === a && x >= bx - 20 && x < bx + 20 && y >= by - 8 && y < by + 4) return true; }
+  return _isleSolidAt8(x, y);
+};
+const _placedSprites8b = placedSprites;
+placedSprites = function (list) {
+  _placedSprites8b(list);
+  const s = isleSave(), f = festLive(s); if (!f) return;
+  const [a, bx, by] = festPlace(f); if (ISLE.map.id !== a) return;
+  const key = "booth_" + f.id; if (!IART[key]) IART[key] = artBooth(f.col);
+  list.push([by + 4, { draw(cx, cy) { g.drawImage(IART[key], bx - 20 - cx, by - 34 - cy); text(f.name.replace(/^THE /, ""), bx - cx, by - 40 - cy, 1, WHITE, "center", null); } }]);
+  list.push([by - 80, { draw(cx, cy) {                               // bunting on a ring of poles
+    const cols = ["#f05050", "#ffd246", "#5ac85a", "#4a8cdc", f.col], R = a === "innin" ? 110 : 96, pts = [];
+    for (let k = 0; k < 7; k++) { const ang = Math.PI + k / 6 * Math.PI; pts.push([bx + Math.cos(ang) * R, by - 6 + Math.sin(ang) * R * 0.55]); }
+    for (const [px, py] of pts) { rect("#6e482a", px - cx, py - 24 - cy, 2, 26); }
+    for (let k = 1; k < pts.length; k++) { const [x0, y0] = pts[k - 1], [x1, y1] = pts[k]; for (let j = 1; j < 8; j++) { const u = j / 8, x = x0 + (x1 - x0) * u, y = y0 + (y1 - y0) * u - 24 + Math.sin(u * Math.PI) * 6; rect(cols[(k + j) % cols.length], x - cx - 1, y - cy, 3, 3); } }
+  } }]);
+};
+// ---- running each festival
+function prizeFor(f, tier) {
+  const s = isleSave(), sd = [1000, 500, 200][tier], out = [sd + " SAND DOLLARS"];
+  s.sd += sd;
+  if (tier === 0 && !s.fest[f.id + "_prize"]) { s.fest[f.id + "_prize"] = 1; if (invAdd(f.prize, 1)) s.owed.push([f.prize, 1]); out.push("THE " + ITEMS[f.prize].name); }
+  for (const v of folkHere()) { const r = folkRec(v.id); r.pts = Math.min(HEART * HEART_MAX, r.pts + 20); }
+  return ["YOU WIN " + ["A GOLD", "A SILVER", "A BRONZE"][tier] + " RIBBON! " + out.join(" AND ") + ".", "EVERYONE ENJOYED THE DAY WITH YOU."];
+}
+function festAct() {
+  const s = isleSave(), f = festLive(s); if (!f) return;
+  s.fest = s.fest || {};
+  const done = s.fest[festKey(f, s)];
+  if (done && f.kind !== "exchange") { isleSay([f.name + ". YOU'VE ALREADY TAKEN PART THIS YEAR.", done]); return; }
+  if (f.kind === "show" || f.kind === "potluck") {
+    const it = held(), item = it && ITEMS[it[0]];
+    if (!it || !item.sell || (f.kind === "potluck" && item.kind !== "dish")) { isleSay([f.intro, f.how]); return; }
+    isleSay([(f.kind === "show" ? "SHOW THE JUDGE YOUR " : "ADD YOUR ") + item.name + "?"], { opts: ["YES", "NOT YET"], act: [() => {
+      const v = item.sell * (f.kind === "show" && (item.kind === "fish" || item.kind === "topfish") ? 1.2 : 1), tier = v >= (f.kind === "show" ? 200 : 150) ? 0 : v >= (f.kind === "show" ? 80 : 70) ? 1 : 2;
+      invUse(s.sel);
+      const res = prizeFor(f, tier); s.fest[festKey(f, s)] = res[0];
+      isleSay([f.kind === "show" ? "THE JUDGE TURNS YOUR " + item.name + " OVER IN THEIR HANDS..." : "YOUR " + item.name + " GOES ON THE LONG TABLE. PLATES ARE PASSED. PEOPLE GO BACK FOR SECONDS."].concat(res)); play("fanfare"); saveStore();
+    }, () => play("tick")] });
+    return;
+  }
+  if (f.kind === "lantern") {
+    isleSay([f.intro, "RELEASE YOUR LANTERN?"], { opts: ["RELEASE IT", "LATER"], act: [() => {
+      ISLE.lanterns = Array.from({ length: 24 }, (_, i) => ({ x: festPlace(f)[1] + (Math.random() - 0.5) * 120, y: festPlace(f)[2] + 60 + Math.random() * 50, v: 6 + Math.random() * 6, ph: Math.random() * 6, me: i === 0 }));
+      const res = prizeFor(f, 0); s.fest[festKey(f, s)] = "YOU SENT A LANTERN OUT ON THE SEA.";
+      isleSay(["YOU LIGHT THE LANTERN AND SET IT ON THE WATER. ONE BY ONE, EVERYONE ELSE DOES THE SAME.", "THE LIGHTS DRIFT OUT TOWARD THE DARK LIGHTHOUSE.", f.how].concat(res)); play("chime"); saveStore();
+    }, () => play("tick")] });
+    return;
+  }
+  if (f.kind === "exchange") {
+    const sec = s.secret && s.secret.y === s.year && FOLK[s.secret.id];
+    if (!sec) { isleSay([f.intro, "NOBODY DREW YOUR NAME THIS YEAR. ENJOY THE FEAST!"]); return; }
+    isleSay([f.intro, "YOU DREW " + sec.name + "'S NAME. GIVE " + sec.name + " A GIFT TODAY. " + (s.fest[festKey(f, s)] ? "(YOU ALREADY DID. MERRY MIDWINTER!)" : "")]);
+    return;
+  }
+  isleSay([f.intro, f.how, "READY?"], { opts: ["START", "NOT YET"], act: [() => festStart(f), () => play("tick")] });
+}
+function festStart(f) {
+  const s = isleSave();
+  if (f.kind === "kite") { ISLE.kite = { f, t: 20, y: 0.5, v: 0, band: 0.5, ok: 0, hold: false }; play("select"); return; }
+  const C = { f, t: f.kind === "dig" ? 60 : 90, score: 0, n: 0 };
+  if (f.kind === "dig") { const r = seeded(s.year * 91 + 3), A = AREAS.wreck; C.spots = []; for (let k = 0, t = 0; k < 24 && t < 600; t++) { const x = r.uniform(500, 1300), y = r.uniform(A.grass(x) + 24, A.shore(x) - 10); if (terrainAt(A, x, y) === "s" && !C.spots.some(q => Math.hypot(q[0] - x, q[1] - y) < 30)) { C.spots.push([Math.round(x), Math.round(y), 0]); k++; } } }
+  ISLE.contest = C; toast("GO!", GOLD); play("fanfare");
+}
+function festEnd() {
+  const C = ISLE.contest, f = C.f, s = isleSave(); ISLE.contest = null; ISLE.fish = null;
+  const sc = f.kind === "derby" ? C.score : C.n, gold = { derby: 60, icefish: 6, dig: 10 }[f.kind], silver = { derby: 30, icefish: 3, dig: 5 }[f.kind];
+  const unit = f.kind === "derby" ? " INCHES OF FISH" : f.kind === "icefish" ? " FISH" : " FINDS";
+  if (sc <= 0) { isleSay(["TIME! YOU DIDN'T GET ANYTHING THIS TIME. YOU CAN TRY AGAIN."]); return; }
+  const res = prizeFor(f, sc >= gold ? 0 : sc >= silver ? 1 : 2); s.fest[festKey(f, s)] = "YOU GOT " + sc + unit + ".";
+  isleSay(["TIME! YOU GOT " + sc + unit + "."].concat(res)); play("fanfare"); saveStore();
+}
+const _isleAct58b = isleAct5;
+isleAct5 = function (o) { if (o.act.kind === "fest") festAct(); else _isleAct58b(o); };
+// the gift exchange: four times the friendship, and a present back
+const _giveGift8 = giveGift;
+giveGift = function (v, f) {
+  const s = isleSave(), F = festLive(s), before = f.pts;
+  if (!held()) return;
+  _giveGift8(v, f);
+  if (F && F.kind === "exchange" && s.secret && s.secret.y === s.year && s.secret.id === v.id && !s.fest[festKey(F, s)]) {
+    const gain = f.pts - before; if (gain > 0) f.pts = Math.min(HEART * HEART_MAX, f.pts + gain * 3);
+    const back = ["pearl", "d_pie", "aquamarine", "oldcoin", "f_tree"][seeded(s.year * 3 + v.i).randint(0, 4)];
+    if (invAdd(back, 1)) s.owed.push([back, 1]);
+    s.fest[festKey(F, s)] = "YOU SWAPPED GIFTS WITH " + v.name + ".";
+    const more = [say_(v, "'YOU DREW MY NAME? THEN THIS IS FOR YOU. MERRY MIDWINTER!'"), "YOU GOT " + ITEMS[back].name + "."];
+    if (ISLE.msg) ISLE.msg.pages.push(...more); else isleSay(more);
+    prizeFor(F, 1);
+  }
+};
+// contests: count catches; dig spots
+const _logCatch8 = logCatch;
+logCatch = function (sp, size, how) {
+  _logCatch8(sp, size, how);
+  const C = ISLE.contest; if (!C || (C.f.kind !== "derby" && C.f.kind !== "icefish")) return;
+  const f = FISH[sp]; C.n++; C.score += Math.round(f.min + (f.max - f.min) * size); toast(C.f.kind === "derby" ? "+" + Math.round(f.min + (f.max - f.min) * size) + " IN" : "+1 FISH", GOLD);
+};
+const _isleInteract8b = isleInteract;
+isleInteract = function () {
+  const C = ISLE.contest, it = held();
+  if (C && C.f.kind === "dig" && !ISLE.msg && it && it[0] === "hoe") {
+    const [tx, ty] = facingTile(), d = C.spots.find(q => !q[2] && ((Math.floor(q[0] / TS) === tx && Math.floor(q[1] / TS) === ty) || Math.hypot(q[0] - ISLE.px, q[1] - ISLE.py) < 12));
+    if (d) { d[2] = 1; C.n++; const id = Math.random() < 0.1 ? "oldcoin" : Math.random() < 0.4 ? "glass" : "scrap"; invAdd(id, 1); toast("+1 " + ITEMS[id].name + " (" + C.n + ")", GOLD); play("hit"); splashDust(Math.floor(d[0] / TS), Math.floor(d[1] / TS), "#e6d2a0"); return; }
+  }
+  if (ISLE.kite) return;
+  _isleInteract8b();
+};
+const _placedSprites8c = placedSprites;
+placedSprites = function (list) {
+  _placedSprites8c(list);
+  const C = ISLE.contest;
+  if (C && C.spots && ISLE.map.id === "wreck") for (const d of C.spots) if (!d[2]) list.push([d[1] - 8, { draw(cx, cy) { const x = d[0] - cx, y = d[1] - cy; g.fillStyle = "#c83c32"; for (let k = -3; k <= 3; k++) { g.fillRect(x + k - 1, y + k - 1, 2, 2); g.fillRect(x + k - 1, y - k - 1, 2, 2); } } }]);
+};
+// ---- the kite and the contest clock
+const _isleUpdate8 = isleUpdate;
+isleUpdate = function (dt) {
+  const I = ISLE;
+  if (I && I.kite && !I.msg) {
+    const K = I.kite; K.t -= dt; K.v += (K.hold ? -1.6 : 1.1) * dt; K.v *= 0.97; K.y = clamp(K.y + K.v * dt, 0, 1);
+    K.band = 0.5 + 0.32 * Math.sin((20 - K.t) * 0.9) + 0.1 * Math.sin((20 - K.t) * 2.3);
+    if (Math.abs(K.y - K.band) < 0.11) K.ok += dt;
+    if (K.t <= 0) { I.kite = null; const s = isleSave(), pc = Math.round(K.ok / 20 * 100), res = prizeFor(K.f, pc >= 70 ? 0 : pc >= 45 ? 1 : 2); s.fest = s.fest || {}; s.fest[festKey(K.f, s)] = "YOUR KITE STAYED IN THE WIND " + pc + "% OF THE TIME."; isleSay(["THE WIND DROPS. YOUR KITE STAYED IN THE WIND " + pc + "% OF THE TIME."].concat(res)); play("fanfare"); saveStore(); }
+    return;
+  }
+  _isleUpdate8(dt);
+  if (I && I.contest && !I.msg && !I.menu && !I.list && !I.inv) { I.contest.t -= dt; if (I.contest.t <= 0) festEnd(); }
+  if (I && I.lanterns) { for (const L of I.lanterns) { L.y += L.v * dt; L.d = (L.d || 0) + L.v * dt; } if (I.lanterns.every(L => L.d > 260)) I.lanterns = null; }
+};
+const _isleKey8 = isleKey;
+isleKey = function (e, down) {
+  if (ISLE && ISLE.kite && !ISLE.msg) { if (["Space", "Enter", "KeyE"].includes(e.code)) { e.preventDefault(); ISLE.kite.hold = true; } return; }
+  _isleKey8(e, down);
+};
+const _isleKeyUp8 = isleKeyUp;
+isleKeyUp = function (e) { if (ISLE && ISLE.kite && ["Space", "Enter", "KeyE"].includes(e.code)) ISLE.kite.hold = false; _isleKeyUp8(e); };
+const _isleTouch8 = isleTouch;
+isleTouch = function (e) { if (ISLE && ISLE.kite && !ISLE.msg) { ISLE.kite.hold = true; return; } _isleTouch8(e); };
+const _isleTouchUp8 = isleTouchUp;
+isleTouchUp = function (e) { if (ISLE && ISLE.kite) ISLE.kite.hold = false; _isleTouchUp8(e); };
+const _drawIsle8 = drawIsle;
+drawIsle = function () {
+  _drawIsle8();
+  const I = ISLE, [cx, cy] = isleCam();
+  if (I.lanterns) for (const L of I.lanterns) { const x = L.x + Math.sin(T + L.ph) * 4 - cx, y = L.y - cy, fade = Math.max(0, 1 - (L.d || 0) / 260); g.globalAlpha = 0.35 * fade; disc("#ffbe3c", x, y, 6); g.globalAlpha = fade; rect(L.me ? "#ffe68c" : "#ffa046", x - 2, y - 3, 5, 5); rect("#ffe68c", x - 1, y - 2, 3, 3); g.globalAlpha = 1; }
+  if (I.contest) { const C = I.contest, w = 150, x = Math.round((IW - w) / 2); islePanel(x, 4, w, 16); text(C.f.name.replace(/^THE /, "") + "  " + Math.ceil(C.t) + "S  " + (C.f.kind === "derby" ? C.score + " IN" : C.n), IW / 2, 12, 1, "#3c2c22", "center", null); }
+  if (I.kite) {
+    const K = I.kite, w = 120, h = 150, x = Math.round((IW - w) / 2), y = Math.round((IH - h) / 2);
+    g.globalAlpha = 0.4; rect("#000", 0, 0, IW, IH); g.globalAlpha = 1;
+    islePanel(x, y, w, h); rect("#8cc8f0", x + 6, y + 18, w - 12, h - 40);
+    const by = y + 18 + (1 - K.band) * (h - 40); g.globalAlpha = 0.7; rect("#f4fbff", x + 6, by - 0.11 * (h - 40), w - 12, 0.22 * (h - 40)); g.globalAlpha = 1; outline(x + 6, Math.round(by - 0.11 * (h - 40)), w - 12, Math.round(0.22 * (h - 40)), "#5aaadc");
+    const ky = y + 18 + (1 - K.y) * (h - 40), kx = x + w / 2 + Math.sin(T * 3) * 10; rect("#f0ecdc", kx, ky, 1, y + h - 22 - ky);
+    g.drawImage(plSprite("f_kite"), Math.round(kx - 3), Math.round(ky - 4));
+    text("KITE DAY " + Math.ceil(K.t) + "S", x + w / 2, y + 9, 1, "#b4461e", "center", null);
+    text(IW >= 300 ? "HOLD E TO PULL UP" : "HOLD TO PULL UP", x + w / 2, y + h - 12, 1, "#5a3c28", "center", null);
+  }
+};
+const _isleSave8b = isleSave;
+isleSave = function () { const g_ = _isleSave8b(); if (!g_.fest) g_.fest = {}; return g_; };

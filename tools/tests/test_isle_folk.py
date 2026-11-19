@@ -156,7 +156,7 @@ async def main():
         await ev(SLEEP)
         r = await ev("['rosa', 'kai'].map(id => !!isleSave().arrived[id])")
         check("with the inn, two move in at once", r == [True, True], r)
-        await ev("(() => { isleSave().min = 600; folkInit(); isleGo('port', 789, 430, 'up'); restoredAct('inn'); })()")
+        await ev("(() => { isleSave().min = festOn(isleSave()) ? 1000 : 600; folkInit(); isleGo('port', 789, 430, 'up'); restoredAct('inn'); })()")
         r = await ev("[ISLE.map.id, ISLE.folk.rosa.area, Math.round(ISLE.folk.rosa.x), Math.round(ISLE.folk.rosa.y)]")
         check("the inn has an inside, and Rosa is behind the bar", r[0] == "innin" and r[1] == "innin", r)
         await page.wait_for_timeout(300); await page.screenshot(path=OUT + "/inn.png")
