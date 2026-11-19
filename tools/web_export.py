@@ -162,6 +162,21 @@ for name, rows, pal in NEW_HOOKS: HOOKS.append((name, rows, pal)); items.append(
 _named = dict(items)
 items += [("mhat%d" % i, FS.monsterify(_named["hat%d" % i], 300 + i, eyes=0, teeth=False)) for i in range(len(HATS) - len(NEW_HATS), len(HATS))]
 items += [("mpet%d" % i, FS.monsterify(_named["pet%d" % i], 500 + i, eyes=2, teeth=_named["pet%d" % i].get_width() >= 7)) for i in range(len(PETS) - len(NEW_PETS), len(PETS))]
+# ---- Nov 18, 2026: Driftwood Isle rewards (island.js part 8d). Never sold; earned on the island. Appended so nothing above moves.
+# Names are looked up by island.js, so keep them.
+ISLE_HAT = ("KEEPER'S CAP", ["..nnnn...", ".nnnnnn..", "nnnnnnnnn", ".yyyyyyy."])
+ISLE_PET = ("PICKLES", ["e..e.", "eeee.", "eyey.", "eeeee", ".e.e."])
+ISLE_FLAG = ("DRIFTWOOD ISLE", ["cccccc", "cyccgc", "cggggc", "ssssss"])
+ISLE_FLAIR = ("SEA GLASS", ["t.c", ".g.", "c.t"], "top")
+HATS.append(ISLE_HAT); items.append(("hat%d" % (len(HATS) - 1), outlined(pg, from_rows(pg, ISLE_HAT[1], P))))
+PETS.append(ISLE_PET); items.append(("pet%d" % (len(PETS) - 1), outlined(pg, from_rows(pg, ISLE_PET[1], P))))
+FLAGS.append(ISLE_FLAG); items.append(("flag%d" % (len(FLAGS) - 1), from_rows(pg, ISLE_FLAG[1], P)))
+FLAIR.append(ISLE_FLAIR[:2]); FLAIR_POS.append(ISLE_FLAIR[2]); items.append(("flair%d" % (len(FLAIR) - 1), from_rows(pg, ISLE_FLAIR[1], P)))
+TAV_BOATS += ["ISLAND SKIFF"]
+items.append(("boat%d" % (len(BOATS) + 1 + len(TAV_BOATS) - 1), outlined(pg, from_rows(pg, BOAT_ROWS[0], {"b": (140, 96, 58), "w": (240, 236, 220), "r": (90, 160, 120), "d": (60, 110, 84)}))))
+_named = dict(items)
+items += [("mhat%d" % (len(HATS) - 1), FS.monsterify(_named["hat%d" % (len(HATS) - 1)], 300 + len(HATS) - 1, eyes=0, teeth=False)),
+          ("mpet%d" % (len(PETS) - 1), FS.monsterify(_named["pet%d" % (len(PETS) - 1)], 500 + len(PETS) - 1, eyes=2, teeth=False))]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()

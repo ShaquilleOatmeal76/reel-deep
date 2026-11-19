@@ -3713,3 +3713,118 @@ const _listKey8c = listKey;
 listKey = function (e) { const L = ISLE.list; if (L && (L.kind === "hatchpick" || L.kind === "morphs") && ["Escape", "Tab"].includes(e.code)) { e.preventDefault(); ISLE.list = { kind: "hatch", sel: 0, top: 0 }; play("back"); return; } _listKey8c(e); };
 const _newDay58c = newDay5;
 newDay5 = function (s) { _newDay58c(s); if (s.rest.hatch === "done" && s.hatch.some(T_ => T_ && DAYN(s) - T_.day === HATCH_DAYS)) s.news.push("SOMETHING HATCHED AT THE HATCHERY."); };
+
+// =====================================================================================================================
+// Part 8d: the lighthouse finale and the rewards that carry over topside. Beat the Dreamer, then restore the lighthouse
+// (Marlowe's key opens the door; without it Bram forces it). Light it after dark: the beam reaches down through the rock
+// and out over the sea, and shows you where the lost angler went. The Angler's Fish bites off the point after that, the
+// lighthouse shines on the title screen, and a new bottle washes up. Titles, songs and cosmetics (never sold) are earned
+// on the island and show up topside; three hatchery morphs become FIN PRIX paints.
+Object.assign(RESTORE, { light: { name: "THE LIGHTHOUSE", ruin: "THE LIGHTHOUSE. THE STAIRS ARE ROTTEN AND THE GREAT LENS IS CRACKED.", need: [["wood", 300], ["stone", 300], ["glass", 40], ["gold", 20], ["dreamstone", 3]], sd: 10000, done: "THE LIGHTHOUSE IS REBUILT. NEW STAIRS, A NEW LENS. IT'S READY TO LIGHT, AFTER DARK." } });
+const ISLE_TITLES = [["islander", "ISLANDER", "LAND ON DRIFTWOOD ISLE"], ["cavediver", "CAVE DIVER", "BEAT THE DREAMER"], ["heartisle", "HEART OF THE ISLE", "10 HEARTS WITH A VILLAGER"],
+  ["breeder", "MASTER BREEDER", "HATCH ALL 30 MORPHS"], ["champion", "FESTIVAL CHAMPION", "GOLD AT ALL 8 FESTIVALS"], ["lightkeeper", "LIGHTKEEPER", "LIGHT THE LIGHTHOUSE"]];
+ISLE_TITLES.forEach(t => { if (!TITLES.some(q => q[0] === t[0])) { TITLES.push(t); SHOP_TITLE_IDS.push(TITLES.length - 1); } });
+const ISLE_SONGS = [["ISLAND WALTZ", null, "LAND ON DRIFTWOOD ISLE", 108, "G4 - - B4 - - D5 - - B4 - - C5 - - E5 - - D5 - - B4 - - A4 - - G4 - D4 - -", "G2 - - D3 - - G2 - - D3 - - C3 - - G3 - - G2 - - D3 - - D2 - - G2 - - - -"],
+  ["KEEP THE LIGHT", null, "LIGHT THE LIGHTHOUSE", 92, "E4 - G4 - C5 - - - B4 - G4 - E4 - - - F4 - A4 - D5 - C5 - B4 - G4 - C5 - - -", "C3 - - - G2 - - - A2 - - - E2 - - - F2 - - - G2 - - - C3 - G2 - C3 - - -"]];
+const SONG_I = ISLE_SONGS.map(sg => { let i = SONGS.findIndex(q => q && q[0] === sg[0]); if (i < 0) { SONGS.push(sg); i = SONGS.length - 1; } if (typeof SONG_IDS !== "undefined" && !SONG_IDS.includes(i)) SONG_IDS.push(i); return i; });
+// FIN PRIX paints from three morphs
+[["calico", "CALICO", "calicocarp", ["#f0ecdc", "#f05050"]], ["aurora", "AURORA", "auroratrout", ["#5ad2b4", "#c88cf0"]], ["inkkoi", "INK KOI", "inkkoi", ["#1e1a28", "#f0ecdc"]]].forEach(([id, name, m, cols]) => {
+  if (typeof FP_PAINTS === "undefined") return;
+  FP_PAINTS[id] = cols; if (!FP_LOOKS.paint.some(q => q[0] === id)) FP_LOOKS.paint.push([id, name, null, "isle_" + m]); FP_WHO["isle_" + m] = "HATCH A " + MORPH[m].name;
+});
+const ISLE_COS = [["boat", "ISLAND SKIFF", s => s.rest.dock === "done", "RESTORE THE SKIFF"], ["pet", "PICKLES", s => ((s.folk.pickles && s.folk.pickles.pts) || 0) >= 800, "8 HEARTS WITH PICKLES"],
+  ["flair", "SEA GLASS", s => Object.keys(s.pages).length >= 20, "FIND ALL 20 KEEPER'S PAGES"], ["flag", "DRIFTWOOD ISLE", s => Object.keys(RESTORE).every(b => s.rest[b] === "done"), "RESTORE EVERY BUILDING"],
+  ["hat", "KEEPER'S CAP", s => !!s.flags.lit, "LIGHT THE LIGHTHOUSE"]];
+const ISLE_COS_LIST = { boat: "boats", pet: "pets", flair: "flair", flag: "flags", hat: "hats" };
+function isleAwards() {                                          // idempotent: everything earned on the island, handed out topside
+  const s = isleSave(), got = [];
+  const t = (id, ok) => { if (ok && award(id)) got.push("TITLE: " + TITLES.find(q => q[0] === id)[1]); };
+  t("islander", true); t("cavediver", !!s.cave.boss[5]); t("heartisle", Object.values(s.folk).some(f => f.pts >= HEART * HEART_MAX));
+  t("breeder", Object.keys(s.morphs).length >= MORPHS.length); t("champion", FESTS.every(f => s.fest[f.id + "_prize"])); t("lightkeeper", !!s.flags.lit);
+  if (!songOwned(SONG_I[0])) { earnSong(SONG_I[0]); got.push("SONG: ISLAND WALTZ"); }
+  if (s.flags.lit && !songOwned(SONG_I[1])) { earnSong(SONG_I[1]); got.push("SONG: KEEP THE LIGHT"); }
+  for (const [kind, name, ok] of ISLE_COS) { const i = DATA[ISLE_COS_LIST[kind]].indexOf(name); if (i > 0 && ok(s) && !store.own[kind].includes(i)) { store.own[kind].push(i); got.push(kind.toUpperCase() + ": " + name); } }
+  if (typeof fpData === "function") for (const [id, , m] of [["calico", 0, "calicocarp"], ["aurora", 0, "auroratrout"], ["inkkoi", 0, "inkkoi"]]) if (s.morphs[m] && !fpData().own.includes("paint." + id)) { fpData().own.push("paint." + id); got.push("FIN PRIX PAINT: " + FP_LOOKS.paint.find(q => q[0] === id)[1]); }
+  if (got.length) { got.forEach((g_, k) => toast("TOPSIDE REWARD! " + g_, GOLD)); saveStore(); }
+  return got;
+}
+const _isleUpdate8d = isleUpdate;
+isleUpdate = function (dt) { _isleUpdate8d(dt); if (ISLE && !ISLE.msg) { ISLE.awT = (ISLE.awT || 0) - dt; if (ISLE.awT <= 0) { ISLE.awT = 3; isleAwards(); } } };
+// ---- the lighthouse
+const _artKey8 = artKey;
+artKey = function (o) { return o.k === "lighthouse" && isleSave().flags.lit ? "lighthouse_r" : _artKey8(o); };
+const _isleArt8d = isleArt;
+isleArt = function () { _isleArt8d(); if (!IART.lighthouse_r) IART.lighthouse_r = artLighthouse(true); };
+const FINALE = [
+  "YOU CLIMB THE NEW STAIRS, ROUND AND ROUND, TO THE LAMP ROOM. THE GREAT LENS WAITS, CLEAN AND COLD.",
+  "YOU STRIKE A MATCH.",
+  "THE LAMP CATCHES. LIGHT ROARS UP THROUGH THE LENS AND SWINGS OUT ACROSS THE SEA... AND DOWN, THROUGH THE ROCK, INTO THE DEEP.",
+  "FAR BELOW, SOMETHING HUGE SIGHS. IT SETTLES. IT DREAMS.",
+  "THE BEAM SWEEPS PAST THE WRECK, OUT TO WHERE THE CRACK IS. FOR A MOMENT THE WATER THERE LOOKS WRONG: BRIGHT, AND INSIDE OUT.",
+  "THE FLIPSIDE. AND ON IT, A SMALL BOAT. A FIGURE STANDS UP IN IT AND RAISES A LANTERN.",
+  "THE LOST ANGLER. ALL THESE YEARS HE'S BEEN KEEPING IT ASLEEP FROM THE OTHER SIDE, WAITING FOR SOMEONE TO LIGHT THIS ONE.",
+  "HE WAVES, ONCE. THEN HE PUTS DOWN THE LANTERN, TURNS HIS BOAT, AND ROWS AWAY INTO THE BRIGHT WATER. FREE.",
+  "THE LIGHTHOUSE IS LIT. DRIFTWOOD ISLE IS HOME.",
+];
+function lighthouseAct() {
+  const s = isleSave();
+  if (s.flags.lit) { isleSay(["THE LIGHT TURNS, STEADY AND SLOW. FROM UP HERE YOU CAN SEE THE WHOLE ISLAND."]); return; }
+  if (s.min < 1200) { isleSay(["THE LAMP IS READY, BUT IT'S STILL LIGHT OUT. COME BACK AFTER DARK (8 PM) TO LIGHT IT."]); return; }
+  s.flags.lit = DAYN(s); ISLE.finale = { t: 0 };
+  for (const v of folkHere()) { const r = folkRec(v.id); r.pts = Math.min(HEART * HEART_MAX, r.pts + 100); }
+  const got = isleAwards();
+  isleSay(FINALE.concat(["EVERYONE ON THE ISLAND SAW THE LIGHT GO ON.", got.length ? "TOPSIDE: " + got.join(", ") + "." : "THE ANGLER'S FISH IS OUT THERE NOW, OFF THE POINT, AFTER DARK."]));
+  play("fanfare"); saveStore();
+}
+const _isleAct58d = isleAct5;
+isleAct5 = function (o) {
+  const a = o.act, s = isleSave();
+  if (a.kind === "lighthouse") {
+    if (s.rest.light === "done") { lighthouseAct(); return; }
+    if (s.rest.light === "work") { isleSay(["WORK ON THE LIGHTHOUSE IS UNDERWAY. IT'LL BE READY TOMORROW MORNING."]); return; }
+    if (!s.cave.boss[5]) { isleSay(s.flags.lightkey ? ["MARLOWE'S KEY TURNS. INSIDE, THE STAIRS ARE ROTTEN THROUGH, AND THE GREAT LENS IS CRACKED.", "SOMETHING DEEP UNDER THE POINT IS STILL TOO AWAKE. THE KEEPER'S LOG SAID IT: DEAL WITH THE BOTTOM OF THE CAVES FIRST."] : ["THE LIGHTHOUSE. THE DOOR IS LOCKED TIGHT.", "HIGH ABOVE, THE LAMP ROOM WINDOWS ARE DARK. SOMETHING DEEP UNDER THE POINT IS STILL TOO AWAKE: THE BOTTOM OF THE CAVES HAS TO COME FIRST."]); return; }
+    if (!s.flags.lightdoor) { s.flags.lightdoor = 1; isleSay([s.flags.lightkey ? "MARLOWE'S BRASS KEY TURNS IN THE LOCK. THE DOOR SWINGS OPEN." : "BRAM HELPS YOU PUT A SHOULDER TO THE OLD DOOR. IT GIVES WAY WITH A BANG.", "INSIDE: ROTTEN STAIRS AND A CRACKED LENS. IT CAN BE REBUILT."]); return; }
+    _isleAct58d({ act: { kind: "restore", b: "light" } }); return;
+  }
+  _isleAct58d(o);
+};
+const _laterOpen8 = laterOpen;
+laterOpen = function (f, s) { return f.where === "light" ? !!(s.flags && s.flags.lit) : _laterOpen8(f, s); };
+const _pickFish8d = pickFish;
+pickFish = function (where, s) {
+  if (ISLE && ISLE.map && ISLE.map.id === "point" && s.flags && s.flags.lit && (where === "sea" || where === "deep") && s.min >= 1200 && Math.random() < 0.06) { const sp = _pickFish8d("light", s); if (sp) return sp; }
+  return _pickFish8d(where, s);
+};
+const _newDay58d = newDay5;
+newDay5 = function (s) {
+  _newDay58d(s);
+  if (s.flags.lit && !s.flags.bottle2 && DAYN(s) > s.flags.lit) {
+    s.flags.bottle2 = 1;
+    s.news.push("BRAM: 'SAW YOUR LIGHT FROM THE DOCK LAST NIGHT. FIRST TIME IN FORTY YEARS. I CRIED LIKE A BABY. DON'T TELL ANYONE.'", "A BOTTLE WASHED UP AT THE END OF THE DOCK. IT ISN'T THE KEEPER'S HANDWRITING.", "'IF YOU CAN SEE THIS LIGHT, YOU CAN SEE US TOO. THERE ARE MORE ISLANDS OUT HERE, FURTHER THAN ANYONE HAS SAILED. COME AND FIND US. - M.'");
+  }
+};
+// the beam: on Lighthouse Point at night, and on the title screen's horizon once it's lit
+const _drawIsle8d = drawIsle;
+drawIsle = function () {
+  _drawIsle8d();
+  const I = ISLE, s = isleSave();
+  if (!I.map || I.map.id !== "point" || !s.flags.lit) return;
+  const dk = Math.max(darkness(s.min), I.finale ? 0.4 : 0); if (dk <= 0) return;
+  const [cx, cy] = isleCam(), lx = 377 + 23 - cx, ly = 104 + 20 - cy, a = T * 0.7;
+  g.save(); g.globalCompositeOperation = "lighter"; g.globalAlpha = Math.min(0.5, dk);
+  for (const off of [0, Math.PI]) { const a1 = a + off; g.fillStyle = "#fff0b4"; g.beginPath(); g.moveTo(lx, ly); g.lineTo(lx + Math.cos(a1 - 0.12) * 600, ly + Math.sin(a1 - 0.12) * 300); g.lineTo(lx + Math.cos(a1 + 0.12) * 600, ly + Math.sin(a1 + 0.12) * 300); g.closePath(); g.fill(); }
+  disc("#fff6c8", lx, ly, 6); g.restore();
+  if (I.finale && I.msg && I.msg.i >= 5 && I.msg.i <= 7) { const bx = IW * 0.72, by = 24, glow = 0.5 + 0.5 * Math.sin(T * 4); g.globalAlpha = 0.4 * glow; disc("#ffe68c", bx, by - 6, 7); g.globalAlpha = 1; rect("#2c2232", bx - 8, by, 16, 3); rect("#5a4a3a", bx - 1, by - 7, 2, 7); rect("#ffe68c", bx + 1, by - 9, 2, 2); }
+  if (I.finale && !I.msg) I.finale = null;
+};
+const _drawIsleFar8 = drawIsleFar;
+drawIsleFar = function (x, wl) {
+  _drawIsleFar8(x, wl);
+  const g_ = store.isle && store.isle.g;
+  if (!g_ || !g_.flags || !g_.flags.lit) return;
+  rect("#ffe68c", x + 6, wl - 16, 2, 2);
+  const a = (typeof T === "number" ? T : 0) * 0.8, cxl = x + 7, cyl = wl - 15;
+  g.save(); g.globalAlpha = 0.22 + 0.1 * Math.sin(a * 2); g.fillStyle = "#fff0b4";
+  for (const off of [0, Math.PI]) { const k = Math.cos(a + off); g.beginPath(); g.moveTo(cxl, cyl); g.lineTo(cxl + k * 90, cyl - 6); g.lineTo(cxl + k * 90, cyl + 2); g.closePath(); g.fill(); }
+  g.restore();
+};
