@@ -8,18 +8,18 @@ def check(n, ok, v=""):
     if not ok: fails.append(n)
 CZH = "(h => { const m = h.find(q => q[5] === STAKE_MAX); return [m[1] + m[3] / 2, m[2] + m[4] / 2]; })"
 GAMES = [
-  ["dive bet", "openBet()", "bet", "TAV.bet.stake", 75, "wideMenus() ? [WX() + 289, 89] : [OX + 105, 133]"],
-  ["catch 21", "c21New(false)", "c21", "TAV.c21.bet", 75, "wideMenus() ? [WX() + 144, 144] : [OX + 63, 135]"],
-  ["vip catch 21", "c21New(true)", "c21", "TAV.c21.bet", 200, "wideMenus() ? [WX() + 144, 144] : [OX + 63, 135]"],
-  ["derby", "derbyNew(0,false)", "derby", "TAV.derby.bet", 75, f"wideMenus() ? {CZH}(derbyWideHits()) : [OX + 63, 22 + TAV.derby.racers.length * derbyLane(TAV.derby) + 4 + 34]"],
-  ["plinko", "plinkoOpen()", "plinko", "TAV.plinko.bet", 75, "(() => { const m = plButtons().find(q => q[0] === 'max'); return [m[1] + m[3] / 2, m[2] + m[4] / 2]; })()"],
-  ["line snap", "snapOpen()", "snap", "CZ.snap.bet", 75, f"{CZH}(snapHits())"],
-  ["bigger", "bigOpen()", "bigger", "CZ.big.bet", 75, f"{CZH}(bigHits())"],
-  ["crown", "caOpen()", "crown", "CZ.ca.bet", 75, f"{CZH}(caHits())"],
-  ["reels", "rdOpen()", "reel", "CZ.rd.bet", 75, f"{CZH}(rdHits())"],
-  ["wheel", "whOpen()", "wheel", "CZ.wh.bet", 75, f"{CZH}(whHits())"],
-  ["treasure", "tdOpen()", "treasure", "CZ.td.bet", 75, f"{CZH}(tdHits())"],
-  ["net", "nhOpen()", "net", "CZ.nh.bet", 75, f"{CZH}(nhHits())"],
+  ["dive bet", "openBet()", "bet", "TAV.bet.stake", 1000, "wideMenus() ? [WX() + 289, 89] : [OX + 105, 133]"],
+  ["catch 21", "c21New(false)", "c21", "TAV.c21.bet", 1000, "wideMenus() ? [WX() + 144, 144] : [OX + 63, 135]"],
+  ["vip catch 21", "c21New(true)", "c21", "TAV.c21.bet", 1000, "wideMenus() ? [WX() + 144, 144] : [OX + 63, 135]"],
+  ["derby", "derbyNew(0,false)", "derby", "TAV.derby.bet", 1000, f"wideMenus() ? {CZH}(derbyWideHits()) : [OX + 63, 22 + TAV.derby.racers.length * derbyLane(TAV.derby) + 4 + 34]"],
+  ["plinko", "plinkoOpen()", "plinko", "TAV.plinko.bet", 1000, "(() => { const m = plButtons().find(q => q[0] === 'max'); return [m[1] + m[3] / 2, m[2] + m[4] / 2]; })()"],
+  ["line snap", "snapOpen()", "snap", "CZ.snap.bet", 1000, f"{CZH}(snapHits())"],
+  ["bigger", "bigOpen()", "bigger", "CZ.big.bet", 1000, f"{CZH}(bigHits())"],
+  ["crown", "caOpen()", "crown", "CZ.ca.bet", 1000, f"{CZH}(caHits())"],
+  ["reels", "rdOpen()", "reel", "CZ.rd.bet", 1000, f"{CZH}(rdHits())"],
+  ["wheel", "whOpen()", "wheel", "CZ.wh.bet", 1000, f"{CZH}(whHits())"],
+  ["treasure", "tdOpen()", "treasure", "CZ.td.bet", 1000, f"{CZH}(tdHits())"],
+  ["net", "nhOpen()", "net", "CZ.nh.bet", 1000, f"{CZH}(nhHits())"],
 ]
 async def main():
     async with async_playwright() as p:
@@ -38,12 +38,17 @@ async def main():
                 px, py = r[0] + x * r[2] / r[4], r[1] + y * r[3] / r[5]
                 await page.mouse.click(px, py); await page.wait_for_timeout(150)
                 after = await page.evaluate(get)
+                exp = await page.evaluate("Math.floor(REEL.store.tav.chips / 5) * 5")   # MAX = all in (the bet panel may have added the daily chips)
                 check(f"{tag} {name}: MAX {before} -> {after}", after == exp, (before, after, x, y))
                 await page.screenshot(path=f"/tmp/{tag}_{name.replace(' ','_')}.png")
             # MAX respects your chips
             await page.evaluate("(() => { REEL.store.tav.chips = 32; openBet(); S.overlay = 'bet'; })()")
             await page.evaluate("TAV.bet.stake = stakeStep(TAV.bet.stake, STAKE_MAX)")
             check(f"{tag} max capped by chips (32 -> 30)", await page.evaluate("TAV.bet.stake") == 30)
+            # no table limit (Nov 19, 2026): MAX = all your chips; +/- step with the size of the stake
+            await page.evaluate("(() => { REEL.store.tav.chips = 123456; })()")
+            r = await page.evaluate("[stakeStep(10, STAKE_MAX), stakeStep(95, 1), stakeStep(100, 1), stakeStep(100, -1), stakeStep(500, 1), stakeStep(2000, 1), stakeStep(2000, -1), stakeStep(10000, 1)]")
+            check(f"{tag} all in + bigger steps for bigger stakes", r == [123455, 100, 125, 95, 600, 2500, 1900, 12500], r)
             check(f"no errors {tag}", not errs, errs); await b.close()
     print("ALL PASSED" if not fails else "FAILED: " + ", ".join(fails))
 asyncio.run(main())
