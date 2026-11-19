@@ -81,7 +81,7 @@ const ISLE_FOLK = [
     id: "fenn", name: "DR. FENN", role: "THE CURATOR", birthday: [3, 6], home: 2, work: "aquain",
     look: { hair: "short", pal: { h: "#c8c8d2", s: "#f0d2b4", c: "#6a5a8a", p: "#3c3c50" } },
     arrive: s => s.rest.aquarium === "done", arriveText: "DR. FENN HAS MOVED INTO THE THIRD COTTAGE. HE LOOKS AFTER THE AQUARIUM.",
-    gifts: { love: ["@legend", "t_coel", "t_nautilus", "starfish"], like: ["@fish", "@topfish", "shell"], hate: ["d_grilled", "d_fishchips"] },
+    gifts: { love: ["@legend", "@morph", "t_coel", "t_nautilus", "starfish"], like: ["@fish", "@topfish", "shell"], hate: ["d_grilled", "d_fishchips"] },
     sched: { sun: [[360, "home"], [480, "work"], [750, "beach"], [840, "work"], [1080, "home"]], rain: [[360, "home"], [480, "work"], [1140, "home"]] },
     lines: ["'DID YOU KNOW A SEAHORSE FATHER CARRIES THE EGGS? REMARKABLE ANIMALS.'", "'EVERY FISH IN THESE TANKS HAS A NAME. THE BIG GROUPER IS PROFESSOR GRUMBLES.'", "'THE OPEN SEA HAS ONE HUNDRED AND TWENTY-NINE KINDS WE KNOW OF. I WANT ONE OF EACH.'", "'I WAS A MUSEUM MAN ON THE MAINLAND. TOO MANY STUFFED THINGS. THESE ONES SWIM.'", "'HAVE YOU NOTICED THE TIDE POOLS CHANGE WITH THE SEASONS? I KEEP A NOTEBOOK.'", "'PLEASE DON'T TAP ON THE GLASS. THEY HATE THAT.'"],
     rain: ["'RAIN DAYS ARE FOR CATALOGUING. MY FAVOURITE KIND OF DAY.'", "'THE FISH ARE MORE ACTIVE WHEN IT RAINS. HAVE YOU NOTICED?'"],

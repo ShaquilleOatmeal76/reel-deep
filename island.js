@@ -3641,3 +3641,75 @@ drawIsle = function () {
 };
 const _isleSave8b = isleSave;
 isleSave = function () { const g_ = _isleSave8b(); if (!g_.fest) g_.fest = {}; return g_; };
+
+// =====================================================================================================================
+// Part 8c: the hatchery and its 30 colour morphs. Restore the old hatchery by the Lagoon. Each of its four tanks takes a
+// pair of one kind of island fish; every three days the pair has young: usually the plain fish, sometimes a colour morph
+// (the second morph of each kind is rarer). Morphs are kept in the Morph Collection, sell for a lot, and Dr. Fenn loves them.
+// [id, species, name, colour, second colour ('~' stripes, '*' spots)]
+const MORPHS = [
+  ["rosesardine", "sardine", "ROSE SARDINE", "#e68ca0", "~#ffd2dc"], ["midsardine", "sardine", "MIDNIGHT SARDINE", "#2c2c5a", "*#8cf0ff"],
+  ["tigermack", "mackerel", "TIGER MACKEREL", "#ff8c32", "~#2c222c"], ["ghostmack", "mackerel", "GHOST MACKEREL", "#e6eaf4", "~#b4bcd2"],
+  ["copperbass", "bass", "COPPER BASS", "#c8783c", "#ffbe8c"], ["moonbass", "bass", "MOON BASS", "#d2d2f0", "*#ffffff"],
+  ["calicocarp", "carp", "CALICO CARP", "#f0ecdc", "*#f05050"], ["platcarp", "carp", "PLATINUM CARP", "#dcdce6", "#ffffff"],
+  ["sunsetkoi", "koi", "SUNSET KOI", "#ff6e46", "~#ffd246"], ["inkkoi", "koi", "INK KOI", "#1e1a28", "*#f0ecdc"],
+  ["lemonperch", "perch", "LEMON PERCH", "#f0e646", "~#5a8c3c"], ["bloodperch", "perch", "BLOOD PERCH", "#a01e32", "~#2c1a1a"],
+  ["auroratrout", "rainbow", "AURORA TROUT", "#5ad2b4", "~#c88cf0"], ["obsidtrout", "rainbow", "OBSIDIAN TROUT", "#2c2834", "*#ff6e8c"],
+  ["jadepike", "pike", "JADE PIKE", "#3cb478", "*#b4f0c8"], ["albinopike", "pike", "ALBINO PIKE", "#f6eee6", "#f0a0a0"],
+  ["chococat", "catfish", "CHOCOLATE CATFISH", "#6e4a30", "#a07a50"], ["goldcat", "catfish", "GOLDEN CATFISH", "#ffd246", "*#c8962c"],
+  ["rubysalmon", "salmon", "RUBY SALMON", "#e63c50", "*#ffd2dc"], ["silverking", "salmon", "SILVER KING", "#f0f4fa", "~#9aa6c8"],
+  ["bluecrab2", "shorecrab", "BLUE SHORE CRAB", "#4a8cdc", "#9ad2f0"], ["calicocrab", "shorecrab", "CALICO CRAB", "#f0ecdc", "*#ff8c32"],
+  ["pearlhermit", "hermit", "PEARL HERMIT", "#f0eaf4", "#c8b4dc"], ["neonhermit", "hermit", "NEON HERMIT", "#5af06e", "*#ff5ad2"],
+  ["candyprawn", "prawn", "CANDY PRAWN", "#ff8cc8", "~#ffffff"], ["glassprawn", "prawn", "GLASS PRAWN", "#d2f0f4", "#ffffff"],
+  ["spotpuffer", "puffer", "SPOTTED PUFFER", "#f0dc8c", "*#2c222c"], ["rainpuffer", "puffer", "RAINBOW PUFFER", "#c88cf0", "~#5ad2b4"],
+  ["speckeel", "eel", "SPECKLED EEL", "#5a6a3c", "*#f0e6a0"], ["goldeel", "eel", "GOLDEN EEL", "#ffbe3c", "#fff0a0"],
+];
+const MORPH = {}; MORPHS.forEach(([id, sp, name, c1, c2], i) => { MORPH[id] = { id, sp, name, c1, c2, rare: i % 2 }; ITEMS["m_" + id] = { name, kind: "morph", sell: Math.max(300, (ITEMS["f_" + sp] ? ITEMS["f_" + sp].sell : 60) * (i % 2 ? 8 : 5)), morph: id }; });
+const BREEDS = [...new Set(MORPHS.map(m => m[1]))];
+const HATCH_DAYS = 3, MORPH_P = 0.35, RARE_P = 0.3;
+Object.assign(RESTORE, { hatch: { name: "THE HATCHERY", ruin: "THE OLD HATCHERY. TANKS AND TROUGHS, ALL DRY. SOMEONE BRED FISH HERE ONCE.", need: [["wood", 120], ["stone", 120], ["glass", 20], ["copper", 10]], sd: 2500, done: "THE HATCHERY TANKS ARE FULL AGAIN. PUT IN A PAIR OF FISH AND SEE WHAT HATCHES." } });
+function morphIcon(id) { const m = MORPH[id], key = "morph_" + id; if (ISPR[key]) return ISPR[key]; const f = Object.assign({}, FISH[m.sp], { c1: m.c1, c2: m.c2 }); return pix(key, fishRows(f), fishPal(f)); }
+const _itemIcon8c = itemIcon;
+itemIcon = function (id) { return id.startsWith("m_") && MORPH[id.slice(2)] ? morphIcon(id.slice(2)) : _itemIcon8c(id); };
+const _isleSave8c = isleSave;
+isleSave = function () { const g_ = _isleSave8c(); if (!g_.hatch) { g_.hatch = [null, null, null, null]; g_.morphs = {}; } return g_; };
+const _isleArt8c = isleArt;
+isleArt = function () { _isleArt8c(); if (!IART.hatch_r) IART.hatch_r = artBuilt("HATCHERY", "#5a7a8a", "#d2dcdc"); };
+const _buildArea8c = buildArea;
+buildArea = function (id) { const m = _buildArea8c(id); if (id === "lagoon") m.objs.forEach(o => { if (o.k === "hatch") o.act = { kind: "restore", b: "hatch" }; }); return m; };
+const _restoredAct8c = restoredAct;
+restoredAct = function (b) { if (b === "hatch") { ISLE.list = { kind: "hatch", sel: 0, top: 0 }; play("select"); } else _restoredAct8c(b); };
+function hatchCollect(i) {
+  const s = isleSave(), T_ = s.hatch[i], r = Math.random(), morphs = MORPHS.filter(m => m[1] === T_.sp);
+  let out = "f_" + T_.sp, isMorph = false;
+  if (r < MORPH_P) { const m = morphs[Math.random() < RARE_P ? 1 : 0]; out = "m_" + m[0]; isMorph = true; }
+  if (invAdd(out, 1)) { toast("YOUR BAG IS FULL"); return; }
+  T_.day = DAYN(s);
+  if (isMorph) { const id = out.slice(2), first = !s.morphs[id]; s.morphs[id] = 1; isleSay(["THE EGGS HAVE HATCHED... ONE OF THEM IS A DIFFERENT COLOUR!", "A " + MORPH[id].name + "!" + (first ? " (NEW: " + Object.keys(s.morphs).length + " OF " + MORPHS.length + " MORPHS)" : "")]); play("fanfare"); }
+  else { toast("+1 " + FISH[T_.sp].name + " FROM THE HATCHERY", GOLD); play("chime"); }
+  saveStore();
+}
+const _listRows8c = listRows;
+listRows = function () {
+  const L = ISLE.list, s = isleSave(), day = DAYN(s);
+  if (L.kind === "hatch") {
+    const rows = s.hatch.map((T_, i) => {
+      if (!T_) return { icon: "pot", name: "TANK " + (i + 1) + ": EMPTY", info: "PUT IN A PAIR OF ONE KIND OF FISH. KINDS THAT CAN HATCH MORPHS: " + BREEDS.map(sp => FISH[sp].name).join(", ") + ".", ok: true, act: () => { ISLE.list = { kind: "hatchpick", tank: i, sel: 0, top: 0 }; } };
+      const ready = day - T_.day >= HATCH_DAYS;
+      return { icon: "f_" + T_.sp, name: "TANK " + (i + 1) + ": " + FISH[T_.sp].name + (ready ? " (READY!)" : " (" + (HATCH_DAYS - (day - T_.day)) + " DAYS)"), info: ready ? "THE EGGS HAVE HATCHED. TAKE THE YOUNG FISH." : "THE PAIR IS SETTLING IN. EGGS HATCH EVERY " + HATCH_DAYS + " DAYS. PICK THIS ROW TO TAKE THE PAIR BACK OUT.", ok: true,
+        act: () => { if (ready) hatchCollect(i); else isleSay(["TAKE THE PAIR OF " + FISH[T_.sp].name + " BACK OUT?"], { opts: ["TAKE THEM", "LEAVE THEM"], act: [() => { if (invAdd("f_" + T_.sp, 2)) { toast("YOUR BAG IS FULL"); return; } s.hatch[i] = null; play("select"); }, () => play("tick")] }); } };
+    });
+    rows.push({ icon: "m_" + MORPHS[0][0], name: "MORPH COLLECTION (" + Object.keys(s.morphs).length + "/" + MORPHS.length + ")", info: "EVERY COLOUR MORPH YOU'VE HATCHED.", ok: true, act: () => { ISLE.list = { kind: "morphs", sel: 0, top: 0 }; } });
+    return rows;
+  }
+  if (L.kind === "hatchpick") return BREEDS.map(sp => { const n = invCount("f_" + sp); return { icon: "f_" + sp, name: FISH[sp].name + " (" + n + ")", info: n >= 2 ? "PUT A PAIR OF " + FISH[sp].name + " IN TANK " + (L.tank + 1) + "." : "YOU NEED TWO " + FISH[sp].name + ". " + whereTxt(FISH[sp]) + ".", ok: n >= 2, act: () => { invTake("f_" + sp, 2); s.hatch[L.tank] = { sp, day: day }; ISLE.list = { kind: "hatch", sel: L.tank, top: 0 }; toast("A PAIR OF " + FISH[sp].name + " IN TANK " + (L.tank + 1), GOLD); saveStore(); } }; });
+  if (L.kind === "morphs") return MORPHS.map(([id, sp, name]) => s.morphs[id] ? { icon: "m_" + id, name, info: "A COLOUR MORPH OF THE " + FISH[sp].name + (MORPH[id].rare ? ". A RARE ONE." : "."), ok: true, act: () => {} } : { icon: "f_" + sp, name: "???", info: "A MORPH OF THE " + FISH[sp].name + " YOU HAVEN'T HATCHED YET.", ok: false, act: () => {} });
+  return _listRows8c();
+};
+Object.assign(LIST_TITLE, { hatch: "THE HATCHERY", hatchpick: "PICK A PAIR", morphs: "MORPH COLLECTION" });
+const _listPick8c = listPick;
+listPick = function () { const L = ISLE.list; if (L && ["hatch", "hatchpick", "morphs"].includes(L.kind)) { const r = listRows()[L.sel]; if (r && r.ok) { r.act(); play("select"); } else play("miss"); return; } _listPick8c(); };
+const _listKey8c = listKey;
+listKey = function (e) { const L = ISLE.list; if (L && (L.kind === "hatchpick" || L.kind === "morphs") && ["Escape", "Tab"].includes(e.code)) { e.preventDefault(); ISLE.list = { kind: "hatch", sel: 0, top: 0 }; play("back"); return; } _listKey8c(e); };
+const _newDay58c = newDay5;
+newDay5 = function (s) { _newDay58c(s); if (s.rest.hatch === "done" && s.hatch.some(T_ => T_ && DAYN(s) - T_.day === HATCH_DAYS)) s.news.push("SOMETHING HATCHED AT THE HATCHERY."); };

@@ -86,6 +86,9 @@ Eight **festivals**, two each season: the Tide Fair (spring 13), Kite Day (sprin
 Lantern Night (summer 25), Salvage Day (fall 16), the Harvest Supper (fall 27), Ice Fishing Morning (winter 8) and the
 Midwinter Feast (winter 25). Everyone gathers, and the booth runs the event. Ribbons pay sand dollars, and gold wins a
 decoration you can't get any other way. Festival fish only bite on their day.
+Restore the **hatchery** by the Lagoon to breed fish. Put a pair of one kind in a tank, and every three days they have
+young. Sometimes that's one of 30 colour morphs (each kind has a common morph and a rare one). The hatchery keeps your
+Morph Collection.
 
 ## Save codes
 

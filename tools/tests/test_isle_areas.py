@@ -60,7 +60,7 @@ async def main():
         await page.keyboard.press("KeyE")
         r = await ev("[_d[2], isleSave().inv.filter(Boolean).reduce((a, q) => a + q[1], 0)]")
         check("dig with the hoe: salvage", r[0] == 1 and r[1] > n0, [n0, r])
-        r = await ev("""(() => { const R = Math.random, S = stormNow; stormNow = () => true; Math.random = () => 0.1; const d = [10, 10, 0]; digUp(d); Math.random = R; stormNow = S; return invCount('spyglass'); })()""")
+        r = await ev("""(() => { const n0 = invCount('spyglass'), R = Math.random, S = stormNow; stormNow = () => true; Math.random = () => 0.1; const d = [10, 10, 0]; digUp(d); Math.random = R; stormNow = S; return invCount('spyglass') - n0; })()""")
         check("a storm out at sea brings rarer salvage", r == 1, r)
         r = await ev("[waterKind(700, 520), (() => { const R = Math.random; Math.random = () => 0.01; const s = Object.assign({}, isleSave(), { min: 1300 }); const sp = pickFish('sea', s); Math.random = R; return sp; })()]")
         check("the Captain lives off Shipwreck Beach", r[1] == "captain", r)
