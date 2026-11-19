@@ -50,7 +50,7 @@ async def main():
 
         # which fish can be caught now: everything not waiting for an area or festival still to come
         r = await ev("""(() => { const got = new Set(), base = { year: 1, day: 3 };
-          for (const where of ['sea', 'deep', 'lake', 'river', 'pool', 'seapot', 'freshpot'])
+          for (const where of ['sea', 'deep', 'lake', 'river', 'pool', 'seapot', 'freshpot', 'cave1', 'cave2', 'cave3', 'cave4', 'cave5'])
             for (let se = 0; se < 4; se++) for (const min of [365, 400, 700, 1100, 1300]) for (const wx of ['sun', 'rain', 'snow']) for (const day of [3, 14]) {
               const s = Object.assign({}, base, { season: se, min, day }), old = weatherOf; weatherOf = () => wx;
               for (let k = 0; k < 400; k++) { const id = pickFish(where, s); if (id) got.add(id); }
@@ -58,7 +58,7 @@ async def main():
           const want = ISLE_FISH.filter(f => !LATER.test(f[3])).map(f => f[0]);
           return { missing: want.filter(id => !got.has(id)), n: want.length, extra: [...got].filter(id => !want.includes(id)) }; })()""")
         check("every fish that should be catchable now can be (%d)" % r["n"], not r["missing"] and not r["extra"], r)
-        check("137 catchable now; caves, marsh, wreck, Gull Rock and festivals wait", r["n"] == 137, r["n"])
+        check("163 catchable now (the caves opened in part 7); marsh, wreck, Gull Rock and festivals wait", r["n"] == 163, r["n"])
 
         # north from the Port to the Lagoon
         await ev("(() => { ISLE.px = 600; ISLE.py = 20; })()")
