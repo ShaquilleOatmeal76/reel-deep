@@ -32,6 +32,7 @@ const dark = document.createElement("canvas");
 dark.height = LH;
 function resize() {                                    // the ocean fills whatever shape the window is, from phone portrait to widescreen
   if (S && S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleResize(); return; }   // Driftwood Isle has its own screen (island.js)
+  if (S && S.state === "siege" && typeof SG !== "undefined" && SG) { siegeResize(); return; }   // Siege of the Deep: 480x270 (siege.js)
   const a = window.innerWidth / window.innerHeight;
   LW = a >= UW / LH ? clamp(Math.round(LH * a), UW, WW) : UW;
   OX = Math.floor((LW - UW) / 2);
@@ -775,6 +776,7 @@ function update(dt) {
   if (S.state === "flip" && FLIP) { flipUpdate(dt); S.shake = Math.max(0, (S.shake || 0) - dt); return; }
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartUpdate(dt); return; }   // FIN PRIX (finprix.js)
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleUpdate(dt); return; }   // Driftwood Isle (island.js)
+  if (S.state === "siege" && typeof SG !== "undefined" && SG) { siegeUpdate(dt); return; }   // Siege of the Deep (siege.js)
   if (S.state === "boss" && BOSS) { bossUpdate(dt); S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt); return; }
   S.immune = Math.max(0, S.immune - dt); S.flash = Math.max(0, S.flash - dt);
   if (S.ring !== null) { S.ring += dt; if (S.ring > 0.5) S.ring = null; }
@@ -1838,6 +1840,7 @@ function drawReef(cam, t) {
 function draw() {
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { drawKart(); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { drawIsle(); return; }
+  if (S.state === "siege" && typeof SG !== "undefined" && SG) { drawSiege(); return; }
   if (S.state === "boss" && BOSS) { drawBoss(); return; }
   if (S.state === "flip" && FLIP) { drawFlip(); return; }
   const t = T, cam = S.cam, wl = Math.round(-cam), srcY = Math.max(0, Math.round(cam));
@@ -4588,6 +4591,7 @@ canvas.addEventListener("pointerdown", e => {
   const [rx, ly] = pointerPos(e), lx = rx - OX;          // rx: across the whole screen; lx: inside the menu column
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartTouch(rx, ly, true); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleTouch(e); return; }
+  if (S.state === "siege" && typeof SG !== "undefined" && SG) { siegeTouch(e); return; }
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
   if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) { if (LURES[S.lure][0] !== "angler") flipPulse(); } else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
@@ -4597,7 +4601,7 @@ canvas.addEventListener("pointerdown", e => {
   if (S.state !== "fight") { S.touchX = KON === "mirror" ? LW - rx : rx; S.drift = 0; }
   tapAction();
 });
-canvas.addEventListener("pointermove", e => { if (BOSS && BOSS.touch) BOSS.touch = pointerPos(e); if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
+canvas.addEventListener("pointermove", e => { if (S && S.state === "siege" && typeof SG !== "undefined" && SG) { siegeMove(e); return; } if (BOSS && BOSS.touch) BOSS.touch = pointerPos(e); if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
 window.addEventListener("pointerup", e => {
   if (!S) return;
   S.touchX = null;
@@ -4633,6 +4637,7 @@ window.addEventListener("keydown", e => {
   if (e.repeat) return;
   if (c === "KeyF") { toggleFullscreen(); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleKey(e, true); return; }   // Driftwood Isle
+  if (S.state === "siege" && typeof SG !== "undefined" && SG) { siegeKey(e, true); return; }   // Siege of the Deep
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartKey(e, true); if (["Space", "ShiftLeft", "ShiftRight"].includes(c)) e.preventDefault(); return; }   // FIN PRIX
   if (S.state === "flip" && FLIP && FLIP.test && c === "Escape") { flipDrone(false); FLIP = null; newDive(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
