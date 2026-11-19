@@ -635,10 +635,11 @@ function pulse() {                                       // scatter everything n
   if (S.state === "boss") { bossPulse(); return; }
   if (S.state === "flip") { if (LURES[S.lure][0] !== "angler") flipPulse(); return; }   // the Angler's Hook can't stun anything over there
   if (LURES[S.lure][0] === "angler") { release(); return; }
-  if (!["down", "rise"].includes(S.state) || S.pulses <= 0) return;
+  if (!["down", "rise"].includes(S.state)) return;
+  if (nearCrack()) { S.pulsed = true; knockCrack(); if (S.state === "flip" || S.toFlip || S.pulses <= 0) return; }   // knocking on the crack is free (Nov 19, 2026)
+  if (S.pulses <= 0) return;
   S.pulsed = true;                                         // for the NO PULSES dive bet
   if (!S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; startBoss(false); return; }   // knock on the eye with an empty hook
-  if (store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) { knockCrack(); if (S.state === "flip" || S.toFlip) { S.pulses--; return; } }   // knock on the crack
   S.pulses--; S.ring = 0; S.immune = Math.max(S.immune, 0.5);
   play("pulse");
   for (const [i, f] of visible()) {
@@ -654,9 +655,9 @@ function pulse() {                                       // scatter everything n
 // dive, even after the hook fills (the line goes back down). With an empty hook it still wakes the Sleeper and knocks on the crack.
 function release() {
   const live = ["down", "rise"].includes(S.state), full = S.fullUp && ["turn", "up"].includes(S.state);
+  if (live && nearCrack()) { S.pulsed = true; knockCrack(); return; }      // free, like the pulse
   if (S.pulses <= 0 || !(live || full)) return;
   if (live && !S.catch.length && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (46 + OX)) < 34 && S.eye > 0.3) { S.pulses--; S.pulsed = true; startBoss(false); return; }
-  if (live && store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16) { knockCrack(); if (S.state === "flip" || S.toFlip) { S.pulses--; S.pulsed = true; } return; }
   if (!S.catch.length) { play("miss"); return; }
   const c = S.catch.pop();
   if (c.rise) S.riseN = Math.max(0, (S.riseN || 0) - 1);
@@ -724,6 +725,7 @@ function hookCheck() {                                   // whatever the hook is
     const legend = f.id !== "jelly" && SPEC[f.id][7];
     if (f.id === "jelly") { play("zap"); S.flash = 0.2; S.rising = false; S.stung = true; S.fullUp = false; store.ach.stung++; setState("turn", "ZAPPED!"); }     // dive over; you keep what's hooked
     else if (SHARKS.includes(f.id) && !fromBehind(f)) sharkBite(i, f);
+    else if (S.catch.length >= C.CAPACITY) { if (!C.FIXED.includes(f.id)) scare(f, f.x + 6 >= S.hx ? 1 : -1, 0.6); continue; }   // the crack is calling: a full hook bumps fish off
     else if (legend && S.catch.some(c => SPEC[c[0]][7])) {
       if (C.FIXED.includes(f.id)) continue;
       scare(f, f.x + 10 >= S.hx ? 1 : -1, 2.0, true);
@@ -801,6 +803,7 @@ function update(dt) {
     const m = S.hy / M, z = zoneOf(m);
     S.reached = Math.max(S.reached, m);
     if (ZRANK[z] > ZRANK[S.zoneSeen]) { S.zoneSeen = z; S.popups.push([ZONES[z][0], 2.0, CYAN]); play("chime", 0.5); }
+    if (S.state === "down" && crackCalls()) say("calls", "THE CRACK CALLS THE LIGHT", "#c8a0ff", 3);
     if (S.frenzy && m > S.frenzy[0] - 10) say("frenzy", "FEEDING FRENZY!", ORANGE, 2.6);
     if (S.whaleAt && m > S.whaleAt - 22) {
       const d = S.rng.choice([-1, 1]);
@@ -809,10 +812,11 @@ function update(dt) {
     }
     hookCheck();
     if (S.state === "down" && S.hy >= C.BOTTOM_M * M) {
-      S.hy = C.BOTTOM_M * M; S.bottom = true; play("chime");
+      S.freeRide = S.catch.length >= C.CAPACITY;          // only possible when the crack called you down
+      S.hy = C.BOTTOM_M * M; S.bottom = !S.freeRide; play("chime");
       if (!S.catch.length) S.emptyFloor = true;
-      S.rising = S.catch.length < C.CAPACITY;            // room left on the hook: ride up slowly and keep fishing
-      setState("turn", "TOUCHED BOTTOM!");
+      S.rising = S.catch.length < C.CAPACITY || S.freeRide;   // room left on the hook: ride up slowly and keep fishing
+      setState("turn", S.freeRide ? "THE CRACK IS NEAR" : "TOUCHED BOTTOM!");
     }
     S.cam += ((S.hy - 78) - S.cam) * Math.min(1, dt * 6);
   } else if (S.state === "rise") {                         // the slow ride up from the floor: still catching until the hook is full
@@ -821,6 +825,7 @@ function update(dt) {
     S.path.length = Math.max(0, Math.min(S.path.length, Math.floor(S.hy / 8) + 1));
     hookCheck();
     S.cam += ((S.hy - 128) - S.cam) * Math.min(1, dt * 6);
+    if (S.state === "rise" && S.freeRide && S.hy < (C.MAX_M - 26) * M) { S.fullUp = true; setState("up"); }   // past the crack with a full hook: reel in
     if (S.state === "rise" && S.hy <= 2) beginHaul();
   } else if (S.state === "fight") {
     if (fightTick(S.fight, dt)) loseFight("TOO SLOW! GOT AWAY");
@@ -871,7 +876,8 @@ function land(i, f) {
   else if (f.id === "poop") { S.flash = 0.5; S.popups.push(["MYTHIC!", 3, "#c8a0ff"], ["WHAT IS THAT?!", 3, "#c8a0ff"]); play("fanfare"); }
   else if (legend) { S.flash = 0.35; S.popups.push(["LEGENDARY!", 2.4, LEGEND], [SPEC[f.id][1], 2.4, LEGEND]); play("fanfare"); }
   else if (f.tr) { S.flash = 0.25; S.popups.push(["TROPHY " + SPEC[f.id][1] + "!", 2.2, TROPHY]); play("chime"); }
-  if (S.catch.length >= C.CAPACITY) { S.fullUp = true; setState("turn", "FULL HOOK"); }   // fullUp: the Angler's Hook can still let one go
+  if (S.catch.length >= C.CAPACITY && crackCalls()) { S.popups.push(["FULL HOOK. KEEP SINKING", 2.4, "#c8a0ff"]); if (S.state !== S.resume) setState(S.resume); }
+  else if (S.catch.length >= C.CAPACITY) { S.fullUp = true; setState("turn", "FULL HOOK"); }   // fullUp: the Angler's Hook can still let one go
   else {
     if (!legend && !f.tr) S.popups.push(["HOOKED " + S.catch.length + "/" + C.CAPACITY, 1.0, GOLD]);
     if (S.state !== S.resume) setState(S.resume);
@@ -988,7 +994,7 @@ function beginHaul() {
   if (record) store.best = total;
   saveStore();
   const n = rows.length + extra.length;
-  S.haul = { rows, extra, n, total, mult, sets, news, shown: 0, record, fanfare: false, end: 0.5 + n * 0.42 + 0.3 };
+  S.haul = { deep: Math.floor(S.reached), rows, extra, n, total, mult, sets, news, shown: 0, record, fanfare: false, end: 0.5 + n * 0.42 + 0.3 };
   setState("haul"); splash(LW / 2, 0, 14); play("plop");
 }
 function finishDive() {
@@ -1112,6 +1118,11 @@ const TEST_FLIP = (() => { try { const q = new URLSearchParams(location.search);
 const TEST_END = (() => { try { const q = new URLSearchParams(location.search); return q.has("flipside") ? (q.get("flipside") === "top" ? 2 : 1) : 0; } catch (e) { return 0; } })();
 const flipZoneAt = m => { let z = 0; FLIP_Z.forEach((q, i) => { if (m >= q[1]) z = i; }); return z; };
 const crackOpen = () => store.sec.beat || LURES[S.lure][0] === "glow";      // the first time, it only opens for a light
+const nearCrack = () => store.sec.sleeper && S.hy > (C.MAX_M - 20) * M && Math.abs(S.hx - (OX + 108)) < 16;
+// The crack calls the light (Nov 19, 2026): before you've beaten the game, on the glow lure, once you reach the Bone Yard a
+// full hook no longer turns you back. Extra fish bump off and you keep sinking, and a full hook at the floor rides up slowly
+// past the crack so you can knock. A floor reached that way doesn't count as touching bottom (no bonus, no floor bets).
+const crackCalls = () => store.sec.sleeper && !store.sec.beat && LURES[S.lure][0] === "glow" && S.reached >= ZONES[7][1];
 function knockCrack() {                                       // a pulse at the crack, from a dive
   if (!crackOpen()) { say("crack", "IT WANTS A LIGHT.", "#c8a0ff", 2.6); play("miss"); return; }
   S.flash = 0.5; play("thunder", 0.6);
@@ -1932,7 +1943,7 @@ function draw() {
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
     if (bt && !bt.got && S.prepared) { const [bx, by] = bottleXY(bt, cam, t); lights.push([Math.floor(bx + 3), Math.floor(by + 4), Math.round(20 + 4 * Math.sin(t * 4))]); }   // a bottle glows
     if (typeof raftLights === "function") raftLights(lights, cam, t);
-    if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), 10]);       // the crack glows, faintly
+    if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), crackCalls() ? Math.round(18 + 4 * Math.sin(t * 3)) : 10]);       // the crack glows, faintly
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
     for (const gl of DATA.glows) if (gl[1] > cam - 20 && gl[1] < cam + LH + 20) lights.push([gl[0] - BG_O + OX, Math.floor(gl[1] - cam), gl[2]]);   // crystals and vent mouths
     dg.globalCompositeOperation = "destination-out";
@@ -2042,7 +2053,7 @@ const isLeg = c => !!SPEC[c[0]][7];
 const BETS = [
   ["over", "OVER {L} LB", "SCORE OVER THE LINE", 0.5, (d, L) => d.total > L],
   ["under", "UNDER {L} LB", "3 FISH BELOW 400 M", 0.45, (d, L) => d.total >= L ? false : FULL(d) && d.catch.every(c => (c[3] || 0) >= 400) ? true : null],
-  ["floor", "TOUCH FLOOR", "REACH THE SEA FLOOR", 0.3, d => d.bottom],
+  ["floor", "TOUCH FLOOR", "FLOOR IS AT 1158 M", 0.3, d => d.bottom],
   ["trophy", "A TROPHY", "LAND A TROPHY FISH", 0.25, d => d.catch.some(c => c[2])],
   ["legend", "A LEGENDARY", "LAND A LEGENDARY", 0.08, d => d.catch.some(isLeg)],
   ["over2", "OVER {2L} LB", "DOUBLE THE LINE", 0.12, (d, L) => d.total > 2 * L],
@@ -2057,20 +2068,20 @@ const BETS = [
   ["heavylast", "HEAVY LAST", "BIGGEST FISH LAST", 0.33, d => FULL(d) && d.catch[2][1] >= Math.max(...d.catch.map(c => c[1]))],
   ["d600", "PAST 600 M", "DIVE BELOW 600 M", 0.5, d => d.reached >= 600],
   ["d900", "PAST 900 M", "DIVE BELOW 900 M", 0.35, d => d.reached >= 900],
-  ["floor3", "FLOOR+3 FISH", "FLOOR, FULL HOOK", 0.15, d => d.bottom && FULL(d)],
+  ["floor3", "FLOOR+3 FISH", "1158 M, FULL HOOK", 0.15, d => d.bottom && FULL(d)],
   ["deephook", "DEEP HOOK", "ALL 3 BELOW 500 M", 0.2, d => FULL(d) && d.catch.every(c => (c[3] || 0) >= 500)],
   ["rise", "ON THE RISE", "CATCH ON THE WAY UP", 0.2, d => d.riseN > 0],
   ["tight", "TIGHT HOOK", "3 FISH WITHIN 50 M", 0.25, d => FULL(d) && Math.max(...d.catch.map(c => c[3] || 0)) - Math.min(...d.catch.map(c => c[3] || 0)) <= 50],
-  ["z3", "WRECK FISH", "FROM THE WRECK", 0.4, ZONE_N(3)],
-  ["z4", "ABYSS FISH", "FROM THE ABYSS", 0.35, ZONE_N(4)],
-  ["z5", "CAVE FISH", "FROM CRYSTAL CAVES", 0.3, ZONE_N(5)],
-  ["z6", "VENT FISH", "FROM THE VENTS", 0.25, ZONE_N(6)],
-  ["z7", "BONE FISH", "FROM THE BONE YARD", 0.2, ZONE_N(7)],
-  ["z8", "TRENCH FISH", "FROM THE TRENCH", 0.15, ZONE_N(8)],
-  ["z9", "FLOOR FISH", "FROM THE FLOOR ZONE", 0.12, ZONE_N(9)],
+  ["z3", "WRECK FISH", "WRECK, 320-440 M", 0.4, ZONE_N(3)],
+  ["z4", "ABYSS FISH", "ABYSS, 440-570 M", 0.35, ZONE_N(4)],
+  ["z5", "CAVE FISH", "CAVES, 570-700 M", 0.3, ZONE_N(5)],
+  ["z6", "VENT FISH", "VENTS, 700-830 M", 0.25, ZONE_N(6)],
+  ["z7", "BONE FISH", "BONE YD, 830-960 M", 0.2, ZONE_N(7)],
+  ["z8", "TRENCH FISH", "TRENCH, 960-1110 M", 0.15, ZONE_N(8)],
+  ["z9", "FLOOR FISH", "FLOOR ZONE, 1110 M+", 0.12, ZONE_N(9)],
   ["onezone", "ONE ZONE", "3 FISH, SAME ZONE", 0.12, d => FULL(d) && new Set(d.catch.map(c => SPEC[c[0]][2])).size === 1],
   ["tour", "3 ZONES", "3 FISH, 3 ZONES", 0.3, d => d.sets.some(x => x[1] === "GRAND TOUR")],
-  ["deeptrio", "DEEP TRIO", "3 FROM BONE YARD+", 0.08, d => d.sets.some(x => x[1] === "DEEP TRIO")],
+  ["deeptrio", "DEEP TRIO", "3 FISH FROM 830 M+", 0.08, d => d.sets.some(x => x[1] === "DEEP TRIO")],
   ["trophy2", "2 TROPHIES", "TWO TROPHY FISH", 0.04, d => d.catch.filter(c => c[2]).length >= 2],
   ["pair", "A PAIR", "TWO OF ONE SPECIES", 0.15, d => d.catch.length - new Set(d.catch.map(c => c[0])).size >= 1],
   ["triple", "3 OF A KIND", "3 OF ONE SPECIES", 0.02, d => FULL(d) && new Set(d.catch.map(c => c[0])).size === 1],
@@ -2083,8 +2094,8 @@ const BETS = [
   ["pb", "NEW BEST", "BEAT YOUR BEST", 0.04, d => d.total > d.best],
   ["top10", "TODAY TOP 10", "MAKE TODAY'S TOP 10", 0.25, d => !d.board ? null : d.total > 0 && (d.board.length < 10 || d.total > d.board[9])],
   ["beat1", "TODAY'S #1", "BEAT TODAY'S LEADER", 0.06, d => !d.board ? null : d.total > 0 && (!d.board.length || d.total > d.board[0])],
-  ["floortr", "FLOOR+TROPHY", "FLOOR AND A TROPHY", 0.08, d => d.bottom && d.catch.some(c => c[2])],
-  ["floorlg", "FLOOR+LEGEND", "FLOOR AND A LEGEND", 0.03, d => d.bottom && d.catch.some(isLeg)],
+  ["floortr", "FLOOR+TROPHY", "1158 M AND A TROPHY", 0.08, d => d.bottom && d.catch.some(c => c[2])],
+  ["floorlg", "FLOOR+LEGEND", "1158 M AND A LEGEND", 0.03, d => d.bottom && d.catch.some(isLeg)],
   ["lgtr", "LEGEND+TROPHY", "ONE OF EACH", 0.02, d => d.catch.some(isLeg) && d.catch.some(c => c[2] && !isLeg(c))],
   ["trbounty", "TROPHY+BOUNTY", "A TROPHY AND BOUNTY", 0.03, d => d.catch.some(c => c[2]) && d.catch.some(c => c[0] === d.bounty)],
   ["newtr", "NEW+TROPHY", "NEW SPECIES, TROPHY", 0.05, d => d.newN > 0 && d.catch.some(c => c[2])],
@@ -2742,7 +2753,7 @@ function drawBet() {                                         // betting on the n
   text("MAX " + MAX_STAKE + "  WIN " + Math.floor(b.stake * b.opts[b.sel][2]), 60, 148, 1, GREY, "center", null);
   const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 5 && !blk;
   box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
-  text("NEW BETS EVERY DIVE", 60, 180, 1, "#5a8a74", "center", null);
+  text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids the bet
   text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
   g.restore();
 }
@@ -3107,15 +3118,17 @@ function drawHud() {
   if (["down", "turn", "up", "fight", "rise"].includes(st)) {
     text(Math.floor(S.hy / M) + " M", 60, 9, 2);
     text("FISH " + S.catch.length + "/" + C.CAPACITY, 60, 23, 1, S.catch.length < C.CAPACITY ? GOLD : LIME);
+    if (S.reached - S.hy / M > 3) text("DEEPEST " + Math.floor(S.reached) + " M", 60, 33, 1, "#8cc8dc");   // how far you got, once you're on the way up
     const gx = LW - 6 - OX, gy = 34, gh = 150;                   // depth gauge
     rect(INK, gx - 1, gy - 1, 5, gh + 2);
     ZONES.forEach(([, a, b], zi) => rect(ZONE_COL[zi], gx, gy + Math.floor(a / C.MAX_M * gh), 3, Math.floor((b - a) / C.MAX_M * gh) + 1));
     const my = gy + Math.floor(S.hy / M / C.MAX_M * gh);
     poly(WHITE, [[gx - 6, my - 3], [gx - 2, my], [gx - 6, my + 3]]);
+    rect(WHITE, gx - 2, gy + Math.floor(S.reached / C.MAX_M * gh), 7, 1);     // the deepest point this dive
     if (tav().map === weekString()) { const by = gy + Math.floor(bootDepth() / C.MAX_M * gh); rect(GOLD, gx - 3, by - 1, 2, 3); }   // the treasure map's mark
     const ang = LURES[S.lure][0] === "angler";
     if (st === "down" || st === "rise" || (ang && S.fullUp && (st === "up" || st === "turn"))) {   // the pulse button (DROP on the Angler's Hook, which still works on a full hook)
-      const have = S.pulses > 0, n = LURES[S.lure][5];
+      const have = S.pulses > 0 || (st !== "up" && st !== "turn" && nearCrack()), n = LURES[S.lure][5];
       box(2 - OX, 176, 36, 22, have ? CYAN : "#505678"); text(ang ? "DROP" : "PULSE", 20 - OX, 183, 1, have ? CYAN : "#6e7496", "center", null);
       for (let k = 0; k < n; k++) rect(k < S.pulses ? CYAN : "#3c4264", 20 - OX - n * 4 + k * 8 + 1, 190, 6, 3);
       if (st === "down") { box(2 - OX, 2, 12, 10); text("<", 8 - OX, 7, 1, WHITE, "center", null); }
@@ -3160,7 +3173,7 @@ function drawHaulBox() {                                     // the haul screen,
   else if (st === "haul") {
     const h = S.haul;
     box(6, 84, 108, 112, CYAN);
-    text("THE HAUL", 60, 92, 1, CYAN, "center", null);
+    text("HAUL", 10, 92, 1, CYAN, "left", null); text((h.deep || 0) + " M DEEP", 110, 92, 1, "#8cc8dc", "right", null);
     const rows = h.rows.slice(0, h.shown);
     rows.forEach(([fid, lb, tag, tr], i) => {
       const y = 104 + i * 10, name = ((SPEC[fid][7] ? "!" : tr ? "*" : "") + SPEC[fid][1]).slice(0, tag ? 9 : lb >= 100 ? 12 : 13);
@@ -3978,6 +3991,7 @@ function drawBetWide() {
   text(b.stake, px + 59, 69, 2, WHITE, "center");
   text("WIN " + Math.floor(b.stake * b.opts[b.sel][2]), px + 59, 103, 1, GOLD, "center", null);
   text("NEW BETS", px + 59, 150, 1, "#5a8a74", "center", null); text("EVERY DIVE", px + 59, 160, 1, "#5a8a74", "center", null);
+  text("HAUL UNDER " + Math.ceil(JUNK_K * betLine()) + " LB", px + 59, 174, 1, "#5a8a74", "center", null); text("= STAKE BACK", px + 59, 184, 1, "#5a8a74", "center", null);
   closeLine("TAP HERE FOR NO BET");
 }
 function betTapWide(rx, ly) {
@@ -4219,7 +4233,7 @@ function drawHaulWide(h, t) {
   g.save(); g.translate(-OX, 0);
   const x = Math.floor(LW / 2) - 114, w = 228;
   box(x, 82, w, 114, CYAN);
-  text("THE HAUL", x + w / 2, 90, 1, CYAN, "center", null);
+  text("THE HAUL", x + 8, 90, 1, CYAN, "left", null); text("DEEPEST " + (h.deep || 0) + " M", x + w - 6, 90, 1, "#8cc8dc", "right", null);
   const rows = h.rows.slice(0, h.shown);
   rows.forEach(([fid, lb, tag, tr], i) => {
     const y = 103 + i * 12;
