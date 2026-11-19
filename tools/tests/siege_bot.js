@@ -2,11 +2,12 @@
 // best free pad, upgrades what it has, calls waves when ready. skill 0..1: how good its choices are.
 window.siegeBot = function (id, skill, maxT, opts) {
   opts = opts || {};
-  const Q = window.SIEGE; Q.startSiege(id, { test: true });
+  const Q = window.SIEGE; Q.startSiege(id, { test: true, kit: opts.kit || 0, xp: opts.xp || 0 });
   const G = () => Q.SG;
   const cover = (x, y, r) => { let n = 0; for (const pl of G().R.routes) for (let s = 0; s < pl.total; s += 6) { const [px, py] = Q.atS(pl, s); if (Q.inRange(x, y - 4, px, py, r)) n++; } return n; };
   const order = opts.order || [0, 1, 0, 3, 2, 0, 6, 1, 3];
   let t = 0, step = 0;
+  if (G().hero && opts.hero !== false) { const pl = G().R.routes[0], [hx, hy] = Q.atS(pl, pl.total * 0.62); G().hero.tx = hx; G().hero.ty = hy + 6; }
   while (t < (maxT || 900) && !G().result) {
     if (step % 30 === 0) {
       const g = G();
@@ -29,8 +30,9 @@ window.siegeBot = function (id, skill, maxT, opts) {
         }
       }
     }
+    if (step % 15 === 0 && G().hero && opts.hero !== false) { const H = G().hero, n = G().en.filter(e => Q.inRange(H.x, H.y, e.x, e.y, 60)).length; if (n >= 2) { Q.heroAbility("q"); Q.heroAbility("e"); } }
     Q.siegeStep(1 / 30); t += 1 / 30; step++;
   }
   const g = G();
-  return { id, won: g.result ? g.result.won : null, stars: g.result ? g.result.stars : 0, hull: g.hull, wave: g.wave + 1, of: g.waves.length, towers: g.towers.filter(Boolean).map(t => Q.TW[t.k].id + t.lv + (t.spec >= 0 ? "AB"[t.spec] : "")).join(" "), shells: g.shells, t: Math.round(t) };
+  return { id, won: g.result ? g.result.won : null, stars: g.result ? g.result.stars : 0, hull: g.hull, wave: g.wave + 1, of: g.waves.length, heroDead: g.hero ? g.hero.dead > 0 : null, towers: g.towers.filter(Boolean).map(t => Q.TW[t.k].id + t.lv + (t.spec >= 0 ? "AB"[t.spec] : "")).join(" "), shells: g.shells, t: Math.round(t) };
 };

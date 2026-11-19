@@ -62,6 +62,33 @@ async def main():
         check("calling a wave early pays", r["bonus"] > 0, r)
         r = await ev("""(() => { const Q = SIEGE; Q.startSiege('0.0', {test: true}); const g = Q.SG; for (let w = 0; w < 8; w++) { Q.callWave(); for (let i = 0; i < 60 * 120; i++) { Q.siegeStep(1/60); if (g.result) break; } if (g.result) break; } return g.result; })()""")
         check("undefended: the buoy falls", r and r["won"] is False, r)
+        # the hero (part 2)
+        r = await ev("""(() => { const Q = SIEGE; Q.startSiege('0.0', {test: true, kit: 0}); const g = Q.SG, H = g.hero, out = {};
+            out.atBuoy = Math.hypot(H.x - g.M.buoy[0], H.y - g.M.buoy[1] - 20) < 1;
+            Q.siegeClick(300, 230); for (let i = 0; i < 400; i++) Q.siegeStep(1 / 60); out.walked = Math.hypot(H.x - 300, H.y - 230) < 2;
+            // a crawler walking into the hero stops
+            const pl = g.R.routes[2]; let best = 0, bd = 1e9; for (let s = 0; s < pl.total; s += 2) { const [x, y] = Q.atS(pl, s); const d = Math.hypot(x - H.x, y - H.y); if (d < bd) { bd = d; best = s; } }
+            const [ex, ey] = Q.atS(pl, best); H.x = ex; H.y = ey; H.tx = null;
+            g.en.push({k: 'crawler', ri: 2, s: best - 10, hp: 9999, max: 9999, spd: 22, arm: 0, slime: 0, hull: 1, bounty: 5, fl: '', slow: 0, slowT: 0, held: 0, poison: 0, poisonT: 0, x: 0, y: 0, right: true, hitT: 0, grabT: 0, id: 1});
+            const e = g.en[0]; for (let i = 0; i < 120; i++) Q.siegeStep(1 / 60); const s1 = e.s; for (let i = 0; i < 120; i++) Q.siegeStep(1 / 60);
+            out.blocked = e.block === H && Math.abs(e.s - s1) < 0.5 && e.hp < 9999;
+            out.hurtHero = H.hp < H.max;
+            H.hp = 1; for (let i = 0; i < 60; i++) Q.siegeStep(1 / 60); out.ko = H.dead > 0 && !e.block;
+            for (let i = 0; i < 60 * 16; i++) Q.siegeStep(1 / 60); out.back = H.dead === 0 && H.hp === H.max;
+            return out; })()""")
+        for k, v in r.items(): check("hero: " + k, v, r)
+        r = await ev("""(() => { const Q = SIEGE, out = {};
+            for (const kit of [0, 1, 2]) { Q.startSiege('0.0', {test: true, kit}); const g = Q.SG, H = g.hero; H.x = 300; H.y = 180;
+              for (let i = 0; i < 4; i++) g.en.push({k: 'crawler', ri: 0, s: 50 + i * 4, hp: 500, max: 500, spd: 0, arm: 0, slime: 0, hull: 1, bounty: 5, fl: '', slow: 0, slowT: 0, held: 0, poison: 0, poisonT: 0, x: 300 + i * 8, y: 190, right: true, hitT: 0, grabT: 0, id: i});
+              const hp0 = g.en.map(e => e.hp + e.s); Q.heroAbility('q'); Q.heroAbility('e');
+              out[kit] = { cd: H.cdQ > 0 && H.cdE > 0, did: g.en.some((e, i) => e.hp + e.s !== hp0[i] || e.slow > 0 || e.held > 0) || H.flareT > 0 }; }
+            return out; })()""")
+        check("abilities work and go on cooldown", all(v["cd"] and v["did"] for v in r.values()), r)
+        check("hero levels", await ev("[1, 2, 5, 20].map(L => SIEGE.heroLevel(SIEGE.heroXpFor(L)))") == [1, 2, 5, 20])
+        check("lamplighter lights the dark", await ev("(() => { const Q = SIEGE; Q.startSiege('0.0', {test: true, kit: 2}); const g = Q.SG, H = g.hero; H.x = 100; H.y = 100; return lit(110, 105) && !lit(300, 200); })()"))
+        r = await ev("""(() => { const Q = SIEGE; REEL.store.siege = undefined; Q.startSiege('0.0', {}); const g = Q.SG; g.earned = 100; g.wave = g.waves.length - 1; g.spawn = []; g.en = []; Q.siegeStep(1/60);
+            const q = REEL.store.siege; const out = { stars: q.stars['0.0'], xp: q.xp }; REEL.store.siege = undefined; return out; })()""")
+        check("a real win saves stars and xp", r["stars"] == 3 and r["xp"] == 50 + 60, r)
         # bot play: a good bot wins the first two Shallows maps
         rs = [await ev("siegeBot('0.0', 1.0, 1200)") for _ in range(3)]
         check("good bot wins Sandbar Crossing", all(x["won"] for x in rs), rs)
