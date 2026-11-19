@@ -255,7 +255,7 @@ const BOTTLES = [
 function bottleOpen(i) {                                   // can bottle i turn up for this player yet?
   const w = BOTTLES[i][1], q = store.sec;
   return w === "any" || (w === "sleeper" && q.sleeper) || (w === "stuck" && q.sleeper && !q.crack && q.afterSleeper >= 10)
-    || (w === "crossed" && q.crossed && !q.beat) || (w === "beat" && q.beat);
+    || (w === "crossed" && q.crossed && !q.beat) || (w === "beat" && q.beat) || (w === "leak" && typeof siegeLeakBottle === "function" && siegeLeakBottle());
 }
 function pickBottle(rng) {                                 // a bottle not found yet if there is one, else any open one but the last
   const open = BOTTLES.map((b, i) => i).filter(bottleOpen);
@@ -565,6 +565,7 @@ function cast() {                                        // the lure is chosen: 
     if (id >= 0) S.bottle = { id, x: S.rng.uniform(10, LW - 20), y: S.rng.uniform(30, C.MAX_M - 80) * M, got: false };
   }
   if (typeof raftCast === "function") raftCast();          // raft planks, rope and sail (island.js)
+  if (typeof siegeCast === "function") siegeCast();        // Flipside spawn, the leak (siege.js)
   noteEvents();
   S.prepared = true;
   setState("down");
@@ -717,6 +718,7 @@ function hookCheck() {                                   // whatever the hook is
     findSecret("bottle");
   }
   if (typeof raftHook === "function") raftHook();          // raft parts come along like bottles (island.js)
+  if (typeof siegeHook === "function") siegeHook();        // ...and so does the Flipside spawn (siege.js)
   if (S.hy <= 10 * M || S.immune > 0) return;
   for (const [i, f] of visible()) {
     const touch = overlap(hook, fishRect(f));
@@ -1912,6 +1914,7 @@ function draw() {
     }
   }
   if (typeof raftDraw === "function") raftDraw(cam, t);
+  if (typeof siegeDraw === "function") siegeDraw(cam, t);
   const diving = ["down", "turn", "up", "fight", "rise"].includes(S.state);
   if (diving) {                                          // the line, the hook and whatever is on it
     const pts = wl > -20 ? [[OX + 63, wl - 13]] : [];
@@ -1950,6 +1953,7 @@ function draw() {
     DATA.vents.forEach(v => lights.push([v[0] - BG_O + OX, Math.floor(v[1] - cam), 16]));
     if (bt && !bt.got && S.prepared) { const [bx, by] = bottleXY(bt, cam, t); lights.push([Math.floor(bx + 3), Math.floor(by + 4), Math.round(20 + 4 * Math.sin(t * 4))]); }   // a bottle glows
     if (typeof raftLights === "function") raftLights(lights, cam, t);
+    if (typeof siegeLights === "function") siegeLights(lights, cam, t);
     if (store.sec.sleeper) lights.push([OX + 108, Math.floor(DEPTH_PX + 6 - cam), crackCalls() ? Math.round(18 + 4 * Math.sin(t * 3)) : 10]);       // the crack glows, faintly
     if (S.eye > 0.05) lights.push([46 + OX, Math.floor(DEPTH_PX + 52 - cam), 20]);
     for (const gl of DATA.glows) if (gl[1] > cam - 20 && gl[1] < cam + LH + 20) lights.push([gl[0] - BG_O + OX, Math.floor(gl[1] - cam), gl[2]]);   // crystals and vent mouths
@@ -1964,6 +1968,7 @@ function draw() {
     const bob = Math.floor(Math.sin(t * (S.storm ? 3.4 : 2)) * (S.storm ? 3 : 1.5));
     drawShack(wl, tavOpen());
     if (typeof raftScene === "function") raftScene(wl);       // the shipwright's pier and the raft (island.js)
+    if (typeof siegeScene === "function") siegeScene(wl);     // the Admiral's gunboat, the leak count (siege.js)
     angler(OX + 30, wl - 9 + bob, store.eq, wl);
     line("#785432", OX + 50, wl - 12 + bob, OX + 63, wl - 22 + bob);
     if (["title", "haul"].includes(S.state)) line(lineCol(0), OX + 63, wl - 22 + bob, OX + 63, wl + 2);
@@ -3214,8 +3219,9 @@ function drawHaulBox() {                                     // the haul screen,
 
 const MORE_ROWS = () => [["TASKS", LIME, "tasks"], [store.sec.found.length ? "SECRETS" : "???", store.sec.found.length ? "#c8a0ff" : GREY, "secrets"]]
   .concat(store.sec.beat ? [["BESTIARY", "#ff8ca0", "bestiary"]] : [])                  // after beating the game
+  .concat(typeof siegeAtMore === "function" && siegeAtMore() ? [["THE SIEGE", "#ff6e78", "siege"]] : [])   // phones: Siege of the Deep
   .concat([["HELP", CYAN, "help"], [store.name ? "INITIALS: " + store.name : "SET INITIALS", store.name ? WHITE : GREY, "name"], ["SAVE CODE", GOLD, "save"]]);
-const moreStep = () => (MORE_ROWS().length > 5 ? 18 : 21);
+const moreStep = () => (MORE_ROWS().length > 6 ? 16 : MORE_ROWS().length > 5 ? 18 : 21);
 function drawMore() {                                      // everything that used to crowd the title screen
   g.save(); g.translate(OX, 0);
   box(6, 30, 108, 150, WHITE); text("MORE", 60, 40, 2, WHITE, "center");
@@ -4503,6 +4509,7 @@ function overlayTap(lx, ly) {
       if (id === "tasks") openOverlay("tasks");
       else if (id === "secrets") { if (store.sec.found.length) openOverlay("secrets"); else play("miss"); }
       else if (id === "bestiary") openOverlay("bestiary");
+      else if (id === "siege") { S.overlay = null; siegeEnter(); }
       else if (id === "help") openOverlay("help");
       else if (id === "name") { S.overlay = null; askName(); }
       else { S.overlay = null; openSave(); }
@@ -4560,6 +4567,7 @@ function titleTap(rx, lx, ly) {                            // -> true if the tap
     else play(P.n > 3 ? "hit" : "tick");
     return true;
   }
+  if (typeof siegeTap === "function" && siegeTap(rx, ly, wl)) return true;   // the Admiral's gunboat (siege.js)
   if (typeof raftTap === "function" && raftTap(rx, ly, wl)) return true;   // the shipwright, the raft, the island (island.js)
   if (rx >= OX - 8 && rx < OX + 22 && ly >= wl - 38 && ly < wl) {      // the Rusty Hook
     if (tavOpen()) { TAV.say = dailyReady() ? "FREE CHIPS ON THE BAR" : "WHAT'LL IT BE?"; openOverlay("tavern"); }

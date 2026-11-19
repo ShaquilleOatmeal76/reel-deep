@@ -142,6 +142,36 @@ async def main():
         for k, v in r.items(): check("twist: " + k, v, r)
         r = await ev("(() => { const Q = SIEGE; Q.startSiege('10.2', {test: true}); const g = Q.SG; g.wave = g.waves.length - 1; g.spawn = []; g.en = []; Q.siegeStep(1/60); return g.result; })()")
         check("beating the Sleeper seals the crack", r and r.get("ending") == 1, r)
+        # the leak, the Admiral and topside rewards (part 7)
+        await ev("(() => { SIEGE.SG = null; REEL.newDive(); resize(); })()")
+        r = await ev("""(() => { const R = REEL, st = R.store, out = {}; st.siege = undefined; st.dives = 5; let n = 0;
+            for (let i = 0; i < 40; i++) { R.newDive(); R.S.seed = i * 7919; R.cast(); R.S.overlay = null; n += R.S.spawns.length; } out.none = n === 0;
+            st.dives = 12; n = 0; for (let i = 0; i < 200; i++) { R.newDive(); R.S.seed = i * 7919 + 1; R.cast(); R.S.overlay = null; n += R.S.spawns.length; } out.half = n > 70 && n < 130;
+            out.bottleWaits = !bottleOpen(BOTTLES.length - 1) && STARTERS.length === 11;
+            R.newDive(); R.cast(); R.S.overlay = null; R.S.spawns = [{x: R.S.hx - 7, y: R.S.hy}]; SIEGE.siegeHook(); out.caught = st.siege.leak === 1 && R.S.spawns[0].got;
+            out.bottleOpens = bottleOpen(BOTTLES.length - 1); out.noHookSlot = R.S.catch.length === 0;
+            st.siege.leak = 14; R.S.spawns = [{x: R.S.hx - 7, y: R.S.hy}]; SIEGE.siegeHook(); out.unlocked = SIEGE.siegeUnlocked() && !bottleOpen(BOTTLES.length - 1);
+            R.newDive(); R.S.seed = 3; R.cast(); out.noMore = R.S.spawns.length === 0;
+            return out; })()""")
+        for k, v in r.items(): check("leak: " + k, v, r)
+        await ev("(() => { REEL.newDive(); REEL.S.overlay = null; })()"); await pg.wait_for_timeout(200)
+        r = await ev("""(() => { const R = REEL, out = {}; const wl = Math.round(-R.S.cam); const a = SIEGE_ART.gunboat, x = OX - 78;
+            out.tapped = SIEGE.siegeEnter ? (R.titleTap(x + 20, x + 20 - OX, wl - 10), R.S.overlay === 'admiral') : false;
+            for (let i = 0; i < 4; i++) EXTRA_OV.admiral.tap(); out.camp = !!(SIEGE.SG && SIEGE.SG.camp) && R.store.siege.met === 1;
+            SIEGE.SG = null; R.newDive(); resize(); return out; })()""")
+        for k, v in r.items(): check("admiral: " + k, v, r)
+        r = await ev("""(() => { const st = REEL.store, out = {}; st.titles = ['rookie']; st.own.pet = [0]; st.own.flag = [0]; st.own.hat = [0]; st.sec.found = []; st.tav.songs = [];
+            st.siege.stars = {'0.0': 3, '0.1': 3, '0.2': 3}; SIEGE.siegeAwards();
+            out.shore = st.titles.includes('shorewarden'); out.crab = st.sec.found.includes('siege_crab') && st.own.pet.includes(DATA.pets.indexOf('KING CRAB'));
+            out.song = songOwned(SONGS.findIndex(q => q && q[0] === 'WAR DRUMS'));
+            for (const id of Object.keys(SIEGE.SMAPS)) st.siege.stars[id] = 3; SIEGE.siegeAwards();
+            out.flag = st.sec.found.includes('siege_flag'); out.hat = st.sec.found.includes('siege_hat'); out.sealer = st.titles.includes('cracksealer') && st.titles.includes('lightbringer');
+            out.paint = fpData().own.includes('paint.ironclad'); out.victory = songOwned(SONGS.findIndex(q => q && q[0] === 'VICTORY AT SEA'));
+            out.noBoatYet = !st.sec.found.includes('siege_boat'); out.idem = SIEGE.siegeAwards().length === 0;
+            out.secretsWear = SECRETS.find(q => q[0] === 'siege_hat')[3][0] === 'hat';
+            out.notSold = DATA.hats.indexOf('SIEGE BICORNE') >= SHOP_N.hat && DATA.boats.indexOf('IRONCLAD') >= SHOP_N.boat;
+            st.siege = undefined; return out; })()""")
+        for k, v in r.items(): check("rewards: " + k, v, r)
         # bot play: a good bot wins the first two Shallows maps
         rs = [await ev("siegeBot('0.0', 1.0, 1200)") for _ in range(3)]
         check("good bot wins Sandbar Crossing", all(x["won"] for x in rs), rs)
@@ -177,6 +207,9 @@ async def main():
         # phone width still works
         b, pg, errs = await page_at(p, URL + "?siege", 390, 700)
         await pg.wait_for_timeout(300); await pg.screenshot(path=os.path.join(OUT, "phone.png"))
+        r = await pg.evaluate("(() => { REEL.store.siege = {leak: 15, stars: {}}; return MORE_ROWS().some(x => x[2] === 'siege') && !siegeTap(0, 0, 0); })()")
+        check("phone: THE SIEGE in the MORE menu", r)
+        await pg.evaluate("REEL.store.siege = undefined")
         check("phone: no errors", not errs, errs[:3])
         await b.close()
     print("\n" + ("ALL PASS" if not fails else "FAILED: " + ", ".join(fails)))

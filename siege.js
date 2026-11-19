@@ -747,6 +747,7 @@ function siegeEnd(won) {
   G.result.xp = xp; G.result.lv0 = G.hero ? G.hero.lv : 1; G.result.lv1 = heroLevel(G.heroXp0 + xp);
   if (won && G.id === "10.2") G.result.ending = 1;
   if (!G.test) { const q = siegeSave(), before = q.done | 0; q.xp += xp; if (won) q.stars[G.id] = Math.max(q.stars[G.id] || 0, stars); q.done = zonesDone(); if (q.done > before) G.result.zone = SZ[q.done - 1].name + " RECLAIMED!"; saveStore(); }
+  if (!G.test) siegeAwards();
   play(won ? "fanfare" : "miss");
 }
 
@@ -1083,6 +1084,7 @@ function drawResult() {
   siegeBtn(x + 16, y + h - 24, 76, 16, "RETRY", null);
   siegeBtn(x + w - 92, y + h - 24, 76, 16, SG.test ? "QUIT" : "CONTINUE", GOLD);
   if (R_.zone) text(R_.zone, SIW / 2, y - 10, 1, GOLD);
+  (SG.rewards || []).slice(0, 4).forEach((r, i) => text("TOPSIDE REWARD! " + r, SIW / 2, y + h + 10 + i * 10, 1, GOLD));
 }
 function bigStar(cx, cy, on) {
   const pts = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 4 : 10; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
@@ -1190,6 +1192,7 @@ function openCampaign(sel) {
   const zi = +cur.split(".")[0];
   SG = { camp: { sel: cur, tab: "map", scroll: clamp(zi * 27 - 80, 0, 11 * 27 - 236), hover: null, t: 0, msg: null } };
   siegeResize(); play("select");
+  siegeAwards();
 }
 let SILH = {};
 function silhouette(key) {
@@ -1371,5 +1374,125 @@ function drawPadMarks() {
   for (const i in G.eaten || {}) { const [x, y] = G.M.pads[i]; ell("#3c0a14", x - 12, y - 6, 24, 12); for (let k = -10; k <= 10; k += 4) { rect("#f0e6dc", x + k, y - 5, 2, 3); rect("#f0e6dc", x + k + 1, y + 3, 2, 3); } text(Math.ceil(G.eaten[i]), x, y - 14, 1, RED); }
 }
 
-window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, TUNE, GUARD, addGuardian, zoneDark, doorOpen, inKelp, ZMAPS, autoLayout, HUD_KEEP, openCampaign, campClick, mapOpen, zonesDone, starsTotal, starsSpent, RES, resHas, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
+// ---------------------------------------------------------------------------------------------------- the leak and the Admiral (part 7)
+// Once you have 10 dives, red Flipside spawn drift through about one dive in two (caught like bottles: no hook slot, no
+// weight, no score). LEAK n/15 shows under your coins. At 15 the Admiral moors his iron gunboat by the Rusty Hook, and
+// tapping it opens the siege (on phones, THE SIEGE is in the MORE menu). Rewards come back topside: titles, songs, a hat,
+// a pet, a flag, a boat and a FIN PRIX paint, all earned, never sold.
+const LEAK = { AT: 10, N: 15, P: 0.5 };
+const leakN = () => (store.siege && store.siege.leak) | 0;
+const siegeUnlocked = () => leakN() >= LEAK.N;
+function siegeCast() {                                           // game.js: end of cast()
+  S.spawns = [];
+  if (siegeUnlocked() || store.dives < LEAK.AT) return;
+  const r = RNG((S.seed ^ 0x5ee9e) >>> 0);
+  if (r.random() < LEAK.P) S.spawns.push({ x: r.uniform(10, LW - 24), y: r.uniform(60, 1080) * M });
+}
+function siegeHook() {                                           // game.js: in hookCheck, beside the bottle
+  if (!S.spawns) return;
+  for (const d of S.spawns) {
+    if (d.got) continue;
+    const cx = d.x + 7, dy = S.hy - d.y;
+    if (Math.abs(dy) < 40) d.x += clamp(S.hx - cx, -0.3, 0.3);
+    if (Math.abs(S.hx - cx) < 8 && Math.abs(dy) < 9) {
+      d.got = true; const q = siegeSave(); q.leak = Math.min(LEAK.N, (q.leak | 0) + 1);
+      S.popups.push(["FLIPSIDE SPAWN! " + q.leak + "/" + LEAK.N, 2.6, "#ff6e78"]);
+      if (q.leak === 1) S.popups.push(["SOMETHING IS LEAKING UP FROM BELOW...", 3.2, "#ffc8c8"]);
+      if (q.leak === LEAK.N) S.popups.push(["THE ADMIRAL HAS MOORED BY THE RUSTY HOOK!", 3.6, GOLD]);
+      saveStore(); splash(S.hx, S.hy, 6, "#ff6e78"); play("growl", 0.5);
+    }
+  }
+}
+function siegeDraw(cam, t) {                                     // game.js: in the ocean, with the raft parts
+  if (!S.spawns || !S.prepared) return;
+  for (const d of S.spawns) {
+    if (d.got) continue;
+    const [x, y] = driftXY(d, cam, t);
+    if (y < -12 || y > LH + 12) continue;
+    const pu = 0.5 + 0.5 * Math.sin(t * 4);
+    g.globalCompositeOperation = "lighter"; g.globalAlpha = 0.12 + 0.1 * pu; disc("#ff3c50", x + 7, y, 10); disc("#ff3c50", x + 7, y, 5); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+    const a = SIEGE_ART.egg; g.drawImage(SART, a[0], a[1], a[2], a[3], x, y - (a[3] >> 1), a[2], a[3]);
+  }
+}
+function siegeLights(lights, cam, t) { if (!S.spawns || !S.prepared) return; for (const d of S.spawns) if (!d.got) { const [x, y] = driftXY(d, cam, t); lights.push([x + 7, y, 14]); } }
+const gunboatX = () => OX - 78;                                  // moored left of the Rusty Hook, on wide screens
+function siegeScene(wl) {                                        // game.js: the title screen's shore
+  if (S.state !== "title" || S.overlay) return;
+  if (!siegeUnlocked() && leakN() > 0) text("LEAK " + leakN() + "/" + LEAK.N, 4, 20, 1, "#ff6e78", "left");
+  if (!siegeUnlocked() || !wideMenus()) return;
+  const x = gunboatX(), bob = Math.round(Math.sin(T * 1.8) * 1), a = SIEGE_ART.gunboat, ad = SIEGE_ART.admiral;
+  g.drawImage(SART, a[0], a[1], a[2], a[3], x, wl - a[3] + 6 + bob, a[2], a[3]);
+  g.drawImage(SART, ad[0], ad[1], ad[2], ad[3], x + 20 - ad[2] / 2 + 2, wl - a[3] - ad[3] + 18 + bob, ad[2], ad[3]);
+  if (!siegeSave().met && Math.floor(T * 2) % 2) text("!", x + 22, wl - a[3] - ad[3] + 10 + bob, 1, GOLD);
+}
+function siegeTap(rx, ly, wl) {                                  // game.js: titleTap, before the tavern
+  if (!siegeUnlocked() || !wideMenus()) return false;
+  const x = gunboatX(), a = SIEGE_ART.gunboat;
+  if (rx >= x - 2 && rx < x + a[2] + 2 && ly >= wl - a[3] - 22 && ly < wl + 8) { siegeEnter(); return true; }
+  return false;
+}
+const siegeAtMore = () => siegeUnlocked() && !wideMenus();       // phones: THE SIEGE in the MORE menu
+const siegeLeakBottle = () => leakN() >= 1 && !siegeUnlocked();  // bottle 17 waits for the first spawn
+BOTTLES.push(["THE RED EGGS ARE NOT FISH. SOMEONE SHOULD BE COUNTING THEM.", "leak"]);
+const ADMIRAL_TALK = [
+  "AHOY THERE. THOSE RED EGGS YOU'VE BEEN FISHING UP? FLIPSIDE SPAWN. THE CRACK IS LEAKING.",
+  "THEY'VE HATCHED. THE WHOLE OCEAN IS CRAWLING WITH THEM, FROM THE FLOOR ALL THE WAY UP TO THE SHALLOWS.",
+  "WE TAKE IT BACK. ZONE BY ZONE, FROM THE SHALLOWS DOWN TO THE CRACK ITSELF.",
+  "YOU BUILD THE DEFENCES AND LEAD FROM THE FRONT. I'LL KEEP THE CHARTS. SHALL WE BEGIN?",
+];
+function siegeEnter() {
+  play("select");
+  if (siegeSave().met) { openCampaign(); return; }
+  S.overlay = "admiral"; S.admPage = 0;
+}
+EXTRA_OV.admiral = {
+  draw() {
+    const W = wideMenus() ? 300 : 116, X = Math.round((LW - W) / 2), y = wideMenus() ? 40 : 20, h = wideMenus() ? 120 : 160;
+    g.globalAlpha = 0.7; rect("#060a1e", 0, 0, LW, LH); g.globalAlpha = 1;
+    box(X, y, W, h, GOLD);
+    const ad = SIEGE_ART.admiral, k = wideMenus() ? 3 : 2;
+    g.drawImage(SART, ad[0], ad[1], ad[2], ad[3], X + 8, y + 10, ad[2] * k, ad[3] * k);
+    text("THE ADMIRAL", X + 8 + ad[2] * k / 2, y + 14 + ad[3] * k, 1, GOLD);
+    const tx = wideMenus() ? X + 70 : X + 6, tw = wideMenus() ? 36 : 18, ty = wideMenus() ? y + 14 : y + 70;
+    wrap(ADMIRAL_TALK[S.admPage], tw).forEach((l, i) => text(l, tx, ty + i * 10, 1, WHITE, "left"));
+    text(S.admPage < ADMIRAL_TALK.length - 1 ? "TAP TO GO ON" : "TAP TO OPEN THE CHARTS", X + W / 2, y + h - 9, 1, Math.floor(T * 2) % 2 ? GOLD : "#c8a03c");
+  },
+  tap() { if (S.admPage < ADMIRAL_TALK.length - 1) { S.admPage++; play("tick"); } else { siegeSave().met = 1; saveStore(); S.overlay = null; openCampaign(); } },
+  key(code) { if (code === "Space" || code === "Enter") EXTRA_OV.admiral.tap(); },
+  back: null,
+};
+// ---- topside rewards: idempotent, checked whenever the campaign opens and after every map
+const SIEGE_TITLES = [["shorewarden", "SHORE WARDEN", "RECLAIM THE SHALLOWS IN THE SIEGE"], ["lightbringer", "LIGHTBRINGER", "RECLAIM THE ABYSS IN THE SIEGE"],
+  ["cracksealer", "CRACK SEALER", "SEAL THE CRACK: FINISH THE SIEGE"], ["ironadmiral", "IRON ADMIRAL", "EVERY IRON BADGE IN THE SIEGE"],
+  ["riptide", "RIPTIDE", "EVERY RIPTIDE BADGE IN THE SIEGE"], ["holdline", "HOLD THE LINE", "REACH WAVE 50 IN HOLD THE LINE"]];
+SIEGE_TITLES.forEach(t => { if (!TITLES.some(q => q[0] === t[0])) { TITLES.push(t); SHOP_TITLE_IDS.push(TITLES.length - 1); } });
+const SIEGE_SONGS = [["WAR DRUMS", null, "BEAT YOUR FIRST SIEGE GUARDIAN", 132, "D4 - D4 - F4 - D4 - A4 - G4 - F4 - E4 - D4 - D4 - F4 - A4 - D5 - - - C5 - A4 -", "D2 - D2 - D2 - D2 - A2 - A2 - D2 - D2 - D2 - D2 - F2 - F2 - G2 - - - A2 - A2 -"],
+  ["VICTORY AT SEA", null, "FINISH THE SIEGE", 104, "C4 - E4 - G4 - C5 - - - B4 - G4 - A4 - F4 - G4 - - - E4 - G4 - C5 - E5 - D5 - C5 - - -", "C3 - - - G2 - - - F2 - - - G2 - - - C3 - - - A2 - - - F2 - G2 - C3 - - -"]];
+const SIEGE_SONG_I = SIEGE_SONGS.map(sg => { let i = SONGS.findIndex(q => q && q[0] === sg[0]); if (i < 0) { SONGS.push(sg); i = SONGS.length - 1; } if (!SONG_IDS.includes(i)) SONG_IDS.push(i); return i; });
+if (typeof FP_PAINTS !== "undefined") { FP_PAINTS.ironclad = ["#464a56", "#c83c3c"]; if (!FP_LOOKS.paint.some(q => q[0] === "ironclad")) FP_LOOKS.paint.push(["ironclad", "IRONCLAD", null, "siege99"]); FP_WHO.siege99 = "EARN 99 SIEGE STARS"; }
+// cosmetics are worn from the Secrets page, like the secret rewards: [id, name, how, list, item name, earned?]
+const SIEGE_COS = [["siege_crab", "THE KING CRAB", "3 STARS ON EVERY SHALLOWS MAP IN THE SIEGE", "pet", "KING CRAB", q => ["0.0", "0.1", "0.2"].every(id => q.stars[id] === 3)],
+  ["siege_flag", "THE SIEGE FLAG", "50 STARS IN THE SIEGE", "flag", "THE SIEGE", () => starsTotal() >= 50],
+  ["siege_hat", "THE SIEGE BICORNE", "SEAL THE CRACK IN THE SIEGE", "hat", "SIEGE BICORNE", () => zoneDone(10)],
+  ["siege_boat", "THE IRONCLAD", "EVERY IRON BADGE IN THE SIEGE", "boat", "IRONCLAD", () => ironAll()]];
+const COS_LIST = { pet: "pets", flag: "flags", hat: "hats", boat: "boats" };
+for (const [id, name, how, kind, item] of SIEGE_COS) { const i = DATA[COS_LIST[kind]].indexOf(item); if (i > 0 && !SECRETS.some(q => q[0] === id)) SECRETS.push([id, name, how, [kind, i]]); }
+const ironAll = () => { const b = siegeSave().badges; return Object.keys(SMAPS).every(id => b[id + "i"]); };
+const riptideAll = () => { const b = siegeSave().badges; return Object.keys(SMAPS).every(id => b[id + "r"]); };
+function siegeAwards() {
+  const q = siegeSave(), got = [];
+  const t = (id, ok) => { if (ok && award(id)) got.push("TITLE: " + TITLES.find(x => x[0] === id)[1]); };
+  t("shorewarden", zoneDone(0)); t("lightbringer", zoneDone(5)); t("cracksealer", zoneDone(10)); t("ironadmiral", ironAll()); t("riptide", riptideAll()); t("holdline", (q.endBest | 0) >= 50);
+  if (zoneDone(0) && !songOwned(SIEGE_SONG_I[0])) { tav().songs.push(SIEGE_SONG_I[0]); got.push("SONG: WAR DRUMS"); }
+  if (zoneDone(10) && !songOwned(SIEGE_SONG_I[1])) { tav().songs.push(SIEGE_SONG_I[1]); got.push("SONG: VICTORY AT SEA"); }
+  for (const [id, name, , kind, item, ok] of SIEGE_COS) {
+    const i = DATA[COS_LIST[kind]].indexOf(item);
+    if (i > 0 && ok(q) && !store.sec.found.includes(id)) { store.sec.found.push(id); if (!store.own[kind].includes(i)) store.own[kind].push(i); got.push(name + " (WEAR IT FROM SECRETS)"); }
+  }
+  if (typeof fpData === "function" && starsTotal() >= 99 && !fpData().own.includes("paint.ironclad")) { fpData().own.push("paint.ironclad"); got.push("FIN PRIX PAINT: IRONCLAD"); }
+  if (got.length) { saveStore(); if (SG && SG.camp) campMsg("TOPSIDE REWARD! " + got[0]); (SG && (SG.rewards = (SG.rewards || []).concat(got))); }
+  return got;
+}
+
+window.SIEGE = { get SG() { return SG; }, set SG(v) { SG = v; }, startSiege, siegeCast, siegeHook, siegeAwards, siegeEnter, siegeUnlocked, LEAK, SIEGE_COS, SIEGE_TITLES, TUNE, GUARD, addGuardian, zoneDark, doorOpen, inKelp, ZMAPS, autoLayout, HUD_KEEP, openCampaign, campClick, mapOpen, zonesDone, starsTotal, starsSpent, RES, resHas, heroAbility, heroTick, heroLevel, heroXpFor, KITS, kitsOpen, newHero, siegeStep, callWave, ringFor, ringAct, siegeClick, siegeKey, SMAPS, TW, ETYPES, buildWaves, mapRoutes, siegeSave, towerStats, inRange, atS, polyline, catmull, onRoad, inPool, hpScale, Z_ROSTER, E_COST, SZ };
 if (TEST_SIEGE) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); if (TEST_SIEGE === "campaign") { openCampaign(); return; } let kit = 0; try { kit = clamp(parseInt(new URLSearchParams(location.search).get("kit"), 10) || 0, 0, 2); } catch (e) {} startSiege(SMAPS[TEST_SIEGE] ? TEST_SIEGE : "0.0", { test: true, kit }); } }, 50); }
