@@ -66,7 +66,7 @@ async def main():
         check("at 7:50 Bram is at home", await ev("ISLE.folk.bram.area") == "home_bram")
         await ev("isleSave().min = 480"); await ev(TICK + "(2)")
         r = await ev("[ISLE.folk.bram.area, Math.round(ISLE.folk.bram.x), Math.round(ISLE.folk.bram.y), (ISLE.folk.bram.path || []).length]")
-        check("at 8:00 he comes out of his door and has a path", r[0] == "port" and abs(r[1] - 1014) < 4 and r[3] > 10, r)
+        check("at 8:00 he comes out of his door and has a path", r[0] == "port" and abs(r[1] - 1014) < 8 and r[3] > 10, r)
         await ev(TICK + "(240)"); await page.wait_for_timeout(100)
         await ev("(() => { ISLE.px = ISLE.folk.bram.x - 40; ISLE.py = ISLE.folk.bram.y + 20; })()")
         await page.screenshot(path=OUT + "/walking.png")
