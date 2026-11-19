@@ -9,8 +9,8 @@ window.siegeBot = function (id, skill, maxT, opts) {
   if (opts.research) {                                   // a late-game player: everything researched, every zone open (writes a throwaway save)
     const res = {}; for (const r of Q.RES) res[r.id] = r.nodes.length;
     window.REEL.store.siege = { v: 1, stars: {}, badges: {}, xp: xp0, kit: opts.kit || 0, res, seen: Object.keys(Q.ETYPES), done: 11 };
-    Q.startSiege(id, { kit: opts.kit || 0 });
-  } else Q.startSiege(id, { test: true, kit: opts.kit || 0, xp: xp0 });
+    Q.startSiege(id, { kit: opts.kit || 0, mode: opts.mode });
+  } else Q.startSiege(id, { test: true, kit: opts.kit || 0, xp: xp0, mode: opts.mode });
   const G = () => Q.SG, rng = (() => { let a = 12345; return () => { a = (a * 1103515245 + 12345) & 0x7fffffff; return a / 0x7fffffff; }; })();
   const cover = (x, y, r) => { let n = 0; for (const pl of G().R.routes) for (let s = 0; s < pl.total; s += 6) { const [px, py] = Q.atS(pl, s); if (Q.inRange(x, y - 4, px, py, r)) n++; } return n; };
   const z = G().M.zone, darkZ = z >= 5 || z === 3, hiddenZ = Q.Z_ROSTER[z].includes("hidden");
