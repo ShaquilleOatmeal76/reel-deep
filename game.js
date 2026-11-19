@@ -2042,6 +2042,11 @@ function stakeStep(st, d, max) {
 // high-water mark, which fades about 2% a real day (tanking can't speed that up). A junk dive (under a quarter of the line)
 // is left out of all of it, and a bet riding on a junk dive is void: no bet pays for a bad dive.
 const BET_CAP = 25, HW_FADE = 0.98, JUNK_K = 0.25;
+// Only bets a short, thrown dive could win are voided on a junk dive (Nov 19, 2026). Before, every bet was, so a real dive
+// cut short at depth (a jellyfish, a shark) voided bets it had already won, like PAST 900 M or A TROPHY. Pricing still
+// leaves junk dives out for every bet, so tanking can't move the odds.
+const JUNK_VOID = new Set(["odd", "seven", "pair", "triple", "onezone", "tight", "heavylast", "clean", "nopulse", "all10", "bounty", "record"]);
+const junkVoids = k => JUNK_VOID.has(k);
 const junkRow = r => r[5] === 1;                            // 6th field of a history row: a junk dive (rows from before have none)
 function betHW() { const q = tav(); if (!q.bhw || typeof q.bhw !== "object") q.bhw = { d: "", line: 0 }; return q.bhw; }
 function betLife() { const q = tav(); if (!Array.isArray(q.blife)) q.blife = []; return q.blife; }   // [[real dives it could be judged on, wins]] per bet
@@ -2198,7 +2203,7 @@ function settleBet(dive) {                                  // -> a popup line f
   const b = tav().bet;
   if (!b) return null;
   tav().bet = null;
-  const i = BET_I[b.k], won = i === undefined || dive.total < JUNK_K * b.line ? null : BETS[i][4](dive, b.line);   // a thrown dive: void
+  const i = BET_I[b.k], won = i === undefined || (dive.total < JUNK_K * b.line && junkVoids(b.k)) ? null : BETS[i][4](dive, b.line);   // a thrown dive voids only the bets it could win
   if (won === null) { addChips(b.stake); return ["BET VOID: STAKE BACK", 4, CHIP]; }    // e.g. UNDER without a real dive
   if (!won) { saveStore(); return ["BET LOST", 3, ORANGE]; }
   const pay = Math.round(b.stake * b.pays);   // round, not floor: odd stakes are allowed since Nov 19, 2026
@@ -2780,7 +2785,7 @@ function drawBet() {                                         // betting on the n
   text("WIN " + fmtChips(Math.round(b.stake * b.opts[b.sel][2])), 60, 148, 1, GREY, "center", null);
   const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 1 && !blk;
   box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
-  text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids the bet
+  if (junkVoids(b.opts[b.sel][0])) text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids this bet
   text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
   g.restore();
 }
@@ -4022,7 +4027,7 @@ function drawBetWide() {
   text(b.stake, px + 59, 69, 2, WHITE, "center");
   text("WIN " + Math.round(b.stake * b.opts[b.sel][2]), px + 59, 103, 1, GOLD, "center", null);
   text("NEW BETS", px + 59, 150, 1, "#5a8a74", "center", null); text("EVERY DIVE", px + 59, 160, 1, "#5a8a74", "center", null);
-  text("HAUL UNDER " + Math.ceil(JUNK_K * betLine()) + " LB", px + 59, 174, 1, "#5a8a74", "center", null); text("= STAKE BACK", px + 59, 184, 1, "#5a8a74", "center", null);
+  if (junkVoids(b.opts[b.sel][0])) { text("HAUL UNDER " + Math.ceil(JUNK_K * betLine()) + " LB", px + 59, 174, 1, "#5a8a74", "center", null); text("= STAKE BACK", px + 59, 184, 1, "#5a8a74", "center", null); }
   closeLine("TAP HERE FOR NO BET");
 }
 function betTapWide(rx, ly) {
