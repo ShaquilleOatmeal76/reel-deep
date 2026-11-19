@@ -44,12 +44,12 @@ async def main():
         check("no raft parts before 50 dives", kinds == [], kinds)
         check("no shipwright tap before 50 dives", not await ev("raftTap(pierX() + 10, 85, 96)"))
 
-        # after 50 dives: planks about 60% of dives, rope and sail sometimes
+        # after 50 dives: about 2 planks a dive (1 always, 2nd 70%, 3rd 40%), rope and sail sometimes
         await ev("REEL.store.dives = 50")
         kinds = []
         for _ in range(400): kinds += await ev(CAST)
         n = kinds.count("plank")
-        check("planks drift by in about 60% of dives", 200 < n < 280, n)
+        check("about 2.1 planks drift by a dive", 760 < n < 920, n)
         check("ropes and sails turn up", kinds.count("rope") > 50 and kinds.count("sail") > 40, (kinds.count("rope"), kinds.count("sail")))
         r = await ev("""(() => { const R = REEL; for (let i = 0; i < 50; i++) { R.newDive(); R.cast(); if (R.S.rparts.some(d => d.k === 'rope')) break; }
           const d = R.S.rparts.find(q => q.k === 'rope'), z = ZONES[1]; return d.y / M >= z[1] && d.y / M <= z[2]; })()""")
