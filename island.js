@@ -487,6 +487,7 @@ function terrainAt(A, x, y) {                               // -> tile kind at p
     if (d > -6) return "w";
     return pathDist(A, x, y) < 9 ? "p" : "g";
   }
+  if (A.seaD) { const d = A.seaD(x, y); return d > 70 ? "d" : d > 0 ? "a" : d > -16 ? "s" : pathDist(A, x, y) < 9 ? "p" : "g"; }   // a headland with sea all round (part 7)
   const sh = A.shore(x);
   if (y >= sh + TIDE_BAND + 60) return "d";
   if (y >= sh + TIDE_BAND) return "a";
@@ -514,7 +515,7 @@ function buildArea(id) {                                    // paint the ground 
       else if (t === "k") { const yy = py - 596; col = yy % 4 === 0 ? [120, 80, 46] : [164, 114, 70]; if ((px - 560) % 32 === 0 || (px - 591) % 32 === 0) col = INKC; }
       else if (t === "s" || t === "w" || t === "t") { col = TCOL.s[n < .75 ? 0 : n < .9 ? 1 : n < .97 ? 2 : 3]; if (t !== "s") col = col.map(v => Math.round(v * (t === "t" ? 0.8 : 0.88))); }
       else if (A.fresh) { const dep = freshDepth(A, px, py); col = dep < 8 ? [104, 178, 168] : dep < 26 ? [72, 148, 156] : [52, 116, 140]; if (dep >= 26 && dep < 29 && (px + py) % 2) col = [72, 148, 156]; }
-      else { const dep = py - A.shore(px) - TIDE_BAND; col = dep < 14 ? [118, 204, 214] : dep < 50 ? [78, 172, 204] : [52, 140, 190]; if (((dep >= 14 && dep < 17) || (dep >= 50 && dep < 53)) && (px + py) % 2) col = dep < 30 ? [118, 204, 214] : [78, 172, 204]; }
+      else { const dep = A.seaD ? A.seaD(px, py) - 4 : py - A.shore(px) - TIDE_BAND; col = dep < 14 ? [118, 204, 214] : dep < 50 ? [78, 172, 204] : [52, 140, 190]; if (((dep >= 14 && dep < 17) || (dep >= 50 && dep < 53)) && (px + py) % 2) col = dep < 30 ? [118, 204, 214] : [78, 172, 204]; }
       put(i, col);
     }
     for (let k = 0; k < W * 0.8; k++) {                     // grass blades and tufts
@@ -823,7 +824,8 @@ function drawIsle() {
       for (const o of M_.objs) if (o.k === "shack") { disc("#ffb450", o.x - cx + 19, o.y - cy + 58, 10); disc("#ffb450", o.x - cx + 57, o.y - cy + 58, 10); disc("#ff9640", o.x - cx + 72, o.y - cy + 68, 8); }
       g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
     }
-  } else { const dk = darkness(s.min) * 0.5; if (dk > 0) { g.globalAlpha = dk; rect("#141a40", 0, 0, IW, IH); g.globalAlpha = 1; } }
+  } else if (A.cave) caveDark(cx, cy);
+  else { const dk = darkness(s.min) * 0.5; if (dk > 0) { g.globalAlpha = dk; rect("#141a40", 0, 0, IW, IH); g.globalAlpha = 1; } }
   drawIsleHud(s);
   drawFishing(cx, cy);
   drawToolbar(s); drawToasts();
@@ -930,7 +932,7 @@ function isleTouch(e) {
   if (toolbarTouch(x, y)) return;
   if (I.fish) { fishPress(); return; }
   { const it = held(), [cx0, cy0] = isleCam(), wx0 = x + cx0, wy0 = y + cy0;     // holding the rod: a tap on water casts toward it
-    if (it && it[0] === "rod" && I.map.A.outdoor && isWaterAt(wx0, wy0)) { const dx = wx0 - I.px, dy = wy0 - I.py; I.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down"); fishPress(); I.touchFish = true; return; } }
+    if (it && it[0] === "rod" && (I.map.A.outdoor || I.map.A.cave) && isWaterAt(wx0, wy0)) { const dx = wx0 - I.px, dy = wy0 - I.py; I.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? "left" : "right") : (dy < 0 ? "up" : "down"); fishPress(); I.touchFish = true; return; } }
   const [cx, cy] = isleCam(), wx = x + cx, wy = y + cy, o = objAt(wx, wy), f = forageAt(wx, wy);
   if (f && Math.hypot(wx - I.px, wy - I.py) < 30) { forageTake(f); return; }
   if (o && Math.hypot(wx - I.px, wy - I.py) < 36) { isleAct(o); return; }
@@ -1320,7 +1322,7 @@ ITEMS.rod = { name: "FISHING ROD", kind: "tool" }; ITEMS.net = { name: "NET", ki
 const LOG_PAGES = [["sea", "THE SEA", "SEA"], ["fresh", "LAGOON AND RIVER", "FRESH"], ["pool", "TIDE POOLS", "POOLS"], ["pot", "CRAB POTS", "POTS"],
   ["cave", "THE CAVES", "CAVES"], ["legend", "LEGENDS", "LGND"], ["special", "SPECIALS", "SPCL"]];
 const TIME_WIN = { a: [360, 1560], m: [360, 660], d: [660, 1020], e: [1020, 1260], n: [1260, 1560], w: [360, 420] };
-const LATER = /^(cave|marsh|wreck|gull|fest_|light)/;          // places and days still to come
+const LATER = /^(marsh|wreck|gull|fest_|light)/;                // places and days still to come (the caves opened in part 7)
 function fishOk(f, s) {
   if (LATER.test(f.where) || !f.seasons.includes(String(s.season))) return false;
   const [a, b] = TIME_WIN[f.time]; if (s.min < a || s.min >= b) return false;
@@ -1343,6 +1345,7 @@ function isWaterAt(x, y) {
 }
 function waterKind(x, y) {
   const M_ = ISLE.map, A = M_.A;
+  if (A.cave) return "cave" + A.layer;
   if (A.fresh) return riverNear(A, x, y) ? "river" : "lake";
   return M_.tiles[Math.floor(y / TS)][Math.floor(x / TS)] === "d" ? "deep" : "sea";
 }
@@ -1357,7 +1360,7 @@ function spawnShadow(x, y) {
 }
 function shadowsTick(dt) {
   const I = ISLE, M_ = I.map;
-  if (!M_.A.outdoor) { I.shadows = []; return; }
+  if (!M_.A.outdoor && !M_.A.cave) { I.shadows = []; return; }
   if (I.shadowArea !== M_.id) { I.shadows = []; I.shadowArea = M_.id; }
   const [cx, cy] = isleCam();
   I.shadows = I.shadows.filter(f => !f.gone && f.x > cx - 90 && f.x < cx + IW + 90 && f.y > cy - 90 && f.y < cy + IH + 90);
@@ -1387,7 +1390,7 @@ function drawShadows(cx, cy) {
 // ---- the rod
 function fishPress() {
   const I = ISLE, F = I.fish;
-  if (!F) { if (!I.map.A.outdoor) { toast("NO WATER IN HERE"); play("miss"); return; } I.fish = { phase: "charge", p: 0, d: 1 }; return; }
+  if (!F) { if (!I.map.A.outdoor && !I.map.A.cave) { toast("NO WATER IN HERE"); play("miss"); return; } I.fish = { phase: "charge", p: 0, d: 1 }; return; }
   if (F.phase === "wait") { if (F.bite > 0) startReel(); else { I.fish = null; if (F.sh) F.sh.hook = false; play("back"); } return; }
   if (F.phase === "reel") F.hold = true;
 }
@@ -1973,8 +1976,9 @@ function pickUp(p) {
   s.placed = s.placed.filter(q => q !== p); play("select");
 }
 function sprinklersWater(s) {
-  for (const p of s.placed) if (p.id === "sprinkler" || p.id === "sprinkler2") {
-    const R = p.id === "sprinkler" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  for (const p of s.placed) if (p.id === "sprinkler" || p.id === "sprinkler2" || p.id === "sprinkler3") {
+    const R = p.id === "sprinkler" ? [[1, 0], [-1, 0], [0, 1], [0, -1]] : p.id === "sprinkler2" ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+      : [-2, -1, 0, 1, 2].flatMap(a => [-2, -1, 0, 1, 2].map(b => [a, b])).filter(([a, b]) => a || b);    // part 7: the iron sprinkler, 5 x 5
     for (const [a, b] of R) { const e = s.farm[p.a + ":" + (p.x + a) + "," + (p.y + b)]; if (e) e.w = 1; }
   }
 }
@@ -2180,7 +2184,7 @@ const WORK = { yard: ["yard", "yardfront", "dock"], store: ["store", "storefront
 const _isleSave6 = isleSave;
 isleSave = function () {
   const g_ = _isleSave6();
-  if (!g_.folk) { g_.folk = {}; g_.flags = {}; g_.owed = []; }
+  for (const [k, v] of [["folk", {}], ["flags", {}], ["owed", []]]) if (!g_[k]) g_[k] = v;
   if (!g_.arrived) g_.arrived = { bram: DAYN(g_), pickles: DAYN(g_) };
   return g_;
 };
@@ -2409,6 +2413,7 @@ function giftTaste(v, id) {
   for (const k of ["hate", "love", "like"]) if (v.gifts[k].includes(id)) return k;
   for (const k of ["hate", "love", "like"]) if (v.gifts[k].some(t => t[0] === "@" && tag(t))) return k;
   if (it.kind === "dish") return "like";
+  if (it.kind === "gem") return "like";
   if (it.kind === "mat" || it.kind === "seed") return "dislike";
   return "neutral";
 }
@@ -2609,3 +2614,581 @@ isleTouch = function (e) {
 };
 const _drawIsle6 = drawIsle;
 drawIsle = function () { _drawIsle6(); if (ISLE.folkUI) drawFolkUI(); };
+
+// =====================================================================================================================
+// Part 7: Lighthouse Point and the caves. The path north of the Lagoon opens onto a headland with the dark lighthouse and
+// a cave mouth. Fifty floors underneath, in five layers of ten (wet stone, crystal, ice, magma, then something wrong), made
+// fresh each day. You carry a lantern; the pulse (Shift or X, or the button on touch screens) is your weapon, as in the
+// Sleeper fight. Rocks hold stone, ore and gems; pools hold the cave fish; a boss guards every tenth floor. The elevator
+// stops every five floors. Black out and you wake at the cave mouth with half of what you found on that trip. The
+// lighthouse keeper's missing log pages are down there: chests on fifteen floors, and one from each boss.
+const CAVE_W = 30, CAVE_H = 30, PULSE_R = 46, PULSE_R2 = 62, PULSE_CD = 0.9, PULSE_CD2 = 0.65;
+const PAGE_FLOORS = [2, 4, 6, 8, 10, 13, 15, 17, 19, 20, 23, 26, 28, 30, 33, 36, 40, 43, 46, 50];
+const KEEPER_PAGES = [
+  "DAY ONE BELOW. THE STAIRS UNDER THE LIGHTHOUSE GO DOWN FURTHER THAN THE CLIFFS ARE TALL. THE WALLS ARE WET AND THEY HUM.",
+  "THE CRABS DOWN HERE HAVE NEVER SEEN THE SUN. THEY DON'T LIKE MY LANTERN. THEY LIKE MY PULSE EVEN LESS.",
+  "I FOUND FISH IN A POOL ON THE FOURTH LEVEL. BLIND, PALE, PERFECT. I'M ADDING THEM TO THE LOG.",
+  "MY FATHER KEPT THE LIGHT. HIS FATHER KEPT THE LIGHT. NONE OF THEM EVER ASKED WHY THE LAMP FACES DOWN AS WELL AS OUT.",
+  "THE OLD CRAB GUARDED THE TENTH LEVEL LIKE A DOOR. IT WASN'T GUARDING THE CAVES FROM ME. IT WAS GUARDING THE SURFACE FROM WHAT'S BELOW.",
+  "CRYSTAL NOW. EVERY WALL SHINES. MY LANTERN COMES BACK TO ME A HUNDRED TIMES. I FEEL WATCHED.",
+  "THE OLD LOGS SAY THE FIRST KEEPER CAME HERE BECAUSE OF A DREAM: SOMETHING HUGE, SLEEPING, AND A LIGHT THAT KEPT IT THAT WAY.",
+  "I DIVE BY DAY AND CLIMB DOWN BY NIGHT. GUS THINKS I'VE GONE MAD. GUS SAW IT TOO. HE JUST WON'T SAY SO.",
+  "THERE IS A CRACK IN THE SEA FLOOR PAST THE WRECK. THESE CAVES RUN TOWARD IT. EVERYTHING DOWN HERE LEANS THAT WAY.",
+  "THE PRISM SHATTERED, AND FOR A MOMENT EVERY CRYSTAL SHOWED THE SAME PICTURE: AN EYE, CLOSED.",
+  "IT'S COLD THIS DEEP. FROST IN MY BEARD. THE FISH HERE HAVE CLEAR BLOOD. I CAN SEE THEIR HEARTS BEATING.",
+  "I WROTE A LETTER TODAY AND PUT IT IN A BOTTLE. I DON'T KNOW WHO IT'S FOR. SOMEONE WHO FISHES, I HOPE.",
+  "THE LIGHT ISN'T A WARNING FOR SHIPS. IT NEVER WAS. IT SHINES DOWN THROUGH THE ROCK. AS LONG AS IT BURNS, THE SLEEPER DREAMS.",
+  "FROSTMAW CAME UP THROUGH THE ICE THREE TIMES BEFORE I UNDERSTOOD: IT WASN'T HUNTING ME. IT WAS RUNNING FROM SOMETHING DEEPER.",
+  "HEAT NOW. THE ROCK GLOWS. THE SLEEPER IS WARMER THAN IT WAS WHEN I STARTED. IT'S BEGINNING TO STIR.",
+  "IN ITS DREAMS THE SEA TURNS INSIDE OUT. THERE IS ANOTHER SIDE, WRONG AND BRIGHT. THINGS SWIM THERE THAT SHOULDN'T.",
+  "THE CINDER KING WORE A CROWN OF SLAG. WHEN IT FELL, THE WHOLE CAVE SIGHED. SOMEWHERE BELOW, SOMETHING TURNED OVER IN ITS SLEEP.",
+  "I HAVE NO CHILD TO KEEP THE LIGHT AFTER ME. IF I GO DOWN AND DON'T COME BACK, THE LAMP WILL GO OUT. I KNOW THAT.",
+  "THE BOTTOM IS CLOSE. THE WALLS ARE SOFT. I HEAR IT BREATHING WHEN I SLEEP. IT KNOWS MY NAME.",
+  "THE DREAMER WAS ONLY A DREAM OF THE SLEEPER. THE REAL ONE IS UNDER THE SEA. I'M GOING THROUGH THE CRACK TO FIND ANOTHER WAY. WHOEVER READS THIS: KEEP THE LIGHT.",
+];
+// [name, floor colours, wall, wall face, water, ore id, gem id]
+const LAYERS = [null,
+  ["WET STONE", [[70, 66, 74], [78, 74, 82], [62, 58, 68]], [40, 36, 46], [96, 88, 98], [44, 92, 112], "copper", "quartz"],
+  ["THE CRYSTAL CAVES", [[58, 52, 84], [66, 60, 94], [50, 46, 76]], [34, 28, 56], [110, 92, 160], [60, 110, 150], "iron", "amethyst"],
+  ["THE ICE CAVES", [[150, 176, 196], [160, 186, 204], [138, 164, 186]], [70, 94, 120], [210, 230, 244], [80, 140, 190], "silver", "aquamarine"],
+  ["THE MAGMA CAVES", [[70, 46, 40], [80, 52, 44], [60, 40, 36]], [36, 22, 22], [140, 70, 50], [150, 70, 40], "gold", "ruby"],
+  ["THE DEEP", [[40, 30, 46], [46, 34, 54], [34, 26, 40]], [18, 12, 24], [86, 50, 96], [70, 30, 90], "dream", "dreamstone"]];
+Object.assign(ITEMS, {
+  copper: { name: "COPPER ORE", kind: "ore", sell: 15 }, iron: { name: "IRON ORE", kind: "ore", sell: 30 }, silver: { name: "SILVER ORE", kind: "ore", sell: 50 },
+  gold: { name: "GOLD ORE", kind: "ore", sell: 80 }, dream: { name: "DREAM ORE", kind: "ore", sell: 150 },
+  quartz: { name: "QUARTZ", kind: "gem", sell: 40 }, amethyst: { name: "AMETHYST", kind: "gem", sell: 90 }, aquamarine: { name: "AQUAMARINE", kind: "gem", sell: 150 },
+  ruby: { name: "RUBY", kind: "gem", sell: 250 }, dreamstone: { name: "DREAMSTONE", kind: "gem", sell: 500 } });
+// new things to place, then make
+[["sprinkler3", "IRON SPRINKLER", 1, 0, 0, ["..b..", "bbbbb", "bsssb", ".sss."], { b: "#5aaadc", s: "#8c8c9a" }],
+ ["clamp", "CRYSTAL LAMP", 1, 0, 1, ["..w..", ".wcw.", ".ccc.", "..s..", ".sss."], { w: "#e6faff", c: "#9adcf0", s: "#8c8c96" }],
+ ["geode", "GEODE", 1, 0, 0, [".sss.", "sappa", "spaps", ".sss."], { s: "#8c8c96", a: "#b48ce6", p: "#e6c8ff" }],
+ ["goldfish", "GOLD FISH STATUE", 1, 0, 0, ["y...y", "yyyy.", "ykyyy", "yyyy.", "..s..", ".sss."], { y: "#ffd246", k: INK, s: "#8c8c96" }],
+ ["dreamorb", "DREAM ORB", 1, 0, 1, [".ppp.", "pwppp", "ppppp", ".ppp.", ".sss."], { p: "#a05ad2", w: "#f0d2ff", s: "#5a5a64" }],
+ ["tro_crab", "CRAB CROWN", 1, 0, 0, ["y.y.y", "yyyyy", "yryby", "yyyyy"], { y: "#ffd246", r: "#f05050", b: "#5aaadc" }],
+ ["tro_prism", "PRISM HEART", 1, 0, 1, ["..c..", ".cwc.", "ccwcc", ".ccc.", "..c.."], { c: "#b48ce6", w: "#ffffff" }],
+ ["tro_frost", "FROSTMAW FANG", 1, 0, 0, ["w....", "ww...", ".ww..", "..ww.", "...bb"], { w: "#e6faff", b: "#6e482a" }],
+ ["tro_cinder", "CINDER CROWN", 1, 0, 1, ["o.o.o", "ooooo", "orrro", "ooooo"], { o: "#ff8c32", r: "#ffd246" }],
+ ["tro_dream", "THE DREAMER'S EYE", 1, 0, 1, [".ppp.", "pwwwp", "pwkwp", "pwwwp", ".ppp."], { p: "#6e3c8c", w: "#f0e6ff", k: "#e64a5a" }],
+].forEach(row => { PLACE.push(row); const [id, name, solid, flat, light, rows, pal] = row; PL[id] = { id, name, solid, flat, light, rows, pal }; ITEMS[id] = { name, kind: "place", sell: 0 }; });
+CRAFT.push(["sprinkler3", 1, [["iron", 5], ["copper", 10], ["quartz", 1]]], ["clamp", 1, [["quartz", 2], ["copper", 3]]], ["geode", 1, [["amethyst", 1], ["stone", 20]]],
+  ["goldfish", 1, [["gold", 10]]], ["dreamorb", 1, [["dream", 5], ["dreamstone", 1]]]);
+UPGRADES.push(["lantern", "BRIGHT LANTERN", "SEE FURTHER IN THE CAVES", 1500, [["copper", 20], ["quartz", 2]]],
+  ["pulse", "STRONG PULSE", "THE PULSE REACHES FURTHER AND RECHARGES FASTER", 3000, [["iron", 15], ["amethyst", 2]]]);
+const _itemIcon7 = itemIcon;
+itemIcon = function (id) {
+  const ore = { copper: "#d2824a", iron: "#b4b4c8", silver: "#e6eaf4", gold: "#ffd246", dream: "#c88cf0" }[id], gem = { quartz: "#f0f0fa", amethyst: "#b47ae6", aquamarine: "#7ae6e6", ruby: "#f04664", dreamstone: "#e682ff" }[id];
+  if (ore) return pix("icon_" + id, [".ss.", "sosx", "ssos", ".ss."].map(r => r.replace("x", "s")), { s: "#6e6e78", o: ore });
+  if (gem) return pix("icon_" + id, [".g.", "ghg", "ggg", ".g."], { g: gem, h: "#ffffff" });
+  if (id === "lantern") return pix("icon_lantern", [".k.", "kyk", "kyk", "kkk"], { k: "#5a5a64", y: "#ffd246" });
+  if (id === "pulse") return pix("icon_pulse", [".ccc.", "c...c", "c.c.c", "c...c", ".ccc."], { c: CYAN });
+  if (id === "page") return pix("icon_page", ["wwww", "wkkw", "wwww", "wkkw", "wwww"], { w: "#f0e6c8", k: "#8c6c50" });
+  return _itemIcon7(id);
+};
+
+// ---- the save
+const _isleSave7 = isleSave;
+isleSave = function () {
+  const g_ = _isleSave7();
+  if (!g_.cave) g_.cave = { lift: 0, boss: {}, chest: {}, hpMax: 5, deep: 0 };
+  if (!g_.pages) g_.pages = {};
+  if (!g_.p7) { g_.p7 = 1; if (g_.intro) g_.pointMsg = 1; }
+  return g_;
+};
+
+// ---- Lighthouse Point: a headland with the sea on three sides
+AREAS.point = {
+  name: "LIGHTHOUSE POINT", w: 50, h: 50, outdoor: true,
+  seaD: (x, y) => {                                             // > 0: how far out to sea
+    const e = Math.sqrt(((x - 400) / 340) ** 2 + ((y - 470) / 360) ** 2), dE = (e - 1) * 340, dN = y > 560 ? Math.abs(x - 400) - 300 : 1e9;
+    return Math.min(dE, dN) + 9 * Math.sin(x / 37) + 7 * Math.sin(y / 29 + 1);
+  },
+  paths: [[[400, 810], [400, 560], [404, 300], [400, 214]], [[402, 520], [520, 470], [584, 432]]],
+  exits: [{ side: "s", a: 300, b: 500, to: "lagoon", x: 598, y: 24 }],
+};
+AREAS.lagoon.exits.push({ side: "n", a: 560, b: 640, to: "point", x: 400, y: 784 });
+function artLighthouse(lit) {
+  const P = paintCanvas(46, 112);
+  P.shadow(22, 106, 20, 4);
+  for (let j = 0; j < 72; j++) { const w = 22 + Math.round(j * 0.16), x0 = 23 - (w >> 1); for (let i = 0; i < w; i++) P.px(x0 + i, 32 + j, Math.floor(j / 12) % 2 ? "#f0ecdc" : "#c84646"); P.px(x0, 32 + j, INK); P.px(x0 + w - 1, 32 + j, INK); }
+  P.rect(16, 92, 14, 14, "#5a3c28"); P.rect(16, 92, 14, 1, INK); P.rect(22, 92, 1, 14, "#3c2818");
+  P.rect(9, 28, 28, 5, "#3c3c46"); P.rect(13, 12, 20, 16, INK); P.rect(14, 13, 18, 14, lit ? "#ffe68c" : "#2c3446"); P.rect(22, 13, 2, 14, INK);
+  P.rect(11, 6, 24, 7, "#3c3c46"); P.rect(20, 1, 6, 6, "#3c3c46"); P.rect(22, 0, 2, 2, INK);
+  return P.c;
+}
+function artCaveMouth() {
+  const P = paintCanvas(60, 44);
+  P.shadow(30, 40, 28, 3);
+  for (let j = 0; j < 36; j++) for (let i = 0; i < 60; i++) { const dx = (i - 30) / 30, dy = (j - 36) / 36; if (dx * dx + dy * dy < 1) P.px(i, j + 4, (Math.floor(i / 5) + Math.floor(j / 4)) % 3 ? "#8c8494" : "#76707e"); }
+  for (let j = 0; j < 22; j++) for (let i = 0; i < 26; i++) { const dx = (i - 13) / 13, dy = (j - 22) / 22; if (dx * dx + dy * dy < 1) P.px(17 + i, 18 + j, j < 3 ? "#2c2834" : "#0c0a12"); }
+  P.rect(15, 38, 30, 2, "#5a5462");
+  return P.c;
+}
+function pointObjects() {
+  const o = [], add = (k, x, y, solid, act) => o.push({ k, x, y, solid, act }), A = AREAS.point, r = seeded(901);
+  add("lighthouse", 377, 104, [6, 92, 34, 14], { kind: "lighthouse" });
+  add("cavemouth", 556, 384, [0, 14, 60, 22], { kind: "cave", rect: [14, 18, 32, 28] });
+  add("scave", 520, 436, [24, 10, 6, 8], { kind: "say", text: ["THE CAVES. A HAND-PAINTED SIGN: KEEPER'S STAIR. MIND THE DARK."] });
+  add("spoint", 430, 740, [24, 10, 6, 8], { kind: "say", text: ["LIGHTHOUSE POINT. THE LIGHT HAS BEEN DARK FOR MANY YEARS."] });
+  const clear = (x, y, w, h) => !o.some(q => x + w > q.x - 6 && x < q.x + IART[q.k].width + 6 && y + h > q.y - 4 && y < q.y + IART[q.k].height + 4) && pathDist(A, x + w / 2, y + h - 4) > 18 && A.seaD(x + w / 2, y + h) < -24;
+  for (let i = 0; i < 260; i++) {
+    const x = r.uniform(0, 780), y = r.uniform(0, 780), palm = r.random() < 0.3, [w, h] = palm ? [28, 42] : [16, 12];
+    if (!clear(x, y, w, h)) continue;
+    if (palm) add("palm", x, y, [10, 30, 8, 6]); else add(r.random() < 0.5 ? "bush" : "bushb", x, y, [3, 6, 10, 4]);
+  }
+  for (let i = 0; i < 60; i++) { const x = r.uniform(0, 780), y = r.uniform(0, 780); if (clear(x, y, 10, 8)) add("rock", x, y, [1, 3, 8, 4]); }
+  return o;
+}
+const POINT_MOUTH = [586, 446];
+
+// ---- making a cave floor
+function caveArt() {
+  if (IART.cup) return;
+  for (let L = 1; L <= 5; L++) {
+    const [, fl, , face] = LAYERS[L], rc = "rgb(" + face.join(",") + ")", rd = "rgb(" + face.map(v => Math.round(v * 0.7)).join(",") + ")";
+    const rock = (spk, gem) => { const P = paintCanvas(16, 14); P.shadow(8, 12, 7, 2); P.rows(["..rrrr..", ".rrrrrr.", "rrhrrrrd", "rrrrrrdd", ".rrrddd."].map(q => q), { r: rc, h: shade("#" + face.map(v => v.toString(16).padStart(2, "0")).join(""), 1.3), d: rd }, 0, 4, false); if (spk) for (const [a, b] of gem ? [[4, 5], [6, 4], [5, 6]] : [[2, 6], [5, 7], [4, 5]]) P.rect(a, b + 1, gem ? 2 : 1, gem ? 2 : 1, spk); return P.c; };
+    IART["crock" + L] = rock(null); IART["core" + L] = rock(({ 1: "#d2824a", 2: "#e6e6f0", 3: "#f4f8ff", 4: "#ffd246", 5: "#c88cf0" })[L]); IART["cgem" + L] = rock(({ 1: "#ffffff", 2: "#c896ff", 3: "#7af0f0", 4: "#ff5070", 5: "#ff8cff" })[L], 1);
+    void fl;
+  }
+  const lad = up => { const P = paintCanvas(16, up ? 26 : 16); if (up) { P.rect(3, 0, 2, 26, "#8c5a32"); P.rect(11, 0, 2, 26, "#8c5a32"); for (let k = 0; k < 6; k++) P.rect(3, 3 + k * 4, 10, 1, "#b47e4a"); } else { P.rect(0, 2, 16, 12, INK); P.rect(1, 3, 14, 10, "#06040a"); P.rect(4, 3, 2, 10, "#8c5a32"); P.rect(10, 3, 2, 10, "#8c5a32"); for (let k = 0; k < 3; k++) P.rect(4, 4 + k * 3, 8, 1, "#b47e4a"); } return P.c; };
+  IART.cup = lad(true); IART.cdown = lad(false);
+  const C = paintCanvas(18, 14); C.rect(0, 0, 18, 13, INK); C.rect(1, 1, 16, 11, "#8c5a32"); C.rect(1, 1, 16, 4, "#b47e4a"); C.rect(8, 4, 2, 3, GOLD); IART.cchest = C.c;
+  IART.lighthouse = artLighthouse(false); IART.cavemouth = artCaveMouth(); IART.scave = artSign("THE CAVES"); IART.spoint = artSign("LIGHTHOUSE POINT");
+}
+const _isleArt7 = isleArt; isleArt = function () { _isleArt7(); caveArt(); };
+function buildCave(n) {
+  const s = isleSave(), L = Math.ceil(n / 10), boss = n % 10 === 0, Ly = LAYERS[L];
+  let r = seeded(n * 7919 + DAYN(s) * 31 + 17), G, entry, exit, dist;
+  const inb = (x, y) => x >= 0 && y >= 0 && x < CAVE_W && y < CAVE_H, D4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const bfs = (sx, sy, grid) => { const d = grid.map(rw => rw.map(() => -1)), q = [[sx, sy]]; d[sy][sx] = 0; while (q.length) { const [x, y] = q.shift(); for (const [a, b] of D4) { const nx = x + a, ny = y + b; if (inb(nx, ny) && d[ny][nx] < 0 && grid[ny][nx] === "f") { d[ny][nx] = d[y][x] + 1; q.push([nx, ny]); } } } return d; };
+  for (let tries = 0; tries < 8; tries++) {
+    if (boss) { G = []; for (let y = 0; y < CAVE_H; y++) { const rw = []; for (let x = 0; x < CAVE_W; x++) rw.push(Math.hypot(x - 14.5, (y - 15) * 1.1) < 12.5 + Math.sin(x * 1.7 + y) * 0.6 ? "f" : "x"); G.push(rw); } entry = [15, 26]; G[26][15] = "f"; }
+    else {
+      let w = []; for (let y = 0; y < CAVE_H; y++) { const rw = []; for (let x = 0; x < CAVE_W; x++) rw.push(x === 0 || y === 0 || x === CAVE_W - 1 || y === CAVE_H - 1 || r.random() < 0.45); w.push(rw); }
+      for (let it = 0; it < 5; it++) w = w.map((rw, y) => rw.map((v, x) => { if (x === 0 || y === 0 || x === CAVE_W - 1 || y === CAVE_H - 1) return true; let k = 0; for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) if ((a || b) && w[y + b][x + a]) k++; return k >= 5 || (it < 2 && k === 0); }));
+      G = w.map(rw => rw.map(v => v ? "x" : "f"));
+      const floors = []; G.forEach((rw, y) => rw.forEach((v, x) => { if (v === "f") floors.push([x, y]); }));
+      if (floors.length < 260) { r = seeded(n * 7919 + DAYN(s) * 31 + 101 + tries * 13); continue; }
+      let best = null;                                        // keep the biggest open space; fill the rest in
+      const seen = new Set();
+      for (const [x, y] of floors) { if (seen.has(x + "," + y)) continue; const d = bfs(x, y, G), reg = []; d.forEach((rw, yy) => rw.forEach((v, xx) => { if (v >= 0) { reg.push([xx, yy]); seen.add(xx + "," + yy); } })); if (!best || reg.length > best.length) best = reg; }
+      const keep = new Set(best.map(([x, y]) => x + "," + y)); G = G.map((rw, y) => rw.map((v, x) => keep.has(x + "," + y) ? "f" : "x"));
+      if (best.length < 240) { r = seeded(n * 7919 + DAYN(s) * 31 + 101 + tries * 13); continue; }
+      const open = best.filter(([x, y]) => [-1, 0, 1].every(b => [-1, 0, 1].every(a => G[y + b] && G[y + b][x + a] === "f")));
+      entry = (open.length ? open : best)[Math.floor(r.random() * (open.length || best.length))];
+    }
+    break;
+  }
+  dist = bfs(entry[0], entry[1], G);
+  let far = entry; G.forEach((rw, y) => rw.forEach((v, x) => { if (dist[y][x] > dist[far[1]][far[0]]) far = [x, y]; }));
+  exit = boss ? [15, 15] : far;
+  if (!boss && r.random() < 0.75) {                              // a cave pool, as long as it doesn't cut the way through
+    const cand = []; G.forEach((rw, y) => rw.forEach((v, x) => { if (v === "f" && x < CAVE_W - 2 && y < CAVE_H - 2 && dist[y][x] > 5 && Math.hypot(x - exit[0], y - exit[1]) > 4 && [-1, 0, 1, 2].every(b => [-1, 0, 1, 2].every(a => G[y + b][x + a] === "f"))) cand.push([x, y]); }));
+    if (cand.length) {
+      const [px, py] = cand[Math.floor(r.random() * cand.length)], cells = [[0, 0], [1, 0], [0, 1], [1, 1], [r.random() < 0.5 ? 2 : -1, r.random() < 0.5 ? 0 : 1]];
+      cells.forEach(([a, b]) => G[py + b][px + a] = "a");
+      const d2 = bfs(entry[0], entry[1], G);
+      if (d2[exit[1]][exit[0]] < 0) cells.forEach(([a, b]) => G[py + b][px + a] = "f");
+    }
+  }
+  // paint
+  const W = CAVE_W * TS, H = CAVE_H * TS, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x2 = c.getContext("2d"), img = x2.createImageData(W, H), d = img.data, pr = seeded(n * 31 + 5);
+  const put = (i, col) => { d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255; };
+  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
+    const tx = Math.floor(px / TS), ty = Math.floor(py / TS), t = G[ty][tx], i = (py * W + px) * 4, nn = pr.random();
+    let col;
+    if (t === "x") { const below = ty + 1 < CAVE_H && G[ty + 1][tx] !== "x", yy = py % TS; col = below && yy >= 6 ? (yy === 6 ? Ly[3].map(v => Math.min(255, v + 30)) : Ly[3].map(v => Math.round(v * (nn < 0.85 ? 1 : 0.85)))) : Ly[2].map(v => Math.round(v * (nn < 0.9 ? 1 : 1.25))); }
+    else if (t === "a") { col = Ly[4].map(v => Math.round(v * ((px + py * 3) % 11 === 0 ? 1.3 : 1))); }
+    else col = Ly[1][nn < 0.7 ? 0 : nn < 0.88 ? 1 : 2];
+    put(i, col);
+  }
+  x2.putImageData(img, 0, 0);
+  const tiles = G.map(rw => rw.slice());
+  // things in it
+  const objs = [], used = new Set(), near = (x, y, p, k) => Math.abs(x - p[0]) <= k && Math.abs(y - p[1]) <= k;
+  const freeTile = (minD, avoid) => { for (let k = 0; k < 200; k++) { const x = 1 + Math.floor(r.random() * (CAVE_W - 2)), y = 1 + Math.floor(r.random() * (CAVE_H - 2)); if (G[y][x] !== "f" || used.has(x + "," + y) || dist[y][x] < minD || near(x, y, entry, 2) || near(x, y, exit, 1) || (avoid && avoid(x, y))) continue; used.add(x + "," + y); return [x, y]; } return null; };
+  objs.push({ k: "cup", x: entry[0] * TS, y: entry[1] * TS - 12, solid: null, act: { kind: "ladderup", rect: [0, 4, 16, 22] } });
+  if (!boss) objs.push({ k: "cdown", x: exit[0] * TS, y: exit[1] * TS, solid: null, act: { kind: "ladder", rect: [0, 0, 16, 16] } });
+  else if (s.cave.boss[L] && L < 5) objs.push({ k: "cdown", x: exit[0] * TS, y: exit[1] * TS, solid: null, act: { kind: "ladder", rect: [0, 0, 16, 16] } });
+  if (!boss) {
+    const nRocks = 26 + Math.floor(r.random() * 12);
+    for (let k = 0; k < nRocks; k++) { const t = freeTile(2); if (!t) break; const q = r.random(), kind = q < 0.04 + L * 0.005 ? "gem" : q < 0.27 ? "ore" : "rock"; objs.push({ k: (kind === "gem" ? "cgem" : kind === "ore" ? "core" : "crock") + L, x: t[0] * TS, y: t[1] * TS + 2, solid: [3, 7, 10, 6], cave: { kind, hp: kind === "gem" ? 3 : kind === "ore" ? 2 : 1 } }); }
+  }
+  if (PAGE_FLOORS.includes(n) && !boss && !s.cave.chest[n]) { const t = freeTile(Math.floor(dist[exit[1]][exit[0]] * 0.5)) || freeTile(3); if (t) objs.push({ k: "cchest", x: t[0] * TS - 1, y: t[1] * TS + 2, solid: [0, 2, 18, 11], act: { kind: "cchest" } }); }
+  const foes = [];
+  if (!boss) { const nf = Math.min(10, 3 + Math.floor(n / 6)); for (let k = 0; k < nf; k++) { const t = freeTile(8); if (t) foes.push(makeFoe(CAVE_FOES_BY_LAYER[L][k % 2], t[0] * TS + 8, t[1] * TS + 10, n)); } }
+  else if (!s.cave.boss[L]) foes.push(makeBoss(L));
+  return { id: "cave_" + n, A: { name: "FLOOR " + n + ": " + Ly[0], w: CAVE_W, h: CAVE_H, outdoor: false, cave: true, layer: L, n, boss }, c, tiles, objs, W, H, glints: [], pools: [], entry: [entry[0] * TS + 8, entry[1] * TS + 14], exitT: exit, foes };
+}
+
+// ---- creatures: [name, layer, hp, speed, how it moves, palette, rows (two frames)]
+const CAVE_FOES = {
+  crab: { name: "CAVE CRAB", hp: 2, sp: 24, kind: "walk", r: 6, rows: [[".a.....a.", "aa.....aa", ".aaaaaaa.", "aakaaakaa", ".aaaaaaa.", "a.a...a.a"], [".a.....a.", "aa.....aa", ".aaaaaaa.", "aakaaakaa", ".aaaaaaa.", ".a.a.a.a."]], pal: { a: "#c86450", k: "#fadc5a" } },
+  bat: { name: "DRIP BAT", hp: 1, sp: 44, kind: "bat", r: 5, rows: [["a.......a", "aa.aaa.aa", ".aakakaa.", "...aaa..."], ["...aaa...", "..akaka..", ".aaaaaaa.", "aa.....aa"]], pal: { a: "#5a5070", k: "#ff6e6e" } },
+  beetle: { name: "CRYSTAL BEETLE", hp: 3, sp: 20, kind: "charge", r: 6, rows: [["..a..a..", ".bbbbbb.", "bbcbbcbb", "bbbbbbbb", "bkbbbbkb", ".a.aa.a."], ["..a..a..", ".bbbbbb.", "bbcbbcbb", "bbbbbbbb", "bkbbbbkb", "a.a..a.a"]], pal: { a: "#3c3050", b: "#8c6ad2", c: "#e6d2ff", k: "#ffffff" } },
+  wisp: { name: "SHARD WISP", hp: 2, sp: 30, kind: "bat", r: 5, glow: "#c8a0ff", shoot: 3.2, rows: [["..ww..", ".wbbw.", "wbkkbw", "wbbbbw", ".wbbw.", "..ww.."], [".w..w.", "..bb..", "wbkkbw", "wbbbbw", "..bb..", ".w..w."]], pal: { w: "#e6d2ff", b: "#a078f0", k: "#ffffff" } },
+  slug: { name: "FROST SLUG", hp: 4, sp: 13, kind: "walk", r: 7, rows: [["......aa.", "....aaaak", ".aaaaaaaa", "aaaaaaaaa"], ["......aa.", "....aaaak", "..aaaaaaa", "aaaaaaaaa"]], pal: { a: "#b4dcf0", k: INK } },
+  icebat: { name: "ICE BAT", hp: 2, sp: 50, kind: "bat", r: 5, rows: [["a.......a", "aa.aaa.aa", ".aakakaa.", "...aaa..."], ["...aaa...", "..akaka..", ".aaaaaaa.", "aa.....aa"]], pal: { a: "#78b4dc", k: "#ffffff" } },
+  toad: { name: "EMBER TOAD", hp: 4, sp: 0, kind: "hop", r: 7, glow: "#ff8c32", rows: [[".k....k.", "aaaaaaaa", "abbbbbba", "aaaaaaaa", "a.a..a.a"], [".k....k.", "aaaaaaaa", "abbbbbba", "aaaaaaaa", ".a....a."]], pal: { a: "#c8462c", b: "#ffbe3c", k: "#ffd246" } },
+  cinder: { name: "CINDER BAT", hp: 3, sp: 52, kind: "bat", r: 5, glow: "#ff6e32", rows: [["a.......a", "aa.aaa.aa", ".aakakaa.", "...aaa..."], ["...aaa...", "..akaka..", ".aaaaaaa.", "aa.....aa"]], pal: { a: "#5a2c24", k: "#ffbe3c" } },
+  watcher: { name: "WATCHER", hp: 4, sp: 0, kind: "blink", r: 6, glow: "#e64a5a", rows: [["..aaa..", ".abbba.", "abbkbba", "abkkkba", "abbkbba", ".abbba.", "..aaa.."], ["..aaa..", ".aaaaa.", "abbbbba", "akkkkka", "abbbbba", ".aaaaa.", "..aaa.."]], pal: { a: "#4a2c5a", b: "#f0e6ff", k: "#e64a5a" } },
+  moth: { name: "DREAM MOTH", hp: 3, sp: 38, kind: "bat", r: 6, glow: "#d28cff", rows: [["aa.....aa", "aaa.b.aaa", ".aabbbaa.", "aa.bkb.aa", "a...b...a"], ["..a...a..", ".aa.b.aa.", ".aabbbaa.", "..abkba..", "....b...."]], pal: { a: "#8c5ab4", b: "#f0d2ff", k: INK } },
+};
+const CAVE_FOES_BY_LAYER = [null, ["crab", "bat"], ["beetle", "wisp"], ["slug", "icebat"], ["toad", "cinder"], ["watcher", "moth"]];
+function makeFoe(kind, x, y, n) { const F = CAVE_FOES[kind], inLayer = (n - 1) % 10; return { kind, x, y, hp: F.hp + Math.floor(inLayer / 4), r: F.r, t: Math.random() * 3, st: 0, stun: 0, hit: 0, awake: false, vx: 0, vy: 0, ph: Math.random() * 6 }; }
+const BOSSES = [null,
+  { id: "crab", name: "THE OLD CRAB", hp: 12, r: 17, intro: "SOMETHING HUGE STIRS IN THE SAND...", out: "THE OLD CRAB SCUTTLES BACK INTO THE DARK, MISSING A CLAW.", tro: "tro_crab" },
+  { id: "prism", name: "THE PRISM", hp: 15, r: 14, intro: "THE CRYSTALS IN THE WALLS ALL TURN TO FACE YOU...", out: "THE PRISM SHATTERS INTO A THOUSAND HARMLESS SPARKS.", tro: "tro_prism" },
+  { id: "frost", name: "FROSTMAW", hp: 16, r: 15, intro: "THE ICE UNDER YOUR FEET CRACKS...", out: "FROSTMAW SINKS THROUGH THE ICE AND DOESN'T COME BACK.", tro: "tro_frost" },
+  { id: "cinder", name: "THE CINDER KING", hp: 18, r: 16, intro: "THE FLOOR GLOWS. SOMETHING HEAVY HOPS CLOSER...", out: "THE CINDER KING COOLS INTO A LUMP OF BLACK ROCK. ITS CROWN ROLLS TO YOUR FEET.", tro: "tro_cinder" },
+  { id: "dreamer", name: "THE DREAMER", hp: 20, r: 20, intro: "THE DARK OPENS ITS EYES.", out: "THE DREAMER CLOSES ITS EYES. THE CAVE IS VERY QUIET.", tro: "tro_dream" }];
+function makeBoss(L) { const B = BOSSES[L]; return { boss: L, kind: B.id, x: 15 * TS, y: 11 * TS, hp: B.hp, max: B.hp, r: B.r, t: 0, st: "idle", stT: 1.6, stun: 0, hit: 0, awake: true, ph: 0, eye: 0, spawned: 0 }; }
+
+// ---- going down, coming up
+function caveTripStart() {
+  const s = isleSave(), snap = {};
+  for (const q of s.inv) if (q) snap[q[0]] = (snap[q[0]] || 0) + q[1];
+  ISLE.cave = { hp: s.cave.hpMax, snap, inv: 0, charge: 1, ring: null, shots: [], haz: [], flash: 0, n: 0, foes: [] };
+}
+function enterFloor(n) {
+  const s = isleSave(), old = ISLE.map && ISLE.map.id;
+  if (!ISLE.cave) caveTripStart();
+  caveArt();
+  for (const k of Object.keys(ISLE.maps)) if (k.startsWith("cave_")) delete ISLE.maps[k];
+  const m = buildCave(n); ISLE.maps[m.id] = m;
+  isleGo(m.id, m.entry[0], m.entry[1], "down");
+  const C = ISLE.cave; Object.assign(C, { n, foes: m.foes, shots: [], haz: [], ring: null, charge: 1 });
+  ISLE.fish = null; ISLE.shadows = [];
+  if (n % 5 === 0 && n > s.cave.lift) { s.cave.lift = n; toast("THE ELEVATOR NOW STOPS AT FLOOR " + n, GOLD); }
+  s.cave.deep = Math.max(s.cave.deep || 0, n);
+  const b = C.foes.find(f => f.boss);
+  if (b) isleSay([BOSSES[b.boss].intro, BOSSES[b.boss].name + "!"]);
+  else if (old && !old.startsWith("cave_")) isleSay(["YOU LIGHT YOUR LANTERN AND CLIMB DOWN.", "SHIFT OR X TO PULSE. MINE ROCKS WITH THE PICK. THE LADDER BY THE ENTRANCE TAKES YOU BACK UP."]);
+  play(b ? "thunder" : "plop"); saveStore();
+}
+function caveLeave(blackout) {
+  const s = isleSave(), C = ISLE.cave, lost = [];
+  if (blackout && C) {
+    const now = {}; for (const q of s.inv) if (q) now[q[0]] = (now[q[0]] || 0) + q[1];
+    for (const id in now) { const gain = now[id] - (C.snap[id] || 0), drop = Math.floor(gain / 2); if (drop > 0) { invTake(id, drop); lost.push(drop + " " + ITEMS[id].name); } }
+  }
+  ISLE.cave = null; ISLE.fish = null;
+  for (const k of Object.keys(ISLE.maps)) if (k.startsWith("cave_")) delete ISLE.maps[k];
+  isleGo("point", POINT_MOUTH[0], POINT_MOUTH[1], "down");
+  if (blackout) isleSay(["EVERYTHING GOES DARK...", "YOU WAKE UP AT THE CAVE MOUTH. SOMEONE MUST HAVE CARRIED YOU OUT.", lost.length ? "YOU LOST " + lost.slice(0, 6).join(", ") + "." : "YOU DIDN'T LOSE ANYTHING."]);
+  play(blackout ? "miss" : "tick"); saveStore();
+}
+function caveMouthAct() {
+  const s = isleSave(), stops = [1]; for (let k = 5; k <= s.cave.lift; k += 5) stops.push(k);
+  if (stops.length === 1) { isleSay(["STONE STEPS GO DOWN INTO THE DARK. CLIMB DOWN?"], { opts: ["CLIMB DOWN", "NOT YET"], act: [() => enterFloor(1), () => play("tick")] }); return; }
+  ISLE.list = { kind: "lift", sel: stops.length - 1, top: 0 }; play("select");
+}
+const _listRows7 = listRows;
+listRows = function () {
+  const L = ISLE.list, s = isleSave();
+  if (L.kind === "lift") { const out = [{ icon: "lantern", name: "FLOOR 1", info: "THE TOP OF THE CAVES.", ok: true, act: () => { ISLE.list = null; enterFloor(1); } }]; for (let k = 5; k <= s.cave.lift; k += 5) { const n = k; out.push({ icon: "lantern", name: "FLOOR " + n, info: LAYERS[Math.ceil(n / 10)][0] + (n % 10 === 0 && !s.cave.boss[n / 10] ? ". SOMETHING BIG LIVES ON THIS FLOOR." : "."), ok: true, act: () => { ISLE.list = null; enterFloor(n); } }); } return out; }
+  if (L.kind === "pages") return KEEPER_PAGES.map((t, i) => s.pages[i + 1] ? { icon: "page", name: "PAGE " + (i + 1), info: t, ok: true, act: () => { const i_ = i; isleSay(["THE KEEPER'S LOG, PAGE " + (i_ + 1) + ":", t]); } } : { icon: "page", name: "???", info: "A MISSING PAGE. THE KEEPER WROTE THAT THEY'RE KEPT SAFE BELOW.", ok: false, act: () => {} });
+  return _listRows7();
+};
+Object.assign(LIST_TITLE, { lift: "THE CAVES: ELEVATOR", pages: "THE KEEPER'S LOG" });
+const _listPick7 = listPick;
+listPick = function () { const L = ISLE.list; if (L && (L.kind === "lift" || L.kind === "pages")) { const r = listRows()[L.sel]; if (r && r.ok) { r.act(); play("select"); } else play("miss"); return; } _listPick7(); };
+ISLE_MENU.splice(ISLE_MENU.length - 1, 0, ["KEEPER'S LOG", () => { ISLE.menu = null; ISLE.list = { kind: "pages", sel: 0, top: 0 }; }]);
+function awardPage(n) {
+  const s = isleSave(), i = PAGE_FLOORS.indexOf(n) + 1;
+  if (i <= 0 || s.pages[i]) return [];
+  s.pages[i] = 1;
+  return ["YOU FOUND PAGE " + i + " OF THE KEEPER'S LOG. (" + Object.keys(s.pages).length + " OF 20)", KEEPER_PAGES[i - 1]];
+}
+
+// ---- interacting
+const _isleAct57 = isleAct5;
+isleAct5 = function (o) {
+  const a = o.act, s = isleSave();
+  if (a.kind === "cave") caveMouthAct();
+  else if (a.kind === "lighthouse") isleSay(s.flags.lightkey ? ["THE BRASS KEY TURNS. INSIDE, THE STAIRS ARE ROTTEN THROUGH HALFWAY UP.", "THE LAMP ROOM IS DARK. IT WILL TAKE MORE THAN A KEY TO LIGHT IT AGAIN."] : ["THE LIGHTHOUSE. THE DOOR IS LOCKED TIGHT.", "HIGH ABOVE, THE LAMP ROOM WINDOWS ARE DARK."]);
+  else if (a.kind === "ladder") { const n = ISLE.cave.n + 1; if (n > 50) return; enterFloor(n); }
+  else if (a.kind === "ladderup") isleSay(["CLIMB ALL THE WAY BACK UP?"], { opts: ["CLIMB UP", "STAY"], act: [() => caveLeave(false), () => play("tick")] });
+  else if (a.kind === "cchest") {
+    const n = ISLE.cave.n; s.cave.chest[n] = 1;
+    ISLE.map.objs = ISLE.map.objs.filter(q => q !== o);
+    const L = Math.ceil(n / 10), loot = [[LAYERS[L][5], 3 + Math.floor(Math.random() * 3)], [LAYERS[L][6], 1]];
+    loot.forEach(([id, k]) => { if (invAdd(id, k)) s.owed.push([id, k]); });
+    isleSay(["AN OLD SEA CHEST. INSIDE: " + loot.map(([id, k]) => k + " " + ITEMS[id].name).join(" AND ") + ", WRAPPED IN OILCLOTH WITH A TORN PAGE."].concat(awardPage(n)));
+    play("fanfare"); saveStore();
+  }
+  else _isleAct57(o);
+};
+const _buildArea7 = buildArea;
+buildArea = function (id) {
+  if (id.startsWith("cave_")) return buildCave(+id.slice(5));
+  const m = _buildArea7(id);
+  if (id === "point") { m.objs = pointObjects(); m.objs.forEach((o, i) => { if (o.k === "rock") o.res = { kind: "rock", key: "point:" + i }; }); }
+  if (id === "lagoon") m.objs = m.objs.filter(o => !(o.k === "pile" && o.y < 20));   // the way north is open
+  return m;
+};
+const _startIsland7 = startIsland;
+startIsland = function () {
+  _startIsland7();
+  const s = isleSave();
+  if (s.pointMsg) { s.pointMsg = 0; ISLE.msg.pages.push("THE SHIPWRIGHT CLEARED THE DRIFTWOOD NORTH OF THE LAGOON. THE PATH GOES ON TO LIGHTHOUSE POINT.", "BRAM: 'THERE ARE CAVES UNDER THAT HEADLAND. TAKE A LANTERN, AND DON'T GO DEEPER THAN YOU CAN CLIMB.'"); }
+};
+const _isleSleep7 = isleSleep;
+isleSleep = function (passedOut) { if (ISLE && ISLE.cave) { ISLE.cave = null; for (const k of Object.keys(ISLE.maps)) if (k.startsWith("cave_")) delete ISLE.maps[k]; } _isleSleep7(passedOut); };
+
+// ---- mining and eating
+function caveRockAt(x, y) { for (const o of ISLE.map.objs) if (o.cave && x >= o.x - 3 && x < o.x + 19 && y >= o.y && y < o.y + 18) return o; return null; }
+function caveMine(tool) {
+  const s = isleSave(), [fx, fy] = facingPoint(), o = caveRockAt(fx, fy) || caveRockAt(ISLE.px, ISLE.py - 6);
+  if (!o) { play("miss"); return; }
+  if (tool !== "pick") { toast("THAT NEEDS THE PICK"); play("miss"); return; }
+  o.cave.hp -= s.up.pick ? 2 : 1; o.hit = 0.2; play("hit"); splashDust(Math.floor((o.x + 8) / TS), Math.floor((o.y + 8) / TS), "#b4b4be");
+  if (o.cave.hp > 0) return;
+  ISLE.map.objs = ISLE.map.objs.filter(q => q !== o);
+  const L = ISLE.map.A.layer, k = o.cave.kind, got = k === "gem" ? [[LAYERS[L][6], 1]] : k === "ore" ? [[LAYERS[L][5], 1 + (Math.random() < 0.5 ? 1 : 0)], ["stone", 1]] : [["stone", 1 + (Math.random() < 0.4 ? 1 : 0)]].concat(Math.random() < 0.05 ? [[LAYERS[L][5], 1]] : []);
+  for (const [id, n] of got) { const left = invAdd(id, n); if (left) { toast("YOUR BAG IS FULL"); break; } toast("+" + n + " " + ITEMS[id].name, k === "gem" ? GOLD : "#d2b482"); }
+  if (k === "gem") play("chime");
+}
+const _toolHit7 = toolHit;
+toolHit = function (tool) { if (ISLE.map.A.cave) caveMine(tool); else _toolHit7(tool); };
+const EAT = { dish: 2, artisan: 2, fish: 1, topfish: 1, crop: 1 };
+const _isleInteract7 = isleInteract;
+isleInteract = function () {
+  const I = ISLE, it = held();
+  if (I.map && I.map.A.cave && !I.msg && !I.menu && !I.list && !I.inv && !I.chest && !I.shop && !I.card && !I.log && !I.fish && it && ITEMS[it[0]] && (ITEMS[it[0]].kind === "place" || it[0] === "pot") && !objAt(...facingPoint())) { toast("YOU CAN'T SET THAT DOWN HERE"); play("miss"); return; }
+  if (I.map && I.map.A.cave && I.cave && !I.msg && !I.menu && !I.shop && !I.inv && !I.card && !I.list && !I.chest && !I.log && !I.fish && it && ITEMS[it[0]] && (EAT[ITEMS[it[0]].kind] || ["mushroom", "wildberry", "garlic"].includes(it[0]))) {
+    const [fx, fy] = facingPoint();
+    if (!objAt(fx, fy) && !objAt(I.px, I.py - 4) && !caveRockAt(fx, fy)) {
+      if (I.cave.hp >= isleSave().cave.hpMax) { toast("YOU'RE NOT HURT"); return; }
+      const heal = EAT[ITEMS[it[0]].kind] || 1; I.cave.hp = Math.min(isleSave().cave.hpMax, I.cave.hp + heal); invUse(isleSave().sel);
+      toast("YOU EAT THE " + ITEMS[it[0]].name + ". +" + heal + " HEART" + (heal > 1 ? "S" : ""), "#ff8ca0"); play("chime"); return;
+    }
+  }
+  _isleInteract7();
+};
+
+// ---- fighting
+function caveFree(x, y, r, fly) {
+  const M_ = ISLE.map;
+  for (const [a, b] of [[-r, -r], [r, -r], [-r, r], [r, r]]) {
+    const tx = Math.floor((x + a) / TS), ty = Math.floor((y + b) / TS);
+    if (tx < 0 || ty < 0 || tx >= CAVE_W || ty >= CAVE_H) return false;
+    const t = M_.tiles[ty][tx]; if (t === "x" || (t === "a" && !fly)) return false;
+  }
+  return true;
+}
+function foeMove(f, dx, dy, fly) { if (caveFree(f.x + dx, f.y, f.r * 0.6, fly)) f.x += dx; else f.vx = -f.vx; if (caveFree(f.x, f.y + dy, f.r * 0.6, fly)) f.y += dy; else f.vy = -f.vy; }
+function caveHurt(dmg, fx, fy) {
+  const C = ISLE.cave, I = ISLE;
+  if (!C || C.inv > 0 || I.msg) return;
+  C.hp -= dmg; C.inv = 1.2; C.flash = 0.25; play("zap");
+  const dx = I.px - fx, dy = I.py - fy, d = Math.hypot(dx, dy) || 1;
+  for (let k = 0; k < 14; k++) { const nx = I.px + dx / d, ny = I.py + dy / d; if (!feetBlocked(nx, ny)) { I.px = nx; I.py = ny; } }
+  I.fish = null;
+}
+function caveShot(x, y, ang, sp, col) { ISLE.cave.shots.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, col: col || "#e6d2ff", t: 0 }); }
+const bossOpen = f => f.kind === "frost" ? f.st === "up" : f.kind === "cinder" ? f.st !== "air" : f.kind === "dreamer" ? f.eye > 0.6 : true;
+function cavePulse() {
+  const I = ISLE, C = I.cave, s = isleSave();
+  if (!C || !I.map.A.cave || C.charge < 1 || I.msg) return;
+  C.charge = 0; C.ring = 0; play("pulse");
+  const reach = s.up.pulse ? PULSE_R2 : PULSE_R;
+  C.shots = C.shots.filter(q => Math.hypot(q.x - I.px, q.y - I.py + 6) > reach);
+  for (const f of C.foes) {
+    const d = Math.hypot(f.x - I.px, f.y - (I.py - 6)) - f.r;
+    if (d > reach) continue;
+    if (f.boss && !bossOpen(f)) { f.hit = 0.1; continue; }
+    f.hp--; f.hit = 0.2; f.awake = true;
+    if (!f.boss) { f.stun = 0.5; const dx = f.x - I.px, dy = f.y - I.py, dd = Math.hypot(dx, dy) || 1; for (let k = 0; k < 24; k++) foeMove(f, dx / dd, dy / dd, CAVE_FOES[f.kind].kind === "bat"); }
+    play("hit");
+  }
+  caveSweep();
+}
+function caveSweep() {                                                  // the fallen drop things; a boss falls for good
+  const C = ISLE.cave, s = isleSave(), L = ISLE.map.A.layer;
+  for (const f of C.foes.filter(q => q.hp <= 0)) {
+    if (f.boss) { bossWin(f); continue; }
+    const q = Math.random();
+    if (q < 0.35) { const id = q < 0.05 ? LAYERS[L][6] : q < 0.18 ? LAYERS[L][5] : "stone"; if (!invAdd(id, 1)) toast("+1 " + ITEMS[id].name, "#d2b482"); }
+    splashDust(Math.floor(f.x / TS), Math.floor(f.y / TS), "#c8c8d2");
+  }
+  C.foes = C.foes.filter(q => q.hp > 0);
+  void s;
+}
+function bossWin(f) {
+  const s = isleSave(), L = f.boss, B = BOSSES[L], C = ISLE.cave;
+  s.cave.boss[L] = 1; s.cave.hpMax++; C.hp = s.cave.hpMax; C.shots = []; C.haz = [];
+  C.foes = C.foes.filter(q => q === f);
+  const gems = [[B.tro, 1], [LAYERS[L][6], 2], [LAYERS[L][5], 8]];
+  gems.forEach(([id, n]) => { if (invAdd(id, n)) s.owed.push([id, n]); });
+  s.sd += 500 * L;
+  if (L < 5) ISLE.map.objs.push({ k: "cdown", x: 15 * TS, y: 15 * TS, solid: null, act: { kind: "ladder", rect: [0, 0, 16, 16] } });
+  isleSay([B.out, "YOU GOT THE " + ITEMS[B.tro].name + ", " + gems.slice(1).map(([id, n]) => n + " " + ITEMS[id].name).join(", ") + " AND " + 500 * L + " SAND DOLLARS.", "YOUR HEART FEELS STRONGER: " + s.cave.hpMax + " HEARTS NOW."]
+    .concat(awardPage(L * 10)).concat(L < 5 ? ["A LADDER LEADS FURTHER DOWN."] : ["THE BOTTOM OF THE CAVES. THE WATER IS STILL, AND SOMETHING DEEP BELOW YOU IS DREAMING."]));
+  play("fanfare"); saveStore();
+}
+function bossTick(f, dt) {
+  const I = ISLE, C = I.cave, px = I.px, py = I.py - 6, dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1, ang = Math.atan2(dy, dx);
+  f.t += dt; f.stT -= dt;
+  if (f.kind === "crab") {
+    if (f.st === "idle") { foeMove(f, dx / d * 26 * dt, dy / d * 26 * dt); if (f.stT <= 0) { f.st = Math.random() < 0.6 ? "wind" : "slam"; f.stT = f.st === "wind" ? 0.6 : 0.5; f.ax = dx / d; f.ay = dy / d; } }
+    else if (f.st === "wind") { if (f.stT <= 0) { f.st = "dash"; f.stT = 0.6; } }
+    else if (f.st === "dash") { foeMove(f, f.ax * 160 * dt, f.ay * 160 * dt); if (f.stT <= 0) { f.st = "idle"; f.stT = 1.8 + Math.random(); } }
+    else if (f.st === "slam") { if (f.stT <= 0) { C.haz.push({ ring: 0, x: f.x, y: f.y, max: 110, sp: 120, col: "#e6c8a0" }); f.st = "idle"; f.stT = 2.2; play("thunder"); } }
+    if (f.hp <= f.max / 2 && !f.spawned) { f.spawned = 1; C.foes.push(makeFoe("crab", f.x - 30, f.y + 10, 9), makeFoe("crab", f.x + 30, f.y + 10, 9)); }
+  } else if (f.kind === "prism") {
+    f.ph += dt * 0.8; foeMove(f, Math.cos(f.t * 0.7) * 14 * dt, Math.sin(f.t * 0.9) * 10 * dt);
+    if (f.stT <= 0) { const n = f.hp <= f.max / 2 ? 12 : 8; for (let k = 0; k < n; k++) caveShot(f.x, f.y, f.ph + k * 6.283 / n, 55, "#e6d2ff"); f.stT = 2.0; f.tp = (f.tp || 0) + 1; play("tick"); }
+    if (f.tp >= 3) { f.tp = 0; for (let k = 0; k < 40; k++) { const a = Math.random() * 6.28, r = 60 + Math.random() * 50, nx = px + Math.cos(a) * r, ny = py + Math.sin(a) * r; if (caveFree(nx, ny, f.r * 0.6)) { f.x = nx; f.y = ny; break; } } f.hit = 0.3; }
+  } else if (f.kind === "frost") {
+    if (f.st === "idle" || f.st === "under") { if (f.st === "idle") { f.st = "under"; f.stT = 1.6; } if (f.stT < 1.0 && !f.warn) { f.warn = [px, py]; } if (f.stT <= 0) { const [wx, wy] = f.warn || [px, py]; f.x = wx; f.y = wy; f.warn = null; f.st = "up"; f.stT = 2.6; f.shots = 0; if (Math.hypot(px - wx, py - wy) < 22) caveHurt(1, wx, wy); play("thunder"); } }
+    else if (f.st === "up") { if (f.stT < 2.2 - f.shots * 0.7 && f.shots < 3) { f.shots++; for (const k of [-0.25, 0, 0.25]) caveShot(f.x, f.y, ang + k, 75, "#e6faff"); } if (f.stT <= 0) { f.st = "under"; f.stT = 1.6; } }
+  } else if (f.kind === "cinder") {
+    if (f.st === "idle") { if (f.stT <= 0) { f.st = "air"; f.stT = 0.7; f.ax = dx / d; f.ay = dy / d; f.hop = Math.min(80, d); } }
+    else if (f.st === "air") { foeMove(f, f.ax * f.hop / 0.7 * dt, f.ay * f.hop / 0.7 * dt); if (f.stT <= 0) { f.st = "idle"; f.stT = 0.9; C.haz.push({ ring: 0, x: f.x, y: f.y, max: 80, sp: 140, col: "#ff8c32" }, { pool: 5, x: f.x + (Math.random() - 0.5) * 20, y: f.y + 6, r: 13 }); play("thunder"); } }
+  } else if (f.kind === "dreamer") {
+    const fast = f.hp <= f.max / 2 ? 1.4 : 1, cyc = (f.t * fast) % 3.4;
+    f.eye = cyc > 1.8 ? Math.min(1, (cyc - 1.8) * 4) * Math.min(1, (3.4 - cyc) * 4) : 0;
+    if (f.stT <= 0) { for (let k = 0; k < 10; k++) caveShot(f.x, f.y, f.t + k * 0.628, 50, "#d28cff"); if (fast > 1) for (const k of [-0.2, 0, 0.2]) caveShot(f.x, f.y, ang + k, 70, "#ff6e8c"); f.stT = 2.6 / fast; play("tick"); }
+    f.spawnT = (f.spawnT || 6) - dt; if (f.spawnT <= 0 && C.foes.length < 5) { f.spawnT = 6; C.foes.push(makeFoe("moth", f.x + (Math.random() - 0.5) * 60, f.y + 24, 49)); }
+  }
+  const solid = !(f.kind === "frost" && f.st === "under") && !(f.kind === "cinder" && f.st === "air");
+  if (solid && d < f.r + 5) caveHurt(1, f.x, f.y);
+}
+function caveTick(dt) {
+  const I = ISLE, C = I.cave, s = isleSave();
+  C.charge = Math.min(1, C.charge + dt / (s.up.pulse ? PULSE_CD2 : PULSE_CD)); C.inv = Math.max(0, C.inv - dt); C.flash = Math.max(0, C.flash - dt);
+  if (C.ring !== null) { C.ring += dt * 4; if (C.ring > 1) C.ring = null; }
+  const px = I.px, py = I.py - 6;
+  for (const h of C.haz) {
+    if (h.ring !== undefined) { const prev = h.ring; h.ring += h.sp * dt; const pd = Math.hypot(px - h.x, py - h.y); if (pd > prev - 4 && pd < h.ring + 4 && pd > 10) caveHurt(1, h.x, h.y); h.dead = h.ring > h.max; }
+    else { h.pool -= dt; if (Math.hypot(px - h.x, py - h.y) < h.r) caveHurt(1, h.x, h.y); h.dead = h.pool <= 0; }
+  }
+  C.haz = C.haz.filter(h => !h.dead);
+  for (const q of C.shots) { q.x += q.vx * dt; q.y += q.vy * dt; q.t += dt; if (!caveFree(q.x, q.y, 1, true) || q.t > 6) q.dead = true; else if (Math.hypot(q.x - px, q.y - py) < 7) { q.dead = true; caveHurt(1, q.x, q.y); } }
+  C.shots = C.shots.filter(q => !q.dead);
+  for (const f of C.foes) {
+    f.hit = Math.max(0, f.hit - dt);
+    if (f.boss) { bossTick(f, dt); continue; }
+    const F = CAVE_FOES[f.kind], dx = px - f.x, dy = py - f.y, d = Math.hypot(dx, dy) || 1;
+    f.t += dt;
+    if (!f.awake) { if (d < 110) f.awake = true; else continue; }
+    if (f.stun > 0) { f.stun -= dt; continue; }
+    if (F.kind === "walk") foeMove(f, dx / d * F.sp * dt, dy / d * F.sp * dt);
+    else if (F.kind === "bat") { const w = Math.sin(f.t * 5 + f.ph); foeMove(f, (dx / d * F.sp + -dy / d * w * 30) * dt, (dy / d * F.sp + dx / d * w * 30) * dt, true); if (F.shoot) { f.sh = (f.sh === undefined ? F.shoot : f.sh) - dt; if (f.sh <= 0 && d < 140) { f.sh = F.shoot; caveShot(f.x, f.y, Math.atan2(dy, dx), 60, F.glow); } } }
+    else if (F.kind === "charge") { if (f.st === 0) { foeMove(f, dx / d * F.sp * dt, dy / d * F.sp * dt); if (d < 90 && f.t > 1.5) { f.st = 1; f.t = 0; f.ax = dx / d; f.ay = dy / d; } } else if (f.st === 1) { if (f.t > 0.6) { f.st = 2; f.t = 0; } } else { foeMove(f, f.ax * 140 * dt, f.ay * 140 * dt); if (f.t > 0.5) { f.st = 0; f.t = 0; } } }
+    else if (F.kind === "hop") { if (f.st === 0 && f.t > 1.1) { f.st = 1; f.t = 0; f.ax = dx / d; f.ay = dy / d; } else if (f.st === 1) { foeMove(f, f.ax * 70 * dt, f.ay * 70 * dt); if (f.t > 0.4) { f.st = 0; f.t = 0; } } }
+    else if (F.kind === "blink") { if (f.st === 0 && f.t > 2.2) { for (let k = 0; k < 30; k++) { const a = Math.random() * 6.28, r = 48 + Math.random() * 22, nx = px + Math.cos(a) * r, ny = py + Math.sin(a) * r; if (caveFree(nx, ny, 4)) { f.x = nx; f.y = ny; break; } } f.st = 1; f.t = 0; } else if (f.st === 1 && f.t > 0.8) { f.st = 2; f.t = 0; f.ax = dx / d; f.ay = dy / d; } else if (f.st === 2) { foeMove(f, f.ax * 120 * dt, f.ay * 120 * dt, true); if (f.t > 0.45) { f.st = 0; f.t = 0; } } }
+    if (d < f.r + 4 && !(F.kind === "hop" && f.st === 1)) caveHurt(1, f.x, f.y);
+  }
+  caveSweep();
+  if (C.hp <= 0) caveLeave(true);
+}
+const _isleUpdate7 = isleUpdate;
+isleUpdate = function (dt) {
+  _isleUpdate7(dt);
+  const I = ISLE;
+  if (I && I.cave && I.map && I.map.A.cave && !I.msg && !I.menu && !I.shop && !I.inv && !I.log && !I.card && !I.list && !I.chest && !I.folkUI) caveTick(dt);
+};
+
+// ---- drawing the caves
+function foeSprite(f) { const F = CAVE_FOES[f.kind], fr = Math.floor(f.t * 6 + f.ph) % 2; return pix("foe_" + f.kind + fr, F.rows[fr], F.pal); }
+function drawBoss(f, x, y) {
+  const B = BOSSES[f.boss], flash = f.hit > 0 && Math.floor(T * 30) % 2;
+  g.save(); g.translate(Math.round(x), Math.round(y));
+  const fill = (col, path) => { g.fillStyle = flash ? "#ffffff" : col; g.strokeStyle = INK; g.lineWidth = 1; g.beginPath(); path(); g.fill(); g.stroke(); };
+  const ell = (cx, cy, rx, ry) => () => g.ellipse(cx, cy, rx, ry, 0, 0, 7);
+  if (f.kind === "crab") {
+    const w = f.st === "wind" ? Math.sin(T * 40) * 1.5 : 0;
+    fill("#a8483a", ell(-20 + w, -6, 8, 6)); fill("#a8483a", ell(20 - w, -6, 8, 6)); fill("#c86450", ell(0, 0, 17, 11));
+    fill("#fadc5a", ell(-6, -8, 2.5, 2.5)); fill("#fadc5a", ell(6, -8, 2.5, 2.5));
+    g.fillStyle = INK; for (const k of [-1, 1]) for (let j = 0; j < 3; j++) g.fillRect(k * (12 + j * 3), 6 + j, 2, 5);
+  } else if (f.kind === "prism") {
+    g.rotate(f.ph * 0.3);
+    fill("#8c6ad2", () => { g.moveTo(0, -18); g.lineTo(13, 0); g.lineTo(0, 18); g.lineTo(-13, 0); g.closePath(); });
+    fill("#e6d2ff", () => { g.moveTo(0, -9); g.lineTo(6, 0); g.lineTo(0, 9); g.lineTo(-6, 0); g.closePath(); });
+  } else if (f.kind === "frost") {
+    if (f.st === "up") { fill("#5a8cb4", ell(0, 4, 15, 9)); fill("#b4dcf0", ell(0, -4, 12, 11)); fill(INK, ell(-5, -7, 2, 2)); fill(INK, ell(5, -7, 2, 2)); g.fillStyle = "#ffffff"; for (let k = -2; k <= 2; k++) g.fillRect(k * 3 - 1, 2, 2, 4); }
+    else { g.globalAlpha = 0.5; fill("#3c5a78", ell(0, 6, 12, 4)); g.globalAlpha = 1; }
+  } else if (f.kind === "cinder") {
+    const lift = f.st === "air" ? Math.sin((1 - f.stT / 0.7) * Math.PI) * 26 : 0;
+    g.globalAlpha = 0.3; g.fillStyle = "#000"; g.beginPath(); g.ellipse(0, 8, 15, 4, 0, 0, 7); g.fill(); g.globalAlpha = 1;
+    g.translate(0, -lift); fill("#a03c28", ell(0, 0, 17, 12)); fill("#ffbe3c", ell(0, 3, 10, 6)); fill("#ffd246", ell(-7, -9, 3, 3)); fill("#ffd246", ell(7, -9, 3, 3));
+    g.fillStyle = flash ? "#fff" : "#3c3c46"; g.fillRect(-8, -16, 16, 4); for (let k = 0; k < 3; k++) g.fillRect(-8 + k * 7, -19, 2, 3);
+  } else if (f.kind === "dreamer") {
+    fill("#2c1a3c", ell(0, 0, 22, 18)); fill("#4a2c5a", ell(0, -2, 16, 12));
+    for (const [ex, ey] of [[-9, -3], [9, -3], [0, 6]]) { const o = f.eye; if (o > 0.05) { fill("#f0e6ff", ell(ex, ey, 4, 3 * o)); g.fillStyle = "#e64a5a"; g.fillRect(ex - 1, ey - 1, 2, 2); } else { g.fillStyle = "#8c5ab4"; g.fillRect(ex - 4, ey, 8, 1); } }
+  }
+  g.restore();
+  void B;
+}
+const _placedSprites7 = placedSprites;
+placedSprites = function (list) {
+  _placedSprites7(list);
+  const C = ISLE.cave;
+  if (!C || !ISLE.map.A.cave) return;
+  for (const f of C.foes) list.push([f.y + 4, { draw(cx, cy) {
+    const x = f.x - cx, y = f.y - cy;
+    if (x < -40 || x > IW + 40 || y < -40 || y > IH + 40) return;
+    if (f.boss) { drawBoss(f, x, y); return; }
+    g.globalAlpha = 0.25; g.fillStyle = "#000"; g.beginPath(); g.ellipse(Math.round(x), Math.round(y + 4), f.r, 2, 0, 0, 7); g.fill(); g.globalAlpha = 1;
+    if (f.hit > 0 && Math.floor(T * 30) % 2) return;
+    const c = foeSprite(f), fly = CAVE_FOES[f.kind].kind === "bat" ? -6 + Math.sin(T * 4 + f.ph) * 2 : CAVE_FOES[f.kind].kind === "hop" && f.st === 1 ? -Math.sin(f.t / 0.4 * Math.PI) * 8 : 0;
+    if (CAVE_FOES[f.kind].kind === "charge" && f.st === 1 && Math.floor(T * 20) % 2) return;
+    g.drawImage(c, Math.round(x - c.width / 2), Math.round(y - c.height + 4 + fly));
+  } }]);
+};
+let CAVE_DARK = null;
+function caveDark(cx, cy) {
+  const I = ISLE, C = I.cave, s = isleSave();
+  if (!CAVE_DARK || CAVE_DARK.width !== IW || CAVE_DARK.height !== IH) { CAVE_DARK = document.createElement("canvas"); CAVE_DARK.width = IW; CAVE_DARK.height = IH; }
+  const x = CAVE_DARK.getContext("2d"), R = s.up.lantern ? 112 : 82, flick = Math.sin(T * 9) * 2 + Math.sin(T * 23);
+  x.globalCompositeOperation = "source-over"; x.clearRect(0, 0, IW, IH); x.fillStyle = "rgba(4, 3, 10, 0.9)"; x.fillRect(0, 0, IW, IH);
+  x.globalCompositeOperation = "destination-out";
+  const hole = (hx, hy, r, a) => { const gr = x.createRadialGradient(hx, hy, 0, hx, hy, r); gr.addColorStop(0, "rgba(0,0,0," + a + ")"); gr.addColorStop(0.6, "rgba(0,0,0," + a * 0.75 + ")"); gr.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = gr; x.beginPath(); x.arc(hx, hy, r, 0, 7); x.fill(); };
+  hole(I.px - cx, I.py - 10 - cy, R + flick, 1);
+  if (C) {
+    for (const f of C.foes) { const gl = f.boss ? (f.kind === "frost" && f.st === "under" ? 0 : 54) : CAVE_FOES[f.kind].glow ? 22 : 0; if (gl) hole(f.x - cx, f.y - cy, gl, 0.8); }
+    for (const q of C.shots) hole(q.x - cx, q.y - cy, 10, 0.9);
+    for (const h of C.haz) if (h.pool) hole(h.x - cx, h.y - cy, 22, 0.8);
+  }
+  for (const o of I.map.objs) if (o.k.startsWith("cgem") || o.k === "cdown" || o.k === "cup") hole(o.x + 8 - cx, o.y + 8 - cy, o.k.startsWith("cgem") ? 16 : 20, 0.55);
+  g.drawImage(CAVE_DARK, 0, 0);
+  if (C) {                                                             // things that glow, drawn over the dark
+    for (const h of C.haz) {
+      if (h.pool) { g.globalAlpha = Math.min(0.8, h.pool); g.fillStyle = "#ff6e28"; g.beginPath(); g.ellipse(h.x - cx, h.y - cy, h.r, h.r * 0.6, 0, 0, 7); g.fill(); g.globalAlpha = 1; }
+      else { g.globalAlpha = 0.8; g.strokeStyle = h.col; g.lineWidth = 2; g.beginPath(); g.arc(h.x - cx, h.y - cy, h.ring, 0, 7); g.stroke(); g.globalAlpha = 1; }
+    }
+    for (const q of C.shots) disc(q.col, q.x - cx, q.y - cy, 2);
+    for (const f of C.foes) if (f.boss && f.kind === "frost" && f.warn) { g.globalAlpha = 0.5 + 0.3 * Math.sin(T * 20); g.strokeStyle = "#e6faff"; g.lineWidth = 1; g.beginPath(); g.arc(f.warn[0] - cx, f.warn[1] - cy, 22, 0, 7); g.stroke(); g.globalAlpha = 1; }
+    if (C.ring !== null) { const reach = s.up.pulse ? PULSE_R2 : PULSE_R; g.globalAlpha = 1 - C.ring; g.strokeStyle = CYAN; g.lineWidth = 2; g.beginPath(); g.arc(I.px - cx, I.py - 6 - cy, reach * C.ring, 0, 7); g.stroke(); g.globalAlpha = 1; }
+    if (C.flash > 0) { g.globalAlpha = C.flash * 1.6; rect("#c81e32", 0, 0, IW, IH); g.globalAlpha = 1; }
+  }
+}
+function pulseBtn() { return [IW - 42, IH - 52, 38, 26]; }
+const _drawIsleHud7 = drawIsleHud;
+drawIsleHud = function (s) {
+  _drawIsleHud7(s);
+  const C = ISLE.cave;
+  if (!C || !ISLE.map.A.cave) return;
+  for (let k = 0; k < s.cave.hpMax; k++) g.drawImage(heartIcon(k < C.hp), 24 + k * 7, 8);
+  text("FLOOR " + C.n, 24, 22, 1, "#d2c8e6", "left", null);
+  const b = C.foes.find(f => f.boss);
+  if (b) { const w = Math.min(160, IW - 150), x = Math.round((IW - w) / 2); text(BOSSES[b.boss].name, IW / 2, 8, 1, WHITE, "center", null); rect(INK, x - 1, 13, w + 2, 6); rect("#5a2c3c", x, 14, w, 4); rect("#e64a5a", x, 14, Math.round(w * b.hp / b.max), 4); }
+  const [bx, by, bw, bh] = pulseBtn(), ready = C.charge >= 1;
+  islePanel(bx, by, bw, bh); text("PULSE", bx + bw / 2, by + 9, 1, ready ? "#2c8ca0" : "#a08c78", "center", null);
+  rect("#d2c0a0", bx + 5, by + 17, bw - 10, 4); rect(ready ? CYAN : "#78b4c8", bx + 5, by + 17, Math.round((bw - 10) * C.charge), 4);
+};
+const _isleKey7 = isleKey;
+isleKey = function (e, down) {
+  if (ISLE && down && ISLE.cave && ["KeyX", "ShiftLeft", "ShiftRight"].includes(e.code) && !ISLE.msg && !ISLE.menu && !ISLE.list && !ISLE.inv && !ISLE.chest) { e.preventDefault(); cavePulse(); return; }
+  _isleKey7(e, down);
+};
+const _isleTouch7 = isleTouch;
+isleTouch = function (e) {
+  if (ISLE && ISLE.cave && ISLE.map.A.cave && !ISLE.msg && !ISLE.menu && !ISLE.list && !ISLE.inv && !ISLE.chest && !ISLE.folkUI) {
+    const [x, y] = islePos(e), [bx, by, bw, bh] = pulseBtn();
+    if (x >= bx && x < bx + bw && y >= by && y < by + bh) { cavePulse(); return; }
+  }
+  _isleTouch7(e);
+};

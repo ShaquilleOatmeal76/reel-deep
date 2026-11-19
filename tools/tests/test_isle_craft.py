@@ -77,7 +77,7 @@ async def main():
         await ev(GIVE + "('wood', 200)"); await ev(GIVE + "('stone', 200)"); await ev(GIVE + "('glass', 20)"); await ev(GIVE + "('fiber', 60)"); await ev(GIVE + "('shell', 5)")
         await page.keyboard.press("KeyC")
         check("C opens crafting", await ev("ISLE.list && ISLE.list.kind") == "craft")
-        check("about 40 recipes", await ev("listRows().length") == 40)
+        check("40 recipes, plus 5 from the caves (part 7)", await ev("listRows().length") == 45)
         await page.wait_for_timeout(200); await page.screenshot(path=OUT + "/crafting.png")
         w0 = await ev("invCount('wood')"); await page.keyboard.press("KeyE")
         check("making a chest uses 40 wood", await ev("[invCount('chest'), invCount('wood')]") == [1, w0 - 40])

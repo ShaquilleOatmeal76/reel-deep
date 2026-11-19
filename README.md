@@ -73,6 +73,12 @@ as you restore buildings, fill the island log, grow crops and fill the aquarium.
 walks around the island and has a house you can visit. Talk to them once a day and give them one gift a day (hold the
 item and press E). Birthdays count triple. Friendship goes up to 10 hearts, with story scenes at 2, 5 and 8. **V**
 opens the Villagers screen: hearts, birthdays and the gifts you've learned they love.
+North of the Lagoon is **Lighthouse Point**, with the dark lighthouse and a cave mouth. The caves go down 50 floors in
+five layers. The floors are new every day. Your lantern lights the way, and **Shift** or **X** (or the PULSE button)
+fights off cave creatures. Mine rocks with the pick for stone, ore and gems, fish the cave pools, and eat food to heal.
+A boss waits on every tenth floor. Beating one gives you an extra heart. The elevator at the cave mouth stops every
+five floors. If you black out, you wake at the cave mouth having lost half of what you found on that trip. Twenty pages
+of the lighthouse keeper's log are hidden down there. Read them from the menu (**KEEPER'S LOG**).
 
 ## Save codes
 
