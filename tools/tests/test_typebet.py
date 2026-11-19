@@ -46,6 +46,13 @@ async def main():
                 got = await page.evaluate(get)
                 check(f"{tag} {name}: tap amount, type 37 -> {got}", opened and got == 37, (opened, got))
                 if name == "reels": await page.screenshot(path=os.path.join(OUT, f"{tag}_reel_37.png"))
+            # dive bets: typing more than 75 gives 75, and a bigger stake can't be placed
+            await page.evaluate("(() => { REEL.store.tav.chips = 100000; openBet(); S.overlay = 'bet'; TAV.bet.stake = stakeStep(TAV.bet.stake, STAKE_TYPE, DIVE_MAX); })()")
+            await page.wait_for_timeout(100); await page.keyboard.press("Control+A"); await page.keyboard.type("5000"); await page.keyboard.press("Enter")
+            check(f"{tag} dive bet: typing 5000 gives the 75 max", await page.evaluate("TAV.bet.stake") == 75)
+            r = await page.evaluate("(() => { TAV.bet.stake = 5000; const c = REEL.store.tav.chips; placeBet(); return [REEL.store.tav.chips === c, !REEL.store.tav.bet]; })()")
+            check(f"{tag} dive bet: a stake over 75 is refused", r == [True, True], r)
+            await page.evaluate("S.overlay = null")
             # clamps, cancel, all in, + / - grid
             r = await page.evaluate("""(() => { REEL.store.tav.chips = 500; rdOpen(); S.overlay = 'reel'; CZ.rd.bet = 10; return 0; })()""")
             await page.evaluate("CZ.rd.bet = stakeStep(CZ.rd.bet, STAKE_TYPE)"); await page.wait_for_timeout(100); await page.keyboard.type("99999"); await page.keyboard.press("Enter")
