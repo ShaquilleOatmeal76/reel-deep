@@ -112,6 +112,36 @@ async def main():
         await ev("SIEGE.SG.camp.tab = 'research'"); await pg.wait_for_timeout(150); await pg.screenshot(path=os.path.join(OUT, "research.png"))
         await ev("SIEGE.SG.camp.tab = 'hero'"); await pg.wait_for_timeout(150); await pg.screenshot(path=os.path.join(OUT, "hero.png"))
         await ev("REEL.store.siege = undefined")
+        # all 33 maps (parts 4-6): pads clear, buoys off the HUD, routes end at the buoy
+        r = await ev("""(() => { const Q = SIEGE, out = []; const ids = Object.keys(Q.SMAPS); for (const id of ids) { const M = Q.SMAPS[id], R = Q.mapRoutes(M);
+            if (M.pads.length < 11) out.push(id + ' pads ' + M.pads.length);
+            const [bx, by] = M.buoy; if (Q.HUD_KEEP.some(([a, b, w, h]) => bx > a - 10 && bx < a + w + 10 && by - 40 > b - 4 && by - 40 < b + h)) out.push(id + ' buoy under HUD');
+            if (M.crack && M.pads.some(([x, y]) => Math.hypot(x - M.crack[0], y - M.crack[1]) < 30)) out.push(id + ' pad on the crack'); }
+            return [ids.length, out]; })()""")
+        check("33 maps", r[0] == 33, r[0]); check("maps laid out cleanly", r[1] == [], r[1])
+        check("every third map has its guardian", await ev("Object.keys(SIEGE.SMAPS).every(id => { const w = SIEGE.buildWaves(id, SIEGE.SMAPS[id]); const has = w[w.length - 1].some(g => g[0] === 'GUARD'); return id.endsWith('.2') ? has : !has; })"))
+        # every guardian spawns, uses its trick and can be beaten, with no errors
+        r = await ev("""(() => { const Q = SIEGE, out = {};
+            for (let z = 0; z < 11; z++) { const id = z + '.2'; Q.startSiege(id, {test: true}); const g = Q.SG; g.shells = 9999;
+              g.M.pads.forEach((p, i) => { g.towers[i] = {k: i % 2 ? 6 : 0, lv: 3, spec: 0, x: p[0], y: p[1], cd: 0}; });
+              g.wave = g.waves.length - 1; const e = Q.addGuardian(0); const hp0 = e.hp;
+              let acted = false; for (let i = 0; i < 60 * 40 && !g.result; i++) { Q.siegeStep(1 / 60); if (g.towers.some(t => t && (t.gone || t.off)) || g.dim > 0 || g.overgrown || g.eaten || e.heat > 0 || g.en.length > 1 || e.lives < 2) acted = true; }
+              out[z] = { hurt: e.hp < hp0 || e.hp <= 0, acted, end: !!g.result }; }
+            return out; })()""")
+        check("guardians fight and break rules", all(v["hurt"] and v["acted"] for v in r.values()), r)
+        # the twists
+        r = await ev("""(() => { const Q = SIEGE, out = {}, mk = (k, ri, s) => { const g = Q.SG; g.en.push({k, ri, s, hp: 999, max: 999, spd: 20, arm: 0, slime: 0, hull: 1, bounty: 1, fl: '', slow: 0, slowT: 0, held: 0, poison: 0, poisonT: 0, x: 0, y: 0, right: true, hitT: 0, grabT: 0, id: Math.random()}); const e = g.en[g.en.length - 1]; const p = Q.atS(g.R.routes[ri], s); e.x = p[0]; e.y = p[1]; return e; };
+            Q.startSiege('1.0', {test: true}); let g = Q.SG; const [kx, ky] = g.M.kelp[0]; const e1 = mk('crawler', 0, 0); e1.x = kx; e1.y = ky; out.kelpHides = Q.inKelp(e1);
+            Q.startSiege('2.0', {test: true}); g = Q.SG; const [rx, ry] = g.M.rush[0]; const e2 = mk('crawler', 0, 0); e2.x = rx; e2.y = ry; out.rush = zoneSpeed(e2) > 1.5;
+            Q.startSiege('3.0', {test: true}); g = Q.SG; const d0 = Q.zoneDark(); g.wave = 8; out.twilight = Q.zoneDark() > 0.5 && d0 < 0.5;
+            Q.startSiege('4.0', {test: true}); g = Q.SG; for (let i = 0; i < 60; i++) Q.siegeStep(1/60); const dA = g.door; for (let i = 0; i < 60 * 21; i++) Q.siegeStep(1/60); out.doors = g.door !== dA && Q.doorOpen(0) !== Q.doorOpen(1);
+            Q.startSiege('7.0', {test: true}); g = Q.SG; const e3 = mk('crawler', 0, g.R.routes[0].total * 0.25); e3.spd = 0; e3.hp = e3.max = 999; for (let i = 0; i < 60 * 7; i++) Q.siegeStep(1/60); out.vents = e3.hp < 999;
+            Q.startSiege('8.0', {test: true}); g = Q.SG; g.hero.x = 5; g.hero.y = 260; const e4 = mk('crawler', 0, 40); e4.spd = 0; hurt(e4, 9999, 'phys'); for (let i = 0; i < 60 * 4; i++) Q.siegeStep(1/60); out.bonesRise = g.en.some(e => e.risen);
+            Q.startSiege('5.0', {test: true}); g = Q.SG; g.towers[0] = {k: 0, lv: 1, spec: -1, x: g.M.pads[0][0], y: g.M.pads[0][1], cd: 0}; out.darkShort = darkK(g.towers[0]) < 1; g.towers[1] = {k: 5, lv: 3, spec: -1, x: g.M.pads[0][0] + 10, y: g.M.pads[0][1], cd: 0}; out.litFull = darkK(g.towers[0]) === 1;
+            return out; })()""")
+        for k, v in r.items(): check("twist: " + k, v, r)
+        r = await ev("(() => { const Q = SIEGE; Q.startSiege('10.2', {test: true}); const g = Q.SG; g.wave = g.waves.length - 1; g.spawn = []; g.en = []; Q.siegeStep(1/60); return g.result; })()")
+        check("beating the Sleeper seals the crack", r and r.get("ending") == 1, r)
         # bot play: a good bot wins the first two Shallows maps
         rs = [await ev("siegeBot('0.0', 1.0, 1200)") for _ in range(3)]
         check("good bot wins Sandbar Crossing", all(x["won"] for x in rs), rs)
