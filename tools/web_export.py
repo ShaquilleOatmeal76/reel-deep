@@ -11,7 +11,7 @@ art = fishing.Art(pg)
 OUT = os.path.dirname(HERE)                # the game folder this tools folder sits in
 LATE = ("gboot", "werewolf", "lucky")
 LATE2 = ("blacktip", "leopard", "mako", "hammer", "goblin", "lshark")   # sharks, Nov 18, 2026: packed after everything else         # added later: packed at the end so older sprites keep their places
-items = [(s[0], art.spr[s[0]][0]) for s in fishing.SPECIES if s[0] not in LATE + LATE2]
+items = [(s[0], art.spr[s[0]][0]) for s in fishing.SPECIES if s[0] not in LATE + LATE2 + fishing.REEF]
 items += [("jelly0", art.jelly[0]), ("jelly1", art.jelly[1]), ("whale", art.whale[0])]
 # ---- cosmetics -----------------------------------------------------------------------------------
 INK = fishing.INK
@@ -177,6 +177,8 @@ items.append(("boat%d" % (len(BOATS) + 1 + len(TAV_BOATS) - 1), outlined(pg, fro
 _named = dict(items)
 items += [("mhat%d" % (len(HATS) - 1), FS.monsterify(_named["hat%d" % (len(HATS) - 1)], 300 + len(HATS) - 1, eyes=0, teeth=False)),
           ("mpet%d" % (len(PETS) - 1), FS.monsterify(_named["pet%d" % (len(PETS) - 1)], 500 + len(PETS) - 1, eyes=2, teeth=False))]
+# ---- Nov 19, 2026: the Coral Reef's fish. Appended so nothing above moves.
+items += [(fid, art.spr[fid][0]) for fid in fishing.REEF]
 W = 512; x = y = 1; rowh = 0; pos = {}
 for name, s in items:
     w, h = s.get_size()
@@ -288,13 +290,85 @@ def build_wide():
         y = rnd.randrange(200 * M, DEPTH_PX)
         if rnd.random() < (y / M - 200) / 400:
             w.set_at((rnd.randrange(WW), y), rnd.choice([(90, 230, 255), (140, 255, 200), (255, 130, 220), (200, 210, 255)]))
-    return w, vents, H, glows
-wide, wide_vents, wide_h, wide_glows = build_wide()
+    reef = build_reef(w)
+    return w, vents, H, glows, reef
+
+
+def build_reef(w):
+    """The Coral Reef (Nov 19, 2026), 170-250 m: a coral wall down both sides and a few coral heads in open water.
+    Its own random numbers, so nothing else in the picture moves. Returns anemones [x, y, colour index] for game.js to sway."""
+    M = fishing.M
+    rnd = random.Random(1170)
+    top, bot = 168 * M, 252 * M
+    rock, rock2, edge = (96, 64, 98), (72, 46, 80), (150, 108, 150)
+    COLS = [(255, 112, 150), (255, 160, 70), (184, 104, 234), (255, 222, 84), (80, 222, 200), (232, 72, 84), (255, 190, 210)]
+    anem = []
+    def brain(x, y, r, c):
+        pg.draw.circle(w, c, (x, y), r); dk_ = tuple(max(0, v - 60) for v in c)
+        for k in range(1, r, 2): pg.draw.arc(w, dk_, (x - k, y - r + 1, k * 2, r * 2 - 2), 0.4 + k * 0.3, 2.6 + k * 0.3, 1)
+        w.set_at((x - r // 3, y - r // 2), (255, 255, 255))
+    def stag(x, y, ang, ln, c, depth=0):
+        x2, y2 = x + math.cos(ang) * ln, y - math.sin(ang) * ln
+        pg.draw.line(w, c, (x, y), (x2, y2), 2 if depth < 2 else 1)
+        if depth < 3:
+            for da in (-0.5, 0.45): stag(x2, y2, ang + da + rnd.uniform(-0.15, 0.15), ln * 0.66, c, depth + 1)
+        else: w.set_at((int(x2), int(y2)), (255, 250, 230))
+    def fan(x, y, ang, c):
+        for k in range(7):
+            a = ang - 0.7 + k * 0.23; ln = rnd.randrange(9, 15)
+            pg.draw.line(w, c, (x, y), (x + math.cos(a) * ln, y - math.sin(a) * ln), 1)
+        for _ in range(10):
+            a, d = ang + rnd.uniform(-0.7, 0.7), rnd.uniform(4, 12)
+            w.set_at((int(x + math.cos(a) * d), int(y - math.sin(a) * d)), c)
+    def tubes(x, y, c, up=True):
+        for k in range(rnd.randrange(2, 4)):
+            h = rnd.randrange(6, 13); xx = x + k * 4 - 4
+            w.fill(c, (xx, y - h, 3, h)); w.fill((30, 20, 40), (xx + 1, y - h, 1, 2))
+    def deco(x, y, inward):                     # something growing out of the rock at (x, y), leaning toward the open water
+        kind = rnd.random(); c = rnd.choice(COLS)
+        up = math.pi / 2 + (-0.6 if inward > 0 else 0.6) * (0 if inward == 0 else 1)
+        if kind < 0.3: brain(x, y - 2, rnd.randrange(3, 7), c)
+        elif kind < 0.55: stag(x, y, up + rnd.uniform(-0.3, 0.3), rnd.randrange(6, 10), c)
+        elif kind < 0.75: fan(x, y, up, c)
+        elif kind < 0.9: tubes(x, y, c)
+        else: anem.append([x, y, COLS.index(c)])
+    for side in (0, 1):                         # the walls
+        pts = []
+        for y in range(top, bot + 1, 12):
+            e = max(0.0, math.sin(math.pi * (y - top) / (bot - top))) ** 0.6
+            d = e * (48 + 32 * math.sin(y * 0.011 + side * 2.3) + 16 * math.sin(y * 0.047 + side)) + rnd.uniform(-3, 3)
+            pts.append((max(0, int(d)) if side == 0 else WW - max(0, int(d)), y))
+        poly = [(0 if side == 0 else WW, top)] + pts + [(0 if side == 0 else WW, bot)]
+        pg.draw.polygon(w, rock, poly)
+        for x_, y_ in pts[::2]:
+            if abs(x_ - (0 if side == 0 else WW)) > 6: pg.draw.circle(w, rock2, (x_ + (-6 if side == 0 else 6), y_ + 4), 4)
+        pg.draw.lines(w, edge, False, pts, 1)
+        for i, (x_, y_) in enumerate(pts):
+            if abs(x_ - (0 if side == 0 else WW)) > 4 and rnd.random() < 0.8:
+                deco(x_ + (-1 if side == 0 else 1), y_, 1 if side == 0 else -1)
+            if abs(x_ - (0 if side == 0 else WW)) > 14 and rnd.random() < 0.5:       # more growing on the face, further back
+                xx = x_ - rnd.randrange(4, 12) if side == 0 else x_ + rnd.randrange(4, 12)
+                deco(xx, y_ + rnd.randrange(-4, 8), 0)
+        for _ in range(260):                      # the whole face is crowded with coral
+            x_, y_ = rnd.randrange(0, 100) if side == 0 else WW - rnd.randrange(1, 100), rnd.randrange(top, bot)
+            if tuple(w.get_at((x_, y_)))[:3] in (rock, rock2): deco(x_, y_, 0)
+    heads = [(196, 186), (276, 203), (226, 222), (128, 194), (352, 212), (258, 241), (178, 236), (316, 180)]
+    for hx, hm in heads:                         # coral heads in open water, kept small and few so the fish stay easy to see
+        y = hm * M; r = rnd.randrange(11, 17)
+        pg.draw.ellipse(w, rock, (hx - r, y - r // 2, r * 2, r)); pg.draw.arc(w, edge, (hx - r, y - r // 2, r * 2, r), 0.2, 2.9, 1)
+        pg.draw.ellipse(w, rock2, (hx - r + 3, y, r * 2 - 6, r // 2))
+        for k in range(4): deco(hx - r + 4 + k * (2 * r - 8) // 3 + rnd.randrange(-2, 3), y - r // 2 + 2, 0)
+        anem.append([hx + rnd.randrange(-r // 2, r // 2), y - r // 2 + 1, rnd.randrange(len(COLS))])
+    for _ in range(140):                          # drifting colour: tiny bits of coral and plankton in the water
+        x, y = rnd.randrange(WW), rnd.randrange(top + 30, bot - 30)
+        if tuple(w.get_at((x, y)))[:3] != rock: w.set_at((x, y), rnd.choice(COLS))
+    return dict(anem=anem, cols=[list(c) for c in COLS])
+wide, wide_vents, wide_h, wide_glows, wide_reef = build_wide()
 pg.image.save(wide, OUT + "/assets/water.png")
 F = fishing
 data = dict(atlas=pos, glyphs=ac._GLYPHS, species=[list(s[:3]) + [list(s[3])] + list(s[4:]) for s in F.SPECIES], zones=[list(z) for z in F.ZONES], zoneCol=F.ZONE_COL,
             lures=[["standard", "STANDARD", "BALANCED. 1 PULSE", 1.0, 1.0, 1, 1.0, 1.0, 0], ["angler", "ANGLER'S HOOK", "LET 2 FISH GO", 1.0, 1.0, 2, 1.0, 1.0, 0],
-                   ["glow", "GLOW LURE", "PULLS FISH+JELLIES", 1.0, 1.0, 1, 1.5, 1.2, 26], ["sonar", "SONAR", "3 PULSES. SLOW DROP", 0.85, 1.0, 3, 1.0, 1.0, 0]], vents=wide_vents, glows=wide_glows, waterH=wide_h, waterW=WW, water=[[a, list(c)] for a, c in F.WATER],
+                   ["glow", "GLOW LURE", "PULLS FISH+JELLIES", 1.0, 1.0, 1, 1.5, 1.2, 26], ["sonar", "SONAR", "3 PULSES. SLOW DROP", 0.85, 1.0, 3, 1.0, 1.0, 0]], vents=wide_vents, glows=wide_glows, reef=wide_reef, waterH=wide_h, waterW=WW, water=[[a, list(c)] for a, c in F.WATER],
             chars=CHARS, boats=[b[0] for b in BOATS] + [MAW_BOAT] + TAV_BOATS, pets=[p[0] for p in PETS], flags=[f[0] for f in FLAGS], flairPos=FLAIR_POS, hooks=[h[0] for h in HOOKS], hats=[h[0] for h in HATS], flair=[f[0] for f in FLAIR],
             flip=dict(zones=[list(z) for z in FS.ZONES], crossing=FS.CROSSING_M, junk=list(FS.JUNK), mythic=FS.MYTHIC, hunters=FS.HUNTERS, crossingN=FS.CROSSING_N,
                       species=[[c[0], c[1], c[2], list(c[3]), c[4], c[5], c[6]] for c in FS.CREATURES]),

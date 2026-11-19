@@ -15,6 +15,12 @@ const TROPHY = "#ff6e3c", LEGEND = "#ffd246";            // trophies are red-ora
 const INK = "#1a1628", WHITE = "#fafaff", GOLD = "#ffd246", RED = "#f05050", CYAN = "#5ae6ff", LIME = "#82f082", ORANGE = "#ffa046", GREY = "#96a0c8";
 const rgb = c => "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")";
 const ZONE_COL = DATA.zoneCol.map(rgb);
+// Zones by depth. The Coral Reef (Nov 19, 2026) was appended as zone 10, because saves, bets and tasks use zone numbers,
+// but it sits between the Kelp Forest and Twilight. Anything that means "deeper" compares ZRANK, never the zone number.
+const ZORD = ZONES.map((z, i) => i).sort((a, b) => ZONES[a][1] - ZONES[b][1]), ZRANK = [];
+ZORD.forEach((z, r) => { ZRANK[z] = r; });
+const REEF_Z = 10, FLOOR_Z = ZORD[ZORD.length - 1];
+const zoneStep = (z, d) => ZORD[(ZRANK[z] + d + ZORD.length) % ZORD.length];   // the next (d = 1) or previous (d = -1) zone down
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, k) => a + (b - a) * k;
 const lerpCol = (a, b, k) => rgb([0, 1, 2].map(i => Math.round(lerp(a[i], b[i], clamp(k, 0, 1)))));
@@ -182,7 +188,7 @@ try {
   if (!old.dives) store.dives = Math.max(store.dives || 0, Math.floor(Object.values(store.log).reduce((a, e) => a + (e.n || 0), 0) / 3));   // dives from before they were counted, roughly
 } catch (e) { /* private window: play without saving */ }
 function saveStore() { try { localStorage.setItem("reeldeep", JSON.stringify(store)); } catch (e) { /* ignore */ } }
-const SHARKS = ["blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "sleeper", "frill", "megalodon"];   // touch one anywhere but its back half and it bites
+const SHARKS = ["blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "sleeper", "frill", "megalodon", "whitetip", "nurse"];   // touch one anywhere but its back half and it bites
 const HIDDEN = ["poop", "gboot", "werewolf", "lucky"];                // the mythic and the secret catches never show in the log
 const LOGGED = SPECIES.filter(s => !HIDDEN.includes(s[0]));
 
@@ -320,9 +326,9 @@ const SHOP = [
   ["FISH FLAIR", "flair", price(DATA.flair.slice(0, SHOP_N.flair), [0, 1200, 1500, 4000, 1000, 2000, 1800, 3000, 2500, 1200, 1500, 1000, 2000, 1200, 1800, 1500, 3500, 2500, 2000, 6000])],
 ];
 // Titles are earned, never bought. [id, name, how to get it (null = a secret)]
-const ZONE_TITLES = ["BEACH BUM", "KELP KEEPER", "TWILIGHT RANGER", "WRECK DIVER", "ABYSS WALKER", "CRYSTAL SEER", "VENT WARDEN", "BONE COLLECTOR", "TRENCH RAT", "FLOOR MANAGER"];
+const ZONE_TITLES = ["BEACH BUM", "KELP KEEPER", "TWILIGHT RANGER", "WRECK DIVER", "ABYSS WALKER", "CRYSTAL SEER", "VENT WARDEN", "BONE COLLECTOR", "TRENCH RAT", "FLOOR MANAGER", "REEF RAIDER"];
 const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
-  .concat(ZONES.map((z, i) => ["zone" + i, ZONE_TITLES[i], "LOG ALL OF " + z[0]]))
+  .concat(ZONES.slice(0, 10).map((z, i) => ["zone" + i, ZONE_TITLES[i], "LOG ALL OF " + z[0]]))
   .concat([["floor", "BOTTOM FEEDER", "TOUCH THE SEA FLOOR"], ["legends", "LEGEND HUNTER", "LOG EVERY LEGENDARY"], ["trophies", "TROPHY ROOM", "A TROPHY OF EVERY FISH"],
     ["all", "COMPLETIONIST", "LOG EVERY SPECIES"], ["baiter", "BAIT MASTER", null], ["mythic", "HOLY CRAP", null], ["soggy", "SOGGY", null],
     ["roller", "HIGH ROLLER", "1,000 TAVERN CHIPS"], ["shark", "CARD SHARK", "WIN 25 HANDS OF 21"], ["derbyking", "DERBY KING", "WIN 10 DERBY BETS"],
@@ -332,7 +338,7 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
     .map((n, i) => ["fzone" + i, n, "FILL " + DATA.flip.zones[i][0]]))
   .concat([["flegends", "MONSTER HUNTER", "EVERY FLIPSIDE LEGENDARY"], ["bestiary", "BESTIARY KEEPER", "FILL THE BESTIARY"], ["allofme", "ALL OF ME", "ALL 22 MONSTER FORMS"]])
   .concat([["pegleg", "PEG LEG", "HIT X25 IN PLINKO"], ["calledit", "CALLED IT", "HIT A DERBY TRIFECTA"]])
-  .concat([["jaws", "JAWS", "CATCH ALL 9 SHARKS"], ["tailgater", "TAILGATER", "CATCH 25 SHARKS"], ["sharkbait", "SHARK BAIT", "LOSE 10 FISH TO SHARKS"],   // Nov 18, 2026
+  .concat([["jaws", "JAWS", "CATCH ALL 11 SHARKS"], ["tailgater", "TAILGATER", "CATCH 25 SHARKS"], ["sharkbait", "SHARK BAIT", "LOSE 10 FISH TO SHARKS"],   // Nov 18, 2026
     ["release", "CATCH AND RELEASE", "LET 50 FISH GO"], ["hattrick", "HAT TRICK", "3 TROPHIES ON ONE HOOK"], ["maxed", "MAXED OUT", "HIT THE X5 BONUS CAP"],
     ["heavy", "HEAVYWEIGHT", "A 1,000 LB HAUL"], ["emptyhand", "EMPTY HANDED", "TOUCH FLOOR, EMPTY HOOK"], ["bountyhunter", "BOUNTY HUNTER", "BOUNTY FISH ON 7 DAYS"],
     ["jellylegs", "JELLY LEGS", "GET STUNG 25 TIMES"], ["lifer", "LIFER", "FINISH 500 DIVES"], ["nightowl", "NIGHT OWL", "CATCH 10 GHOST FISH"],
@@ -345,7 +351,8 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat([["anchors", "ANCHORS AWEIGH", "ROLL THREE ANCHORS"], ["reeldeal", "THE REEL DEAL", "THREE LEGENDS ON THE REELS"], ["helmsman", "HELMSMAN", "HIT X10 ON THE WHEEL"]])
   .concat([["treasure", "TREASURE HUNTER", "5 CRATES PAST 10 JELLIES"], ["fullnet", "FULL NET", "ALL 5 IN NET HAUL"]])
   .concat([["onthehouse", "ON THE HOUSE", "BUY 10 ROUNDS"]])
-  .concat([["megajack", "MEGA JACKPOT", "HIT THE REEL DEAL JACKPOT"], ["tablechamp", "TABLE CHAMP", "WIN A WEEKLY TOURNAMENT"], ["podium", "PODIUM", "TOP 3 IN A TOURNAMENT"]]);
+  .concat([["megajack", "MEGA JACKPOT", "HIT THE REEL DEAL JACKPOT"], ["tablechamp", "TABLE CHAMP", "WIN A WEEKLY TOURNAMENT"], ["podium", "PODIUM", "TOP 3 IN A TOURNAMENT"]])
+  .concat([["zone" + REEF_Z, ZONE_TITLES[REEF_Z], "LOG ALL OF " + ZONES[REEF_Z][0]]]);   // the Coral Reef, Nov 19, 2026
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
@@ -398,7 +405,7 @@ function tasks() {                                         // today's and this w
   return store.tasks;
 }
 function taskText(t) {
-  const zs = ["SHALLOWS", "KELP", "TWILIGHT", "WRECK", "ABYSS", "CAVES", "VENTS", "BONE YARD", "TRENCH", "FLOOR"];
+  const zs = ["SHALLOWS", "KELP", "TWILIGHT", "WRECK", "ABYSS", "CAVES", "VENTS", "BONE YARD", "TRENCH", "FLOOR", "REEF"];
   return { zone: t.n + " " + zs[t.a] + " FISH", trophy: t.n > 1 ? "LAND " + t.n + " TROPHIES" : "LAND A TROPHY", depth: "DIVE TO " + t.a + " M", score: "ONE DIVE: " + t.a + " LB",
     bounty: "CATCH " + t.n + " BOUNTY FISH", set: "SET BONUS X2 OR MORE", fish: "CATCH " + t.n + " FISH", floor: t.n > 1 ? "FLOOR " + t.n + " TIMES" : "TOUCH THE FLOOR", legend: t.n > 1 ? "LAND " + t.n + " LEGENDS" : "LAND A LEGENDARY", species: "CATCH " + t.n + " SPECIES",
     weight: "HAUL " + t.n + " LB", }[t.k];
@@ -426,8 +433,10 @@ function progressTasks(dive) {                             // -> [text, coins] f
 function dayString(d) { d = d || new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
 function timeOfDay() { const h = new Date().getHours(); return h >= 5 && h < 11 ? "MORNING" : h >= 11 && h < 17 ? "DAY" : h >= 17 && h < 21 ? "DUSK" : "NIGHT"; }
 function todaysBounty() {                              // one ordinary species is worth triple today, the same one for everybody
-  const d = new Date(), pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && s[2] <= 6 && s[5] >= 2 && !SHARKS.includes(s[0])).map(s => s[0]);   // sharks are left out so adding them didn't change the bounty
-  return RNG((d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()) * 7 + 1).choice(pool);
+  const d = new Date(), n = d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  const reef = n >= 20261120;                          // reef fish join the pool from Nov 20, 2026, so the day it went live kept its bounty
+  const pool = SPECIES.filter(s => !s[7] && s[6] === null && s[4] > 0 && (s[2] <= 6 || (reef && s[2] === REEF_Z)) && s[5] >= 2 && !SHARKS.includes(s[0])).map(s => s[0]);   // sharks are left out so adding them didn't change the bounty
+  return RNG(n * 7 + 1).choice(pool);
 }
 // The weather follows the clock, the same for everybody, so refreshing can't reroll it. Storms were whole clock hours,
 // which meant a lunch-break session could be all storm (Kade, Nov 17, 2026). Now each 15 minutes is stormy about 1 time in
@@ -435,7 +444,7 @@ function todaysBounty() {                              // one ordinary species i
 const STORM_MS = 15 * 60000, STORM_P = 0.15;
 const stormBlock = b => RNG(b * 2654435761 + 17).random() < STORM_P;
 function stormNow(ms) { const b = Math.floor((ms || Date.now()) / STORM_MS); return stormBlock(b) && !stormBlock(b - 1); }
-function zoneOf(m) { for (let i = 0; i < ZONES.length; i++) if (m < ZONES[i][2]) return i; return ZONES.length - 1; }
+function zoneOf(m) { for (const i of ZORD) if (m < ZONES[i][2]) return i; return FLOOR_Z; }
 
 // ------------------------------------------------------------- leaderboard
 const LB = {                                             // two lists in the database: /daily/<date> and /all, each entry {n, s, t, h, ti}
@@ -501,7 +510,9 @@ function newDive() {
   S.storm = stormNow();                                  // weather comes from the clock, so refreshing can't reroll it
   const r = S.rng.random();                              // frenzies and whales are still rolled per dive, as before
   if (!S.storm && r >= 0.14 && r < 0.32) {
-    const z = S.rng.randint(1, 8), a = S.rng.uniform(ZONES[z][1] + 20, ZONES[z][2] - 50);
+    let z = S.rng.randint(1, 8);
+    if (z === 1 && S.rng.random() < 0.5) z = REEF_Z;      // the Kelp Forest's frenzies are shared with the Coral Reef
+    const a = S.rng.uniform(ZONES[z][1] + 20, ZONES[z][2] - 50);
     const pool = SPECIES.filter(s => s[2] === z && s[4] > 0 && s[5] >= 3 && s[6] === null).map(s => s[0]);
     S.frenzy = [a, a + 30, S.rng.choice(pool), S.rng.choice([-1, 1])];
   } else if (!S.storm && r >= 0.32 && r < 0.45) S.whaleAt = S.rng.uniform(150, 420);
@@ -577,8 +588,8 @@ function chunk(i) {
     for (let k = 0; k < n; k++) {
       let y = top + (k + 0.5) * C.CHUNK / n + rng.uniform(-4, 4), zz = z;
       const r1 = rng.random(), r2 = rng.random(), r3 = rng.random();
-      if (z + 1 < ZONES.length && zb - m < C.BLEND && r1 < 0.5 * (1 - (zb - m) / C.BLEND)) zz = z + 1;   // the next zone's fish drift up to meet you
-      else if (z > 0 && m - za < C.BLEND && r1 < 0.5 * (1 - (m - za) / C.BLEND)) zz = z - 1;
+      if (z !== FLOOR_Z && zb - m < C.BLEND && r1 < 0.5 * (1 - (zb - m) / C.BLEND)) zz = zoneStep(z, 1);   // the next zone's fish drift up to meet you
+      else if (ZRANK[z] > 0 && m - za < C.BLEND && r1 < 0.5 * (1 - (m - za) / C.BLEND)) zz = zoneStep(z, -1);
       if (!fr && r2 < C.JELLY_CHANCE[z]) {
         out.push({ id: "jelly", x: rng.uniform(8, LW - 20), y, v: rng.choice([-1, 1]) * rng.uniform(4, 9), ph: rng.uniform(0, 6), lb: 0, tr: false });
         continue;
@@ -590,7 +601,7 @@ function chunk(i) {
       const v = still ? 0 : (fr ? fr[3] : rng.choice([-1, 1])) * s[4] * rng.uniform(0.8, 1.25) * (1 + m / 1200);
       const tr = !still && r3 < C.TROPHY_CHANCE * S.trophyK * (S.storm && zz <= 1 ? 2 : 1);
       const lb = rng.randint(s[3][0], s[3][1]);
-      if (s[0] === "tripod") { if (z !== ZONES.length - 1) continue; y = DEPTH_PX - 12; }
+      if (s[0] === "tripod") { if (z !== FLOOR_Z) continue; y = DEPTH_PX - 12; }
       const f = { id: s[0], x: rng.uniform(0, LW - 20), y, v, ph: rng.uniform(0, 6), lb: tr ? lb * 4 + 6 : lb, tr };
       if (!still && (EV.ghost || EV.october) && erng.random() < (EV.ghost ? 0.3 : 0.12)) f.gh = 1;   // a ghost: drifts through the hook once
       out.push(f);
@@ -789,7 +800,7 @@ function update(dt) {
     while (S.path.length < Math.floor(S.hy / 8) + 1) S.path.push(S.hx);
     const m = S.hy / M, z = zoneOf(m);
     S.reached = Math.max(S.reached, m);
-    if (z > S.zoneSeen) { S.zoneSeen = z; S.popups.push([ZONES[z][0], 2.0, CYAN]); play("chime", 0.5); }
+    if (ZRANK[z] > ZRANK[S.zoneSeen]) { S.zoneSeen = z; S.popups.push([ZONES[z][0], 2.0, CYAN]); play("chime", 0.5); }
     if (S.frenzy && m > S.frenzy[0] - 10) say("frenzy", "FEEDING FRENZY!", ORANGE, 2.6);
     if (S.whaleAt && m > S.whaleAt - 22) {
       const d = S.rng.choice([-1, 1]);
@@ -868,7 +879,7 @@ function land(i, f) {
 }
 // Big fish fight in four different ways, and every fight is on a clock.
 const SLIPPERY = /EEL|SQUID|SERPENT|KRAKEN|LAMPREY|HAGFISH|OARFISH|OCTOPUS/;
-function fightStyle(s) { return SLIPPERY.test(s[1]) ? "dart" : s[4] >= 30 ? "quick" : s[2] >= 4 ? "shrink" : "heavy"; }
+function fightStyle(s) { return SLIPPERY.test(s[1]) ? "dart" : s[4] >= 30 ? "quick" : ZRANK[s[2]] >= ZRANK[4] ? "shrink" : "heavy"; }
 const STYLE_HINT = { dart: "SLIPPERY: IT MOVES", quick: "FAST ONE!", shrink: "HURRY: IT SHRINKS", heavy: "HEAVY: MORE HITS" };
 function newFight(need, style, lb) {                         // the timing bar: tap when the marker is on green
   const time = (style === "quick" ? 3.2 : 4.2) + need * 1.5, c = rnd(0.3, 0.7);
@@ -897,7 +908,7 @@ function fightHit(fg) {                                      // a tap: -> "win",
 }
 function startFight(i, f) {
   const s = SPEC[f.id], legend = s[7], style = fightStyle(s);
-  let need = (legend ? 3 : 2) + (style === "heavy" ? 1 : 0) + (legend && s[2] >= 7 ? 1 : 0);
+  let need = (legend ? 3 : 2) + (style === "heavy" ? 1 : 0) + (legend && ZRANK[s[2]] >= ZRANK[7] ? 1 : 0);
   if (C.FIXED.includes(f.id)) need = 2;
   S.fight = Object.assign(newFight(need, style, f.lb), { i, f });
   S.touchX = null;
@@ -939,7 +950,7 @@ function beginHaul() {
   if (ids.length === 3) {
     if (S.catch.every(c => c[2] || SPEC[c[0]][7])) sets.push([1, "TROPHY CASE"]);          // legendaries count as trophies here
     if (new Set(ids).size === 1) sets.push([2, "3 OF A KIND"]);
-    if (Math.min(...zones) >= 7) sets.push([1, "DEEP TRIO"]);
+    if (zones.every(z => ZRANK[z] >= ZRANK[7])) sets.push([1, "DEEP TRIO"]);
     if (new Set(zones).size === 3) sets.push([1, "GRAND TOUR"]);
   }
   if (ids.length - new Set(ids).size === 1) sets.push([0.5, "A PAIR"]);
@@ -1780,6 +1791,35 @@ function drawGiant() {                                   // something very large
   ell("#140a14", px - 2, ey - (h >> 1) + 1, 5, Math.max(1, h - 2));
 }
 
+// The Coral Reef (Nov 19, 2026): its coral is painted into the ocean picture; here its anemones sway and the light dances.
+const REEF_ANEM = (DATA.reef || { anem: [] }).anem, REEF_COLS = (DATA.reef || { cols: [] }).cols.map(rgb);
+function drawReef(cam, t) {
+  const top = ZONES[REEF_Z][1], bot = ZONES[REEF_Z][2], m0 = cam / M, m1 = (cam + LH) / M;
+  if (m1 < top - 4 || m0 > bot + 4) return;
+  const mMid = (cam + 100) / M, k = clamp(Math.min(mMid - top + 8, bot + 8 - mMid) / 16, 0, 1);
+  if (k > 0 && !S.storm) {                               // light from the surface, rippling down through clear water
+    g.globalAlpha = 0.07 * k;
+    for (let i = 0; i < Math.ceil(LW / 40) + 2; i++) {
+      const x = i * 40 - 20 + Math.floor(Math.sin(t * 0.5 + i * 1.7) * 6), w = 8 + (i * 5) % 3 * 4;
+      poly("#fff", [[x, 0], [x + w, 0], [x + w - 34, LH], [x - 34, LH]]);
+    }
+    g.globalAlpha = 0.18 * k;
+    for (let i = 0; i < 6; i++) { const x = ((i * 67 + Math.floor(t * 9)) % (LW + 20)) - 10, y = (i * 41 + Math.floor(Math.sin(t + i) * 8)) % LH; rect("#fff", x, y, 6, 1); }
+    g.globalAlpha = 1;
+  }
+  const dx = BG_O - OX;
+  for (let i = 0; i < REEF_ANEM.length; i++) {           // anemones: a tuft of tentacles waving in the current
+    const [ax, ay, ci] = REEF_ANEM[i], x = ax - dx, y = ay - cam;
+    if (x < -8 || x > LW + 8 || y < -12 || y > LH + 4) continue;
+    const c = REEF_COLS[ci] || "#ff7896";
+    for (let j = -2; j <= 2; j++) {
+      let px = x + j * 2, py = y;
+      for (let s = 0; s < 4; s++) { px += Math.sin(t * 1.6 + i + s * 0.6) * 0.8 + j * 0.3; py -= 2; rect(s === 3 ? WHITE : c, Math.round(px), Math.round(py), 1, 2); }
+    }
+    rect(c, x - 4, y - 1, 9, 2);
+  }
+}
+
 function draw() {
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { drawKart(); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { drawIsle(); return; }
@@ -1801,7 +1841,7 @@ function draw() {
   const kelp = [3, 9, 15, 21, LW - 21, LW - 15, LW - 9, LW - 3, 27, LW - 27];
   for (let x = 52; x < LW - 50; x += 23) kelp.push(x + (x * 7) % 9);          // a wide ocean has kelp out in the open too
   for (let i = 0; i < kelp.length; i++) {                // kelp: starts sparse, thickens, thins out again
-    const base = kelp[i], topM = i < 10 ? 92 + (i * 7) % 5 * 7 : 112 + (i * 7) % 5 * 9, endM = i < 10 ? 216 - (i * 3) % 5 * 13 : 200 - (i * 3) % 5 * 11;
+    const base = kelp[i], topM = i < 10 ? 92 + (i * 7) % 5 * 7 : 112 + (i * 7) % 5 * 9, endM = Math.min(i < 10 ? 216 - (i * 3) % 5 * 13 : 200 - (i * 3) % 5 * 11, 166 + (i * 5) % 4 * 3);   // kelp gives way to the Coral Reef
     const y0 = Math.max(topM * M, Math.floor(cam / 4) * 4);
     for (let wy = y0; wy < Math.min(endM * M, Math.floor(cam) + LH + 4); wy += 4) {
       const x = base + Math.sin(wy * 0.045 + t * 1.4 + i) * 3, sy = wy - cam;
@@ -1809,6 +1849,7 @@ function draw() {
       if ((wy / 4 + i) % 3 === 0) rect("#50be64", Math.floor(x) + (i % 2 ? 2 : -2), sy, 2, 2);
     }
   }
+  drawReef(cam, t);
   if (S.whale) spr("whale", S.whale.x, S.whale.y - 22 - cam + Math.sin(t * 1.5) * 3, S.whale.d < 0);
   drawGiant();
   drawCrack(cam);
@@ -3494,7 +3535,7 @@ function drawShopWide() {
 // ---- the fish log: zones down the side with how many you've caught, the zone's fish, and a big look at the one picked
 function logWideHits() {
   const x0 = WX(), h = [];
-  ZONES.forEach((z, i) => h.push(["zone", x0, 22 + i * 16, 124, 14, i]));
+  ZORD.forEach((z, i) => h.push(["zone", x0, 22 + i * 15, 124, 13, z]));   // by depth, so the Coral Reef sits under the Kelp Forest
   LOGGED.filter(q => q[2] === S.logPage).forEach((q, i) => h.push(["fish", x0 + 128 + (i % 4) * 28, 22 + Math.floor(i / 4) * 20, 27, 19, i]));
   return h;
 }
@@ -3728,7 +3769,7 @@ function helpTapWide(rx, ly) {
 const EXTRA_OV = {};                                         // overlays from later files: { draw(), tap(rx, ly) }, laid out for both widths themselves
 const WIDE = {
   shop: { draw: drawShopWide, tap: shopTapWide, key: d => { S.shopCat = (S.shopCat + d + CATS.length) % CATS.length; S.shopSel = 0; play("tick"); } },
-  log: { draw: drawLogWide, tap: logTapWide, key: d => { S.logPage = (S.logPage + d + ZONES.length) % ZONES.length; S.logSel = 0; play("tick"); } },
+  log: { draw: drawLogWide, tap: logTapWide, key: d => { S.logPage = zoneStep(S.logPage, d); S.logSel = 0; play("tick"); } },
   bestiary: { draw: drawBestiaryWide, tap: bestiaryTapWide, key: d => { S.bPage = (Math.min(S.bPage, FLIP_Z.length) + d + FLIP_Z.length + 1) % (FLIP_Z.length + 1); S.bSel = 0; play("tick"); } },
   secrets: { draw: drawSecretsWide, tap: secretsTapWide, key: d => { const n = store.sec.found.length; if (n) { S.secSel = (S.secSel + d + n) % n; play("tick"); } } },
   tasks: { draw: drawTasksWide, tap: (rx, ly) => { if (ly > 186) closeOverlay(); }, key: () => {} },
@@ -4458,7 +4499,7 @@ function overlayTap(lx, ly) {
   }
   if (S.overlay === "log") {
     const d = arrows(ZONES.length);
-    if (d) { S.logPage = (S.logPage + d) % ZONES.length; S.logSel = 0; }
+    if (d) { S.logPage = zoneStep(S.logPage, d === 1 ? 1 : -1); S.logSel = 0; }
     else if (ly >= 20 && ly < 100) { S.logSel = clamp(Math.floor((ly - 20) / 20) * 4 + Math.floor((lx - 4) / 28), 0, LOGGED.filter(s => s[2] === S.logPage).length - 1); play("tick"); }
   } else if (S.overlay === "scores") {
     if (store.sec.beat && arrows(2)) { S.board = S.board ? 0 : 1; S.scoreSel = -1; }
