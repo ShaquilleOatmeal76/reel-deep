@@ -631,6 +631,7 @@ function removeFish(i, f) { const k = S.chunks[i].indexOf(f); if (k >= 0) S.chun
 function splash(x, y, n, col) { for (let k = 0; k < (n || 8); k++) S.bubbles.push([x + rnd(-3, 3), y, rnd(-26, 26), rnd(-60, -20), 0.5, col || WHITE, 90]); }
 function say(key, txt, col, secs) { if (!S.said.has(key)) { S.said.add(key); S.popups.push([txt, secs || 2.2, col || CYAN]); } }
 
+const FLOOR_SLOW = [12, 8, 18];                            // start slowing 12 m up, crawl the last 8 m at 18 px/s (3 m/s, about 3 s)
 function pulse() {                                       // scatter everything near the hook
   if (S.state === "boss") { bossPulse(); return; }
   if (S.state === "flip") { if (LURES[S.lure][0] !== "angler") flipPulse(); return; }   // the Angler's Hook can't stun anything over there
@@ -798,7 +799,10 @@ function update(dt) {
   }
   if (S.state === "down") {
     steer(dt);
-    S.hy += (56 + Math.min(70, S.hy / M * 0.09)) * S.sink * dt;
+    let v = (56 + Math.min(70, S.hy / M * 0.09)) * S.sink;
+    const left = C.BOTTOM_M - S.hy / M;                    // the last few metres: slow right down so there's time to line up on the eye or the crack
+    if (left < FLOOR_SLOW[0]) v = FLOOR_SLOW[2] + (v - FLOOR_SLOW[2]) * clamp((left - FLOOR_SLOW[1]) / (FLOOR_SLOW[0] - FLOOR_SLOW[1]), 0, 1);
+    S.hy += v * dt;
     while (S.path.length < Math.floor(S.hy / 8) + 1) S.path.push(S.hx);
     const m = S.hy / M, z = zoneOf(m);
     S.reached = Math.max(S.reached, m);
@@ -3116,7 +3120,9 @@ function drawHud() {
     return;
   }
   if (["down", "turn", "up", "fight", "rise"].includes(st)) {
-    text(Math.floor(S.hy / M) + " M", 60, 9, 2);
+    const ds = Math.floor(S.hy / M) + " M", dw = textW(ds, 2);    // the depth, on a dark plate so it reads over the line and bright water
+    g.globalAlpha = 0.6; rect(INK, Math.floor(60 - dw / 2) - 5, 0, dw + 10, 18); g.globalAlpha = 1;
+    text(ds, 60, 9, 2);
     text("FISH " + S.catch.length + "/" + C.CAPACITY, 60, 23, 1, S.catch.length < C.CAPACITY ? GOLD : LIME);
     if (S.reached - S.hy / M > 3) text("DEEPEST " + Math.floor(S.reached) + " M", 60, 33, 1, "#8cc8dc");   // how far you got, once you're on the way up
     const gx = LW - 6 - OX, gy = 34, gh = 150;                   // depth gauge
