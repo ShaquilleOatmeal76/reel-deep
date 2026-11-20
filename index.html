@@ -33,7 +33,7 @@
   #stakeModal form { background: #1a1628; border: 3px solid #50c896; padding: 20px 22px; text-align: center; color: #fafaff; width: min(300px, 80vw); }
   #stakeModal h2 { margin: 0 0 6px; font-size: 18px; letter-spacing: 2px; color: #50c896; }
   #stakeModal p { margin: 0 0 12px; font-size: 13px; color: #96a0c8; }
-  #stakeIn { width: 9ch; font: inherit; font-size: 30px; text-align: center; padding: 6px; background: #060a1e; color: #fafaff; border: 2px solid #fafaff; border-radius: 0; outline: none; }
+  #stakeIn { width: 11ch; max-width: 100%; box-sizing: border-box; font: inherit; font-size: 30px; text-align: center; padding: 6px; background: #060a1e; color: #fafaff; border: 2px solid #fafaff; border-radius: 0; outline: none; }
   #stakeIn:focus { border-color: #ffd246; }
   #stakeModal .row { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
   #stakeModal button { font: inherit; font-size: 15px; letter-spacing: 1px; padding: 9px 16px; background: #060a1e; color: #50c896; border: 2px solid #50c896; cursor: pointer; }
@@ -70,7 +70,7 @@
   <form onsubmit="return false">
     <h2>YOUR BET</h2>
     <p id="stakeNote">Type any amount.</p>
-    <input id="stakeIn" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="9" autocomplete="off">
+    <input id="stakeIn" type="text" inputmode="text" maxlength="24" autocomplete="off">
     <div class="row"><button type="button" id="stakeCancel">CANCEL</button><button type="button" id="stakeOk">BET</button><button type="button" id="stakeAll">ALL IN</button></div>
   </form>
 </div>

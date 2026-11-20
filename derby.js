@@ -264,7 +264,7 @@ function drawDerby() {
     box(2, by, 116, 24, WHITE);
     wrap(d.call, 18).slice(0, 2).forEach((l, i) => text(l, 60, by + 6 + i * 10, 1, WHITE, "center", null));
     text(derbyBetLine(d), 60, by + 32, 1, GOLD, "center", null);
-    if (d.phase === "done") text(d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME", 60, by + 43, 1, CHIP, "center", null);
+    if (d.phase === "done") text(d.won ? "YOU WIN " + fmtChips(d.won, 1e6) + " CHIPS!" : "NOT THIS TIME", 60, by + 43, 1, CHIP, "center", null);
     else text("TAP TO CHEER", 60, by + 43, 1, "#8cc8f0", "center", null);
   }
   text(d.phase === "race" || d.phase === "photo" ? "" : d.phase === "done" ? "TAP FOR ANOTHER RACE" : "TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
@@ -303,7 +303,7 @@ function drawDerbyWide() {
       else if (id === "race") btn(x, y, w, h, "RACE", d.picks.length >= BET_TYPES[d.type][1] ? GOLD : GREY);
       else btn(x, y, w, h, "STANDINGS", "#8cc8f0");
     }
-    text(d.bet, x0 + 256, by + 55, 1, WHITE, "center", null);
+    text(fmtChips(d.bet, 1e6), x0 + 256, by + 55, 1, WHITE, "center", null);
     text(["ONE FISH TO WIN", "ONE FISH IN THE TOP 2", "ONE FISH IN THE TOP 3", "1ST AND 2ND, IN ORDER", "1ST, 2ND AND 3RD, IN ORDER"][d.type], x0 + 104, by + 20, 1, "#8cc8f0", "center", null);
     text(derbyBetLine(d), x0 + 104, by + 32, 1, GOLD, "center", null);
     const r = d.racers[d.focus], st = tav().stable, f = st.form[r.key] || [];
@@ -317,7 +317,7 @@ function drawDerbyWide() {
     box(x0, by, 208, 26, WHITE);
     wrap(d.call, 32).slice(0, 2).forEach((l, i, a) => text(l, x0 + 104, by + 13 - (a.length - 1) * 5 + i * 10, 1, WHITE, "center", null));
     text(derbyBetLine(d), x0 + 104, by + 34, 1, GOLD, "center", null);
-    if (d.phase === "done") text(d.won ? "YOU WIN " + d.won + " CHIPS!" : "NOT THIS TIME", x0 + 104, by + 45, 1, CHIP, "center", null);
+    if (d.phase === "done") text(d.won ? "YOU WIN " + fmtChips(d.won, 1e6) + " CHIPS!" : "NOT THIS TIME", x0 + 104, by + 45, 1, CHIP, "center", null);
     else {                                                    // the crowd meter
       text(KEYS ? "SPACE OR TAP TO CHEER" : "TAP TO CHEER", x0 + 280, by + 6, 1, "#8cc8f0", "center", null);
       rect("#0c2a4a", x0 + 220, by + 14, 120, 6); rect(d.wild > 0 ? GOLD : "#ff8cd2", x0 + 220, by + 14, Math.round(120 * d.cheer), 6);
