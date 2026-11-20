@@ -466,6 +466,7 @@ function sim(dt) {
   const gnd = floorAt(P.x, P.y);
   if (P.vz || P.feet > gnd + 0.001) { P.vz -= 11 * dt; P.feet += P.vz * dt; if (P.feet <= gnd) { P.feet = gnd; P.vz = 0; P.jumps = 0; } }
   else { P.feet += (gnd - P.feet) * Math.min(1, dt * 14); P.jumps = 0; }
+  if (P.ammo.harp < 10) { P.harpT = (P.harpT || 0) + dt; if (P.harpT > 1.5) { P.harpT = 0; P.ammo.harp++; } }   // never fully dry: harpoons trickle back up to 10
   if (P.swap > 0) { P.swap -= dt; if (P.swap <= 0.125 && P.gun !== P.want) P.gun = P.want; }
   if (WK.fireHeld || (WK.touch.look && WK.touch.look.fire)) fire();
   P.fireT = Math.max(0, P.fireT - dt); P.flash = Math.max(0, P.flash - dt * 8); P.hurt = Math.max(0, P.hurt - dt * 1.5); P.kick = Math.max(0, P.kick - dt * 5);
