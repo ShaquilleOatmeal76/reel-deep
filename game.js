@@ -33,6 +33,7 @@ dark.height = LH;
 function resize() {                                    // the ocean fills whatever shape the window is, from phone portrait to widescreen
   if (S && S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleResize(); return; }   // Driftwood Isle has its own screen (island.js)
   if (S && S.state === "siege" && typeof SG !== "undefined" && SG) { siegeResize(); return; }   // Siege of the Deep: 480x270 (siege.js)
+  if (S && S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) { wreckResize(); return; }   // WRECKONING: 480x270 (wreck.js)
   const a = window.innerWidth / window.innerHeight;
   LW = a >= UW / LH ? clamp(Math.round(LH * a), UW, WW) : UW;
   OX = Math.floor((LW - UW) / 2);
@@ -779,6 +780,7 @@ function update(dt) {
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartUpdate(dt); return; }   // FIN PRIX (finprix.js)
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleUpdate(dt); return; }   // Driftwood Isle (island.js)
   if (S.state === "siege" && typeof SG !== "undefined" && SG) { siegeUpdate(dt); return; }   // Siege of the Deep (siege.js)
+  if (S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) { wreckUpdate(dt); return; }   // WRECKONING (wreck.js)
   if (S.state === "boss" && BOSS) { bossUpdate(dt); S.popups.forEach(p => { p[1] -= dt; }); S.popups = S.popups.filter(p => p[1] > 0); S.flash = Math.max(0, S.flash - dt); return; }
   S.immune = Math.max(0, S.immune - dt); S.flash = Math.max(0, S.flash - dt);
   if (S.ring !== null) { S.ring += dt; if (S.ring > 0.5) S.ring = null; }
@@ -1843,6 +1845,7 @@ function draw() {
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { drawKart(); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { drawIsle(); return; }
   if (S.state === "siege" && typeof SG !== "undefined" && SG) { drawSiege(); return; }
+  if (S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) { drawWreck(); return; }
   if (S.state === "boss" && BOSS) { drawBoss(); return; }
   if (S.state === "flip" && FLIP) { drawFlip(); return; }
   const t = T, cam = S.cam, wl = Math.round(-cam), srcY = Math.max(0, Math.round(cam));
@@ -4649,6 +4652,7 @@ canvas.addEventListener("pointerdown", e => {
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartTouch(rx, ly, true); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleTouch(e); return; }
   if (S.state === "siege" && typeof SG !== "undefined" && SG) { siegeTouch(e); return; }
+  if (S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) { wreckTouch(e); return; }
   if (S.state === "boss" && BOSS) { if (rx < 40 && ly > 172) bossPulse(); else BOSS.touch = [rx, ly]; return; }
   if (S.state === "flip" && FLIP) { if (FLIP.fight) { if (FLIP.fight.time - FLIP.fight.left > 0.35) flipFightTap(); } else if (rx < 40 && ly > 172) { if (LURES[S.lure][0] !== "angler") flipPulse(); } else S.touchX = rx; return; }
   if (S.overlay) { overlayTap(lx, ly); return; }
@@ -4658,12 +4662,13 @@ canvas.addEventListener("pointerdown", e => {
   if (S.state !== "fight") { S.touchX = KON === "mirror" ? LW - rx : rx; S.drift = 0; }
   tapAction();
 });
-canvas.addEventListener("pointermove", e => { if (S && S.state === "siege" && typeof SG !== "undefined" && SG) { siegeMove(e); return; } if (BOSS && BOSS.touch) BOSS.touch = pointerPos(e); if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
+canvas.addEventListener("pointermove", e => { if (S && S.state === "siege" && typeof SG !== "undefined" && SG) { siegeMove(e); return; } if (S && S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) { wreckMove(e); return; } if (BOSS && BOSS.touch) BOSS.touch = pointerPos(e); if (S.touchX !== null) { const x = pointerPos(e)[0]; S.touchX = KON === "mirror" ? LW - x : x; } });
 window.addEventListener("pointerup", e => {
   if (!S) return;
   S.touchX = null;
   if (BOSS) BOSS.touch = null;
   if (typeof KART !== "undefined" && KART) kartTouch(0, 0, false);
+  if (S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) wreckUp(e);   // WRECKONING: let go of a stick, a trigger or the sights
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) isleTouchUp(e);   // Driftwood Isle: letting go casts / stops reeling
   if (swipeAt && S.state === "title" && !S.overlay) {      // a swipe in the sky is an arrow key; a tap is a tap
     const [x, y] = pointerPos(e), dx = x - swipeAt[0], dy = y - swipeAt[1];
@@ -4695,6 +4700,7 @@ window.addEventListener("keydown", e => {
   if (c === "KeyF") { toggleFullscreen(); return; }
   if (S.state === "isle" && typeof ISLE !== "undefined" && ISLE) { isleKey(e, true); return; }   // Driftwood Isle
   if (S.state === "siege" && typeof SG !== "undefined" && SG) { siegeKey(e, true); return; }   // Siege of the Deep
+  if (S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) { wreckKey(e, true); return; }   // WRECKONING
   if (S.state === "kart" && typeof KART !== "undefined" && KART) { kartKey(e, true); if (["Space", "ShiftLeft", "ShiftRight"].includes(c)) e.preventDefault(); return; }   // FIN PRIX
   if (S.state === "flip" && FLIP && FLIP.test && c === "Escape") { flipDrone(false); FLIP = null; newDive(); return; }
   if (S.state === "boss" && BOSS) {                        // the fight: move in any direction, Space or Shift to pulse
@@ -4717,7 +4723,7 @@ window.addEventListener("keydown", e => {
   else if (c === "ShiftLeft" || c === "ShiftRight" || c === "ArrowDown") pulse();
   else if (c === "Space" || c === "Enter" || (c === "ArrowUp" && S.state !== "title")) { tapAction(); }   // Up doesn't cast: it starts a certain code
 });
-window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } if (typeof KART !== "undefined" && KART) kartKey(e, false); if (S && S.state === "isle" && typeof ISLE !== "undefined" && ISLE) isleKeyUp(e); });
+window.addEventListener("keyup", e => { if (HELD.includes(e.code)) { HELD = HELD.filter(k => k !== e.code); syncKeys(); } if (S && S.state === "wreck" && typeof wreckOn === "function" && wreckOn()) wreckKey(e, false); if (typeof KART !== "undefined" && KART) kartKey(e, false); if (S && S.state === "isle" && typeof ISLE !== "undefined" && ISLE) isleKeyUp(e); });
 window.addEventListener("blur", () => { HELD = []; syncKeys(); });
 
 // --------------------------------------------------------------------- loop
