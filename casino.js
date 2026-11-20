@@ -225,15 +225,18 @@ const GAME_OPEN = {
 };
 function hubHits(o) {
   const L = czL(), g0 = HUBS[o].games;
-  return g0.map((gm, k) => L.w ? [gm[0], L.X + (k % 2) * 178, 30 + Math.floor(k / 2) * 34, 170, 28, k] : [gm[0], L.X + 8, 26 + k * 25, 104, 22, k]);
+  const tight = g0.length > 6;                              // Nov 20, 2026: 7 games a menu
+  return g0.map((gm, k) => L.w ? [gm[0], L.X + (k % 2) * 178, 30 + Math.floor(k / 2) * (tight ? 32 : 34), 170, 28, k] : tight ? [gm[0], L.X + 8, 26 + k * 19, 104, 16, k] : [gm[0], L.X + 8, 26 + k * 25, 104, 22, k]);
 }
 function drawHub(o) {
   const H = HUBS[o], L = czL();
   tavernBg();
   if (L.w) { text(H.title, L.X, 10, 1, GOLD, "left", null); chipsAt(L.X + 348, 10, "right"); }
   else { text(H.title, L.X + 60, 8, 1, GOLD, "center", null); g.save(); g.translate(L.X, 0); chipsLine(18); g.restore(); }
-  for (const [id, x, y, w, h, k] of hubHits(o)) { const gm = H.games[k], sel = k === CZ.hub.sel; btn(x, y, w, h, gm[1], sel ? GOLD : CHIP, gm[2], sel ? WHITE : "#a0c8b4"); }
-  if (L.w) { spr("oldman", L.X + 160, 140, false, 2); text(H.say, L.X + 174, 180, 1, "#a08c70", "center", null); }
+  const tight = H.games.length > 6;
+  for (const [id, x, y, w, h, k] of hubHits(o)) { const gm = H.games[k], sel = k === CZ.hub.sel; if (!L.w && tight) btn(x, y, w, h, gm[1], sel ? GOLD : CHIP); else btn(x, y, w, h, gm[1], sel ? GOLD : CHIP, gm[2], sel ? WHITE : "#a0c8b4"); }
+  if (L.w) { if (!tight) spr("oldman", L.X + 160, 140, false, 2); else spr("oldman", L.X + 286, 136, false, 2); text(H.say, tight ? L.X + 298 : L.X + 174, 180, 1, "#a08c70", "center", null); }
+  else if (tight) text(H.games[CZ.hub.sel][2], L.X + 60, 168, 1, "#a0c8b4", "center", null), text(H.say, L.X + 60, 182, 1, "#a08c70", "center", null);
   else text(H.say, L.X + 60, 184, 1, "#a08c70", "center", null);
   text("TAP HERE TO GO BACK", LW / 2, 194, 1, WHITE, "center", null);
 }
@@ -1198,6 +1201,600 @@ function cupKey(code, dir) {
 }
 EXTRA_OV.cup = { draw: drawCup, tap: cupTap, key: cupKey, back: "tables", music: true };
 
-function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); cupTick(dt); roundsAnnounce(); }
+
+// ===================================================================== Part 8 (Nov 20, 2026): four new games
+// COMPASS ROSE (roulette), LIAR'S DICE and THE SHELL GAME at the TABLES; DOUBLOON PUSHER at the MACHINES.
+const czLeave = (c, busy, self, hub) => (c && busy ? self : hub);
+
+// ---- COMPASS ROSE: roulette on a 32-point compass plus one gold KRAKEN pocket where every bet loses (the house's share).
+// 33 pockets. Pays (stake included): one point x31 (31/33 = 93.9%), a cardinal (3 points) x10.4, a quarter (8) x3.9, a half
+// (16 points) x1.95, a colour (16 points) x1.95: each 94.5%. Bets stay on the table between spins until you clear them.
+const CR_PTS = ["N", "NBE", "NNE", "NEBN", "NE", "NEBE", "ENE", "EBN", "E", "EBS", "ESE", "SEBE", "SE", "SEBS", "SSE", "SBE",
+  "S", "SBW", "SSW", "SWBS", "SW", "SWBW", "WSW", "WBS", "W", "WBN", "WNW", "NWBW", "NW", "NWBN", "NNW", "NBW"];
+const CR_N = 33, CR_K = 32;
+const CR_TYPES = [["point", "POINT", "ONE POINT", 31], ["card", "CARDINAL", "N/E/S/W AND SIDES", 10.4], ["quart", "QUARTER", "8 POINTS IN A ROW", 3.9],
+  ["half", "HALF", "16 POINTS", 1.95], ["col", "COLOUR", "RED OR BLUE", 1.95]];
+const CR_OPTS = { card: ["N", "E", "S", "W"], quart: ["NE", "SE", "SW", "NW"], half: ["NORTH", "EAST", "SOUTH", "WEST"], col: ["RED", "BLUE"] };
+const CR_HELP = { point: "ONE POINT. OR TAP THE WHEEL", card: "N = NBW, N AND NBE", quart: "NE = N UP TO E, AND SO ON",
+  half: "NORTH = W UP TO E, 16 POINTS", col: "16 RED, 16 BLUE POCKETS" };
+function crCovers(t, o, p) {
+  if (p === CR_K) return false;                             // the KRAKEN takes everything
+  if (t === "point") return p === o;
+  if (t === "card") return [0, 1, 31].includes((p - o * 8 + 32) % 32);   // the cardinal and the point either side
+  if (t === "quart") return Math.floor(p / 8) === o;
+  if (t === "half") return (p - o * 8 + 40) % 32 < 16;
+  return p % 2 === o;                                       // colour: 0 red (even), 1 blue (odd)
+}
+const crMult = t => CR_TYPES.find(q => q[0] === t)[3];
+const crName = (t, o) => t === "point" ? CR_PTS[o] : CR_OPTS[t][o];
+const crCol = p => p === CR_K ? "#e6b432" : p % 2 ? "#1e3a78" : "#b43232";
+CZ.cr = null;
+function crOpen() { if (!CZ.cr) CZ.cr = { bet: 10, type: 0, opt: { point: 0, card: 0, quart: 0, half: 0, col: 0 }, bets: [], phase: "bet", ang: 0, a0: 0, a1: 0, b0: 0, b1: 0, ball: 0, t: 0, res: -1, last: [], msg: "PLACE YOUR BETS", win: 0 }; }
+const crTotal = () => CZ.cr.bets.reduce((a, b) => a + b.a, 0);
+function crPlace(t, o) {
+  const c = CZ.cr; if (c.phase === "spin") return;
+  if (c.bet < 1 || tav().chips < crTotal() + c.bet) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  const b = c.bets.find(q => q.t === t && q.o === o);
+  if (b) b.a += c.bet; else c.bets.push({ t, o, a: c.bet });
+  c.msg = crName(t, o) + ": " + fmtChips(c.bets.find(q => q.t === t && q.o === o).a, 1e6); play("tick");
+}
+function crSpin() {
+  const c = CZ.cr; if (c.phase === "spin") return;
+  const tot = crTotal();
+  if (!tot) { c.msg = "PLACE A BET FIRST"; play("miss"); return; }
+  if (tav().chips < tot) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-tot); c.staked = tot;
+  c.res = Math.floor(Math.random() * CR_N);
+  c.a0 = c.ang; c.a1 = c.ang + Math.PI * 2 * (1.5 + Math.random());                 // the wheel turns one way...
+  c.b0 = c.ball; const end = c.a1 + (c.res + 0.5) / CR_N * Math.PI * 2;             // ...the pearl the other, and stops on the pocket
+  c.b1 = c.b0 - (((c.b0 - end) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) - Math.PI * 2 * 5;
+  c.t = 0; c.phase = "spin"; c.msg = ""; c.win = 0; play("tick");
+}
+function crTick(dt) {
+  const c = CZ.cr; if (!c || c.phase !== "spin") return;
+  c.t += dt; const u = Math.min(1, c.t / 4), e = 1 - Math.pow(1 - u, 3);
+  c.ang = c.a0 + (c.a1 - c.a0) * e; c.ball = c.b0 + (c.b1 - c.b0) * e;
+  if (Math.random() < 0.25 * (1 - u)) play("tick", 0.4);
+  if (u < 1) return;
+  c.phase = "done"; c.last.unshift(c.res); c.last.length = Math.min(c.last.length, 6);
+  let win = 0, point = false;
+  for (const b of c.bets) if (crCovers(b.t, b.o, c.res)) { win += Math.min(maxWin(b.a), Math.round(b.a * crMult(b.t))); if (b.t === "point") point = true; }
+  c.win = win;
+  if (win) addChips(win, win > c.staked ? "win" : "");
+  if (point) tavAward("navigator");
+  const nm = c.res === CR_K ? "THE KRAKEN" : CR_PTS[c.res];
+  c.msg = nm + (win ? "! +" + fmtChips(win, 1e6) : c.res === CR_K ? " TAKES IT ALL" : ". NO LUCK");
+  play(win > c.staked ? "fanfare" : win ? "chime" : "miss");
+}
+function crWheel(cx, cy, r, c) {
+  for (let i = 0; i < CR_N; i++) {
+    const a0 = c.ang + i / CR_N * Math.PI * 2 - Math.PI / 2, a1 = a0 + Math.PI * 2 / CR_N, covered = c.bets.some(b => crCovers(b.t, b.o, i));
+    poly(crCol(i), [[cx + Math.cos(a0) * r * 0.62, cy + Math.sin(a0) * r * 0.62], [cx + Math.cos(a0) * r, cy + Math.sin(a0) * r], [cx + Math.cos(a1) * r, cy + Math.sin(a1) * r], [cx + Math.cos(a1) * r * 0.62, cy + Math.sin(a1) * r * 0.62]]);
+    if (covered && r >= 50) { const am = (a0 + a1) / 2; disc(CHIP, cx + Math.cos(am) * (r + 5), cy + Math.sin(am) * (r + 5), 2); }   // a chip on it
+  }
+  g.strokeStyle = "#5a3a22"; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, r + 1, 0, Math.PI * 2); g.stroke(); g.lineWidth = 1;
+  disc("#0e2a3a", cx, cy, Math.floor(r * 0.6));
+  for (let k = 0; k < 8; k++) {                              // the rose
+    const a = k * Math.PI / 4 - Math.PI / 2, len = (k % 2 ? 0.34 : 0.55) * r, w = 0.09 * r;
+    poly(k % 2 ? "#a0b4c8" : "#f2ead8", [[cx + Math.cos(a) * len, cy + Math.sin(a) * len], [cx + Math.cos(a + Math.PI / 2) * w, cy + Math.sin(a + Math.PI / 2) * w], [cx, cy], [cx + Math.cos(a - Math.PI / 2) * w, cy + Math.sin(a - Math.PI / 2) * w]]);
+  }
+  disc(GOLD, cx, cy, Math.max(2, Math.floor(r * 0.06)));
+  ["N", "E", "S", "W"].forEach((t, k) => { const a = c.ang + (k * 8 + 0.5) / CR_N * Math.PI * 2 - Math.PI / 2; text(t, cx + Math.cos(a) * r * 0.81, cy + Math.sin(a) * r * 0.81, 1, WHITE, "center", INK); });
+  if (r >= 50) { const a = c.ang + (CR_K + 0.5) / CR_N * Math.PI * 2 - Math.PI / 2; fitDraw(atlas, "kraken", cx + Math.cos(a) * r * 0.81, cy + Math.sin(a) * r * 0.81, 10, 10, 1); }
+  const sp = c.phase === "spin" ? Math.min(1, c.t / 4) : 1, br = r * (0.97 - 0.07 * Math.max(0, (sp - 0.7) / 0.3));
+  const ba = c.ball - Math.PI / 2;
+  if (c.phase !== "bet" || c.last.length) disc(WHITE, cx + Math.cos(ba) * br, cy + Math.sin(ba) * br, Math.max(2, Math.round(r * 0.05)));
+}
+function crHits() {
+  const L = czL(), c = CZ.cr, h = [], t = CR_TYPES[c.type][0];
+  if (L.w) {
+    const px = L.X + 172;
+    CR_TYPES.forEach((q, i) => h.push(["type", px, 20 + i * 20, 176, 18, i]));
+    if (t === "point") h.push(["prev", px, 132, 28, 14, -1], ["next", px + 92, 132, 28, 14, 1], ["place", px + 124, 132, 52, 14, 0]);
+    else CR_OPTS[t].forEach((o, i, a) => h.push(["opt", px + i * (176 / a.length), 132, 176 / a.length - 2, 14, i]));
+    stakeCtl(h, "stake", px, 162, 100); h.push(["clear", px + 102, 162, 36, 15, 0], ["spin", px + 140, 162, 36, 15, 0]);
+    h.push(["wheel", L.X + 14, 20, 136, 136, 0]);
+  } else {
+    const X = L.X;
+    CR_TYPES.forEach((q, i) => h.push(["type", X + 4, 108 + i * 10, 112, 9, i]));
+    if (t === "point") h.push(["prev", X + 4, 159, 20, 11, -1], ["next", X + 60, 159, 20, 11, 1], ["place", X + 82, 159, 34, 11, 0]);
+    else CR_OPTS[t].forEach((o, i, a) => h.push(["opt", X + 4 + i * (112 / a.length), 159, 112 / a.length - 2, 11, i]));
+    stakeCtl(h, "stake", X + 2, 172, 80); h.push(["spin", X + 84, 172, 34, 15, 0], ["clear", X + 84, 97, 34, 9, 0]);
+  }
+  return h;
+}
+function drawCr() {
+  const c = CZ.cr, L = czL(), X = L.X, t = CR_TYPES[c.type][0];
+  rect("#0a1a30", 0, 0, LW, LH);
+  czTitle(L, "COMPASS ROSE", GOLD);
+  if (L.w) crWheel(X + 82, 88, 64, c); else crWheel(X + 60, 60, 33, c);
+  const tot = crTotal();
+  for (const [id, x, y, w, h, v] of crHits()) {
+    if (id === "type") {
+      const q = CR_TYPES[v], sel = v === c.type;
+      if (L.w) { box(x, y, w, h, sel ? GOLD : "#2a4a6a"); text(q[1], x + 6, y + 5, 1, sel ? WHITE : "#a0b8d8", "left", null); text(q[2], x + 6, y + 13, 1, "#6a86ae", "left", null); text("X" + q[3], x + w - 6, y + 9, 1, GOLD, "right", null); }
+      else { rect(sel ? "#3a3010" : "#12223a", x, y, w, h); outline(x, y, w, h, sel ? GOLD : "#2a4a6a"); text(v === 1 ? "N E S W" : q[1], x + 4, y + 5, 1, sel ? WHITE : "#a0b8d8", "left", null); text("X" + q[3], x + w - 3, y + 5, 1, GOLD, "right", null); }
+    } else if (id === "opt") {
+      const nm = CR_OPTS[t][v], on = c.bets.some(b => b.t === t && b.o === v);
+      box(x, y, w, h, on ? GOLD : "#2a4a6a"); text(nm, x + w / 2, y + h / 2, 1, on ? GOLD : "#a0b8d8", "center", null);
+    } else if (id === "prev" || id === "next") { box(x, y, w, h, "#2a4a6a"); text(id === "prev" ? "<" : ">", x + w / 2, y + h / 2, 1, WHITE, "center", null); if (id === "prev") text(CR_PTS[c.opt.point], x + w + (L.w ? 32 : 18), y + h / 2, 1, c.opt.point % 2 ? "#7a9ae6" : "#ff8080", "center", null); }
+    else if (id === "place") btn(x, y, w, h, "PLACE", CHIP);
+    else if (id === "stake" && v < 0) drawStakeCtl(x, y, w === 16 ? (L.w ? 100 : 80) : w, c.bet, CHIP, "BET");
+    else if (id === "clear") { if (L.w || tot) { box(x, y, w, h, "#8ca0c8"); text("CLEAR", x + w / 2, y + h / 2, 1, "#8ca0c8", "center", null); } }
+    else if (id === "spin") btn(x, y, w, h, "SPIN", c.phase === "spin" ? GREY : tot && tav().chips >= tot ? GOLD : GREY);
+  }
+  if (L.w) {
+    const px = X + 172, desc = c.bets.map(b => crName(b.t, b.o) + " " + fmtChips(b.a)).join(", ");
+    text(CR_HELP[t].slice(0, 29), px + 88, 124, 1, "#6a86ae", "center", null);
+    text(c.phase === "spin" ? "NO MORE BETS" : (c.msg || "").slice(0, 29), px + 88, 152, 1, c.phase === "done" && c.win > (c.staked || 0) ? GOLD : WHITE, "center", null);
+    text(tot ? "ON THE TABLE: " + fmtChips(tot, 1e6) : "NOTHING ON THE TABLE YET", X + 82, 162, 1, CHIP, "center", null);
+    if (tot) text(desc.slice(0, 27), X + 82, 172, 1, "#5ab48c", "center", null);
+    text("LAST:", X, 183, 1, "#8ca0c8", "left", null);
+    c.last.slice(0, 4).forEach((p, i) => text(p === CR_K ? "KRAKEN" : CR_PTS[p], X + 34 + i * 34, 183, 1, p === CR_K ? "#e6b432" : p % 2 ? "#7a9ae6" : "#ff8080", "left", null));
+  } else if (c.phase === "done" || c.phase === "spin" || !tot) text(c.phase === "spin" ? "NO MORE BETS" : (c.msg || "").slice(0, c.phase === "done" && tot ? 13 : 19), X + (c.phase === "done" && tot ? 4 : 60), 101, 1, c.phase === "done" && c.win ? GOLD : WHITE, c.phase === "done" && tot ? "left" : "center", null);
+  else text("BETS " + fmtChips(tot), X + 4, 101, 1, WHITE, "left", null);
+  text(c.phase === "spin" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function crTap(rx, ly) {
+  const c = CZ.cr, L = czL(), h = hitAt(crHits(), rx, ly);
+  if (!h) { if (ly > 186 && c.phase !== "spin") closeOverlay(); return; }
+  if (c.phase === "spin") return;
+  const [id, , , , , v] = h, t = CR_TYPES[c.type][0];
+  if (id === "type") { c.type = v; play("tick"); }
+  else if (id === "opt") crPlace(t, v);
+  else if (id === "prev" || id === "next") { c.opt.point = (c.opt.point + v + 32) % 32; play("tick"); }
+  else if (id === "place") crPlace("point", c.opt.point);
+  else if (id === "stake") { c.bet = stakeStep(c.bet, v); play("tick"); }
+  else if (id === "clear") { c.bets = []; c.msg = "TABLE CLEARED"; play("tick"); }
+  else if (id === "spin") crSpin();
+  else if (id === "wheel") {                                // tap a pocket on the big wheel: a bet on that point
+    const dx = rx - (L.X + 82), dy = ly - 88, d = Math.hypot(dx, dy);
+    if (d < 64 * 0.6 || d > 68) return;
+    const a = ((Math.atan2(dy, dx) + Math.PI / 2 - c.ang) % (Math.PI * 2) + Math.PI * 4) % (Math.PI * 2), p = Math.floor(a / (Math.PI * 2) * CR_N);
+    if (p === CR_K) { c.msg = "NOBODY BETS ON THE KRAKEN"; play("miss"); return; }
+    c.type = 0; c.opt.point = p; crPlace("point", p);
+  }
+}
+function crKey(code, dir) {
+  const c = CZ.cr; if (c.phase === "spin") return;
+  if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); }
+  else if (code === "ArrowUp" || code === "KeyW") { c.type = (c.type + 4) % 5; play("tick"); }
+  else if (code === "ArrowDown" || code === "KeyS") { c.type = (c.type + 1) % 5; play("tick"); }
+  else if (code === "Space") crSpin();
+  else if (code === "Enter") { const t = CR_TYPES[c.type][0]; crPlace(t, c.opt[t]); }
+}
+EXTRA_OV.compass = { draw: drawCr, tap: crTap, key: crKey, back: () => czLeave(CZ.cr, CZ.cr && CZ.cr.phase === "spin", "compass", "tables"), music: true };
+
+// ---- LIAR'S DICE against the old fisherman. Five dice each, 1s wild. Bid how many dice in BOTH cups show a face (2-6);
+// each bid must raise the last (more dice, or the same number of a higher face). Call LIAR on his bid and the cups come
+// up: if there are fewer than he said, he loses a die; otherwise you do. The loser starts the next round. Last one with
+// dice wins: a win pays x1.85 (stake included). He plays the odds with a little bluff (`ldAI`). Against him the strongest
+// bot strategy found (call only when a bid is under ~12% likely, never bluff) wins ~51%: about 94% back; a bot that plays
+// exactly like him wins ~49%. tools/tests/test_casino7.py re-checks it.
+const LD_PAY = 1.85, LD_NUM = ["NO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE", "TEN"];
+const LD_TUNE = { call: 0.18, bluff: 0.03, noise: 0.08 };   // tuned by bot sweeps: at call 0.42 a cautious caller won 56%; now the best strategy found wins ~51%
+const ldRoll = n => Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 6));
+const ldCount = (d, f) => d.filter(x => x === f || x === 1).length;
+function ldAtLeast(n, k) {                                  // P(at least k of n unknown dice show the face or a 1), p = 1/3
+  if (k <= 0) return 1; if (k > n) return 0;
+  let s = 0, c = 1;
+  for (let i = 0; i <= n; i++) { if (i > 0) c = c * (n - i + 1) / i; if (i >= k) s += c * Math.pow(1 / 3, i) * Math.pow(2 / 3, n - i); }
+  return s;
+}
+const ldBidOK = (bid, q, f) => f >= 2 && f <= 6 && q >= 1 && (!bid || q > bid[0] || (q === bid[0] && f > bid[1]));
+function ldAI(mine, otherN, bid, tune) {                    // -> ["liar"] or ["bid", q, f]; the old man's head (and the test bot's)
+  const T = tune || LD_TUNE, total = mine.length + otherN;
+  const p = (q, f) => ldAtLeast(otherN, q - ldCount(mine, f));
+  if (bid && p(bid[0], bid[1]) < T.call + (Math.random() - 0.5) * T.noise * 2) return ["liar"];
+  const cands = [];
+  for (let f = 2; f <= 6; f++) for (const q of bid ? [bid[0], bid[0] + 1] : [Math.max(1, ldCount(mine, f) + Math.floor(otherN / 3))]) if (q <= total && ldBidOK(bid, q, f)) cands.push([q, f, p(q, f) + Math.random() * 0.05]);
+  if (!cands.length) return ["liar"];
+  cands.sort((a, b) => b[2] - a[2]);
+  let pick = cands[0];
+  if (Math.random() < T.bluff) { const ok = cands.filter(q => q[2] > 0.25); if (ok.length) pick = ok[Math.floor(Math.random() * ok.length)]; }
+  if (bid && pick[2] < 0.3 && p(bid[0], bid[1]) < 0.55) return ["liar"];
+  return ["bid", pick[0], pick[1]];
+}
+CZ.ld = null;
+function ldOpen() { if (!CZ.ld) CZ.ld = { bet: 10, phase: "stake", you: [], him: [], bid: null, q: 1, f: 2, turn: "you", hist: [], msg: "PUT IN YOUR STAKE", say: "FANCY A GAME?", t: 0, fold: false }; }
+function ldNewRound(c, starter) {
+  c.you = ldRoll(c.you.length); c.him = ldRoll(c.him.length); c.bid = null; c.hist = []; c.turn = starter; c.phase = "play"; c.reveal = null;
+  const best = [2, 3, 4, 5, 6].sort((a, b) => ldCount(c.you, b) - ldCount(c.you, a))[0];
+  c.f = best; c.q = Math.max(1, ldCount(c.you, best)); c.t = 0.9;
+  c.say = starter === "you" ? "YOU START." : "MY BID FIRST.";
+}
+function ldDeal() {
+  const c = CZ.ld; if (c.phase === "play" || c.phase === "reveal") return;
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet; c.you = [0, 0, 0, 0, 0]; c.him = [0, 0, 0, 0, 0]; c.fold = false; c.msg = "";
+  ldNewRound(c, "you"); play("tick");
+}
+function ldBid() {
+  const c = CZ.ld; if (c.phase !== "play" || c.turn !== "you") return;
+  if (!ldBidOK(c.bid, c.q, c.f)) { c.say = "RAISE IT, FRIEND"; play("miss"); return; }
+  c.bid = [c.q, c.f, "you"]; c.hist.push(["YOU", c.q, c.f]); c.turn = "him"; c.t = 0.8 + Math.random() * 0.6; c.say = "HMM..."; c.fold = false; play("tick");
+}
+function ldLiar(who) {                                      // who called it: "you" or "him"
+  const c = CZ.ld, [q, f] = c.bid, n = ldCount(c.you, f) + ldCount(c.him, f), right = n >= q;
+  const loser = (right ? (who === "you" ? "you" : "him") : (who === "you" ? "him" : "you"));
+  c.reveal = { q, f, n, loser, who }; c.phase = "reveal"; c.fold = false;
+  c.say = who === "him" ? "LIAR!" : right ? "HA! THERE." : "...CAUGHT ME.";
+  c.msg = (n === 1 ? "ONE " : LD_NUM[n] || n) + " " + f + (n === 1 ? "" : "S") + " WITH THE 1S. " + (loser === "you" ? "YOU LOSE A DIE" : "HE LOSES A DIE");
+  play(loser === "you" ? "miss" : "chime");
+}
+function ldNext() {                                         // after a reveal: take the die, maybe end the game
+  const c = CZ.ld, r = c.reveal; if (!r) return;
+  if (r.loser === "you") c.you.pop(); else c.him.pop();
+  if (!c.you.length || !c.him.length) {
+    c.phase = "done"; c.reveal = null;
+    if (c.him.length) { c.msg = "HE WINS. ANOTHER?"; c.say = "MAYBE NEXT TIME."; play("miss"); return; }
+    const win = Math.min(maxWin(c.staked), Math.round(c.staked * LD_PAY));
+    addChips(win, "win"); tav().ldWins = (tav().ldWins || 0) + 1; if (tav().ldWins >= 10) tavAward("liarliar");
+    c.msg = "YOU WIN! +" + fmtChips(win, 1e6); c.say = "WELL PLAYED."; play("fanfare"); saveStore(); return;
+  }
+  ldNewRound(c, r.loser);
+}
+function ldFold() { const c = CZ.ld; c.phase = "done"; c.reveal = null; c.msg = "YOU FOLDED. STAKE LOST"; c.say = "SUIT YOURSELF."; play("miss"); }
+function ldTick(dt) {
+  const c = CZ.ld; if (!c || c.phase !== "play" || c.turn !== "him") return;
+  c.t -= dt; if (c.t > 0) return;
+  const a = ldAI(c.him, c.you.length, c.bid);
+  if (a[0] === "liar") { ldLiar("him"); return; }
+  c.bid = [a[1], a[2], "him"]; c.hist.push(["HIM", a[1], a[2]]); c.turn = "you";
+  c.say = (LD_NUM[a[1]] || a[1]) + " " + a[2] + "S."; c.q = a[1]; c.f = a[2]; play("tick");
+  if (!ldBidOK(c.bid, c.q, c.f)) { if (c.f < 6) c.f++; else c.q++; }       // start your next bid one step above his
+}
+const LD_PIPS = { 1: [[1, 1]], 2: [[0, 0], [2, 2]], 3: [[0, 0], [1, 1], [2, 2]], 4: [[0, 0], [2, 0], [0, 2], [2, 2]], 5: [[0, 0], [2, 0], [1, 1], [0, 2], [2, 2]], 6: [[0, 0], [2, 0], [0, 1], [2, 1], [0, 2], [2, 2]] };
+function ldDie(x, y, s, f, o) {
+  o = o || {};
+  rect(o.hide ? "#3a2a1e" : o.wild ? "#ffe9a0" : "#f2ead8", x, y, s, s); outline(x, y, s, s, o.hl ? GOLD : o.hide ? "#5a3a22" : "#8a7a60");
+  if (o.hide) { text("?", x + s / 2, y + s / 2, s >= 14 ? 2 : 1, "#8a6a4a", "center", null); return; }
+  const p = Math.max(2, Math.floor(s / 7)), g3 = (s - 2 * p - 2) / 2;
+  for (const [cx, cy] of LD_PIPS[f]) rect(f === 1 ? "#c83c3c" : INK, Math.round(x + 1 + p / 2 + cx * g3), Math.round(y + 1 + p / 2 + cy * g3), p, p);
+}
+function ldBubble(x, y, w, t) { rect(WHITE, x, y, w, 13); rect(WHITE, x + 6, y + 13, 4, 3); text(t.slice(0, Math.floor((w - 4) / 6)), x + w / 2, y + 7, 1, INK, "center", null); }
+function ldHits() {
+  const L = czL(), c = CZ.ld, h = [], X = L.X, w = L.w;
+  if (c.phase === "stake" || c.phase === "done") { if (w) { stakeCtl(h, "stake", X, 152, 120); h.push(["deal", X + 126, 150, 96, 20, 0]); } else { stakeCtl(h, "stake", X + 4, 136, 112); h.push(["deal", X + 14, 156, 92, 18, 0]); } }
+  else if (c.phase === "reveal") h.push(w ? ["next", X + 60, 150, 102, 20, 0] : ["next", X + 14, 150, 92, 18, 0]);
+  else if (w) h.push(["qm", X, 152, 16, 18, -1], ["qp", X + 70, 152, 16, 18, 1], ["fm", X + 92, 152, 16, 18, -1], ["fp", X + 132, 152, 16, 18, 1], ["bid", X + 154, 152, 32, 18, 0], ["liar", X + 190, 152, 32, 18, 0]);
+  else h.push(["qm", X + 2, 116, 14, 16, -1], ["qp", X + 44, 116, 14, 16, 1], ["fm", X + 62, 116, 14, 16, -1], ["fp", X + 96, 116, 14, 16, 1], ["bid", X + 4, 138, 54, 18, 0], ["liar", X + 62, 138, 54, 18, 0]);
+  return h;
+}
+function drawLd() {
+  const c = CZ.ld, L = czL(), X = L.X, w = L.w;
+  rect("#0e3a2a", 0, 0, LW, LH); rect("#5a3a22", 0, 0, LW, 3); rect("#5a3a22", 0, LH - 3, LW, 3);
+  czTitle(L, "LIAR'S DICE", GOLD);
+  const showHim = c.phase === "reveal" || (c.phase === "done" && c.him.length), r = c.reveal, f = r ? r.f : c.f, playing = c.phase !== "stake";
+  const hl = d => !!r && (d === r.f || d === 1);
+  if (w) {
+    spr("oldman", X + 6, 22, false, 2); ldBubble(X + 44, 22, 150, c.say);
+    text("HIS CUP", X + 44, 48, 1, "#a0c8b4", "left", null);
+    c.him.forEach((d, i) => ldDie(X + 44 + i * 18, 55, 15, d || 1, { hide: !showHim || !d, wild: showHim && d === 1, hl: showHim && hl(d) }));
+    rect("#0a2a1e", X, 80, 222, 22); outline(X, 80, 222, 22, "#2a6a4a");
+    if (c.hist.length) c.hist.slice(-2).forEach(([who, q, fc], i) => { const x = X + 6 + i * 108; text(who + ":", x, 91, 1, who === "YOU" ? CYAN : GOLD, "left", null); text(q + " X", x + 30, 91, 1, WHITE, "left", null); ldDie(x + 52, 84, 13, fc); });
+    else text(playing ? "NO BIDS YET" : "", X + 111, 91, 1, "#5a8a74", "center", null);
+    text("YOUR CUP", X, 112, 1, "#a0c8b4", "left", null);
+    c.you.forEach((d, i) => ldDie(X + 2 + i * 26, 120, 22, d || 1, { hide: !d, wild: d === 1, hl: r ? hl(d) : c.phase === "play" && (d === c.f || d === 1) }));
+    if (playing) text("1S ARE WILD", X + 136, 131, 1, "#ffe9a0", "left", null);
+    const px = X + 232, pw = 116;
+    rect("#0a2a1e", px, 22, pw, 150); outline(px, 22, pw, 150, "#2a6a4a");
+    text("HOW TO PLAY", px + pw / 2, 30, 1, GOLD, "center", null);
+    ["BID HOW MANY DICE", "SHOW A FACE IN", "BOTH CUPS. 1S", "ARE WILD.", "", "RAISE THE BID OR", "CALL LIAR. WRONG", "ON A CALL: LOSE", "A DIE. LAST ONE", "WITH DICE WINS."].forEach((l, i) => text(l, px + 6, 44 + i * 9, 1, "#c8e6d2", "left", null));
+    text(playing ? "DICE: YOU " + c.you.length + "  HIM " + c.him.length : "", px + pw / 2, 142, 1, WHITE, "center", null);
+    text("STAKE " + fmtChips(c.staked && playing ? c.staked : c.bet, 1e6), px + pw / 2, 154, 1, WHITE, "center", null); text("WIN PAYS X" + LD_PAY, px + pw / 2, 164, 1, GOLD, "center", null);
+  } else {
+    spr("oldman", X + 2, 26, false, 1); ldBubble(X + 18, 26, 100, c.say);
+    c.him.forEach((d, i) => ldDie(X + 26 + i * 13, 44, 11, d || 1, { hide: !showHim || !d, wild: showHim && d === 1, hl: showHim && hl(d) }));
+    rect("#0a2a1e", X + 2, 60, 116, 14); outline(X + 2, 60, 116, 14, "#2a6a4a");
+    const last = c.hist[c.hist.length - 1];
+    if (last) { text((last[0] === "YOU" ? "YOUR BID: " : "HIS BID: ") + last[1] + " X", X + 8, 67, 1, last[0] === "YOU" ? CYAN : GOLD, "left", null); ldDie(X + (last[0] === "YOU" ? 96 : 90), 61, 12, last[2]); }
+    else text(playing ? "NO BIDS YET" : "BEAT THE OLD MAN", X + 60, 67, 1, "#5a8a74", "center", null);
+    text(playing ? "YOUR CUP. 1S WILD" : "5 DICE EACH, 1S WILD", X + 60, 82, 1, "#a0c8b4", "center", null);
+    c.you.forEach((d, i) => ldDie(X + 5 + i * 23, 89, 19, d || 1, { hide: !d, wild: d === 1, hl: r ? hl(d) : c.phase === "play" && (d === c.f || d === 1) }));
+  }
+  const msgY = w ? 140 : 112;
+  if (c.phase !== "play") text((c.msg || "").slice(0, w ? 36 : 19), w ? X + 111 : X + 60, w ? 182 : msgY, 1, c.phase === "done" && /WIN!/.test(c.msg) ? GOLD : WHITE, "center", null);
+  for (const [id, x, y, bw, bh, v] of ldHits()) {
+    if (id === "stake" && v < 0) drawStakeCtl(x, y, w ? 120 : 112, c.bet, CHIP, "STAKE");
+    else if (id === "deal") btn(x, y, bw, bh, c.phase === "done" ? "PLAY AGAIN" : "DEAL", tav().chips >= c.bet ? GOLD : GREY);
+    else if (id === "next") btn(x, y, bw, bh, !c.you.length || !c.him.length || (r && ((r.loser === "you" && c.you.length === 1) || (r.loser === "him" && c.him.length === 1))) ? "FINISH" : "NEXT ROUND", GOLD);
+    else if (id === "qm" || id === "qp" || id === "fm" || id === "fp") btn(x, y, bw, bh, id[1] === "m" ? (id[0] === "q" ? "-" : "<") : (id[0] === "q" ? "+" : ">"), CHIP);
+    else if (id === "bid") btn(x, y, bw, bh, "BID", c.turn === "you" && ldBidOK(c.bid, c.q, c.f) ? GOLD : GREY);
+    else if (id === "liar") btn(x, y, bw, bh, w ? "LIAR" : "LIAR!", c.turn === "you" && c.bid && c.bid[2] === "him" ? "#ff6e6e" : GREY);
+  }
+  if (c.phase === "play") {
+    if (w) { rect(INK, X + 18, 152, 50, 18); outline(X + 18, 152, 50, 18, "#2a6a4a"); text(c.q + " X", X + 43, 161, 1, WHITE, "center", null); ldDie(X + 112, 153, 16, c.f);
+      text(c.turn === "you" ? "YOU BID: " + (LD_NUM[c.q] || c.q) + " " + c.f + "S, COUNTING BOTH CUPS" : "HE'S THINKING...", X + 111, 178, 1, "#8cc8a8", "center", null); }
+    else { text(c.q + " X", X + 30, 124, 1, WHITE, "center", null); ldDie(X + 79, 117, 14, c.f); text("DICE: YOU " + c.you.length + "  HIM " + c.him.length, X + 60, 166, 1, WHITE, "center", null); text("STAKE " + fmtChips(c.staked, 1e6) + " PAYS X" + LD_PAY, X + 60, 178, 1, GOLD, "center", null); }
+  } else if (!w && c.phase === "reveal") text("DICE: YOU " + c.you.length + "  HIM " + c.him.length, X + 60, 176, 1, WHITE, "center", null);
+  else if (!w) text("WIN PAYS X" + LD_PAY, X + 60, 178, 1, GOLD, "center", null);
+  const live = c.phase === "play" || c.phase === "reveal";
+  text(live ? (c.fold ? "TAP AGAIN TO FOLD (STAKE LOST)" : "TAP HERE TO FOLD").slice(0, w ? 40 : 19) : "TAP HERE TO LEAVE", LW / 2, 194, 1, live ? (c.fold ? "#ff8c8c" : WHITE) : WHITE, "center", null);
+}
+function ldTap(rx, ly) {
+  const c = CZ.ld, h = hitAt(ldHits(), rx, ly);
+  if (!h) {
+    if (ly > 186) { if (c.phase === "play" || c.phase === "reveal") { if (c.fold) ldFold(); else { c.fold = true; play("tick"); } } else closeOverlay(); }
+    return;
+  }
+  const [id, , , , , v] = h;
+  c.fold = false;
+  if (id === "stake") { c.bet = stakeStep(c.bet, v); play("tick"); }
+  else if (id === "deal") ldDeal();
+  else if (id === "next") ldNext();
+  else if (c.turn !== "you" || c.phase !== "play") return;
+  else if (id === "qm" || id === "qp") { c.q = clamp(c.q + v, 1, c.you.length + c.him.length); play("tick"); }
+  else if (id === "fm" || id === "fp") { c.f = (c.f - 2 + v + 5) % 5 + 2; play("tick"); }
+  else if (id === "bid") ldBid();
+  else if (id === "liar") { if (c.bid && c.bid[2] === "him") ldLiar("you"); else play("miss"); }
+}
+function ldKey(code, dir) {
+  const c = CZ.ld;
+  if (c.phase === "stake" || c.phase === "done") { if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); } else if (code === "Space" || code === "Enter") ldDeal(); return; }
+  if (c.phase === "reveal") { if (code === "Space" || code === "Enter") ldNext(); return; }
+  if (c.turn !== "you") return;
+  if (dir) { c.f = (c.f - 2 + dir + 5) % 5 + 2; play("tick"); }
+  else if (code === "ArrowUp" || code === "KeyW") { c.q = Math.min(c.you.length + c.him.length, c.q + 1); play("tick"); }
+  else if (code === "ArrowDown" || code === "KeyS") { c.q = Math.max(1, c.q - 1); play("tick"); }
+  else if (code === "Space" || code === "Enter") ldBid();
+  else if (code === "KeyL") { if (c.bid && c.bid[2] === "him") ldLiar("you"); }
+}
+EXTRA_OV.liar = { draw: drawLd, tap: ldTap, key: ldKey, back: () => czLeave(CZ.ld, CZ.ld && (CZ.ld.phase === "play" || CZ.ld.phase === "reveal"), "liar", "tables"), music: true };
+
+// ---- THE SHELL GAME. The old man shows the pearl, drops a shell over it and shuffles. Pick the shell with the pearl.
+// Three speeds. At the end his hands cover the shells and SOMETIMES he swaps them again (an old con; the screen says so),
+// so even perfect watching can't beat the house: someone who never loses track wins 1 - 2q/3 of the time, where q is how
+// often he does it. SLOW x1.5 (q .55), FAST x2 (q .79), BLUR x2.75 (q .98) -> about 95% for a perfect watcher, less for
+// a guesser (50% / 67% / 92%).
+const SG_TIERS = [["SLOW", 1.5, 6, 0.55, 0.55], ["FAST", 2, 9, 0.33, 0.79], ["BLUR", 2.75, 12, 0.2, 0.98]];   // [name, pays, swaps, s a swap, q]
+CZ.sg = null;
+function sgOpen() { if (!CZ.sg) CZ.sg = { bet: 10, tier: 0, phase: "stake", slot: [0, 1, 2], pearl: 1, moves: [], mi: 0, t: 0, pick: -1, msg: "WATCH THE PEARL", say: "STEP RIGHT UP", won: 0 }; }
+function sgStart() {
+  const c = CZ.sg; if (!["stake", "done"].includes(c.phase)) return;
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; play("miss"); return; }
+  addChips(-c.bet); c.staked = c.bet;
+  const T = SG_TIERS[c.tier];
+  c.slot = [0, 1, 2]; c.pearl = Math.floor(Math.random() * 3); c.pick = -1; c.won = 0;
+  c.moves = Array.from({ length: T[2] }, () => { const a = Math.floor(Math.random() * 3); return [a, (a + 1 + Math.floor(Math.random() * 2)) % 3]; });   // pairs of slots
+  c.flourish = Math.random() < T[4];
+  c.mi = 0; c.t = 0; c.phase = "show"; c.msg = ""; c.say = "WATCH CLOSELY..."; play("tick");
+}
+function sgSwapSlots(c, a, b) { const i = c.slot.indexOf(a), j = c.slot.indexOf(b); c.slot[i] = b; c.slot[j] = a; }
+function sgTick(dt) {
+  const c = CZ.sg; if (!c || ["stake", "pick", "done"].includes(c.phase)) return;
+  c.t += dt; const T = SG_TIERS[c.tier];
+  if (c.phase === "show" && c.t > 1.4) { c.phase = "shuffle"; c.t = 0; }
+  else if (c.phase === "shuffle" && c.t >= T[3]) {
+    const [a, b] = c.moves[c.mi]; sgSwapSlots(c, a, b); c.mi++; c.t = 0; play("tick", 0.5);
+    if (c.mi >= c.moves.length) { c.phase = "cover"; c.t = 0; c.say = "...AND A TWIST"; }
+  } else if (c.phase === "cover" && c.t > 0.9) {
+    if (c.flourish) { const p = [0, 1, 2]; for (let i = 2; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } c.slot = c.slot.map(s => p[s]); }
+    c.phase = "pick"; c.t = 0; c.say = "WHERE IS IT?"; c.msg = "TAP A SHELL";
+  }
+}
+function sgPick(k) {                                        // k = a slot, 0 to 2
+  const c = CZ.sg; if (c.phase !== "pick") return;
+  const shell = c.slot.indexOf(k); c.pick = k; c.phase = "done"; c.t = 0;
+  if (shell === c.pearl) {
+    const T = SG_TIERS[c.tier]; c.won = Math.min(maxWin(c.staked), Math.round(c.staked * T[1]));
+    addChips(c.won, "win"); if (c.tier === 2) tavAward("sharpeye");
+    c.msg = "THE PEARL! +" + fmtChips(c.won, 1e6); c.say = c.flourish ? "LUCKY GUESS." : "SHARP EYES."; play("fanfare");
+  } else { c.msg = "EMPTY. AGAIN?"; c.say = "SO CLOSE."; play("miss"); }
+}
+function sgShellXY(c, shell, x0, sp, y0) {                  // where a shell is drawn right now (moving shells arc past each other)
+  const s = c.slot[shell];
+  let x = x0 + s * sp, y = y0;
+  if (c.phase === "shuffle" && c.mi < c.moves.length) {
+    const [a, b] = c.moves[c.mi], T = SG_TIERS[c.tier], u = Math.min(1, c.t / T[3]), e = u * u * (3 - 2 * u);
+    if (s === a || s === b) { const to = s === a ? b : a; x = x0 + (s + (to - s) * e) * sp; y = y0 + Math.sin(e * Math.PI) * sp * 0.35 * (s === a ? -1 : 1); }
+  }
+  return [x, y];
+}
+function sgShell(x, y, w, lift) {                           // a scallop shell, w wide, sitting on y
+  const h = Math.round(w * 0.62), top = y - h - lift;
+  g.fillStyle = "#e8b48c"; g.beginPath(); g.moveTo(x - w / 2, y - lift); g.quadraticCurveTo(x - w / 2, top, x, top); g.quadraticCurveTo(x + w / 2, top, x + w / 2, y - lift); g.closePath(); g.fill();
+  g.strokeStyle = "#a0644a"; g.lineWidth = 1;
+  for (let k = -2; k <= 2; k++) { g.beginPath(); g.moveTo(x + k * w * 0.08, top + 2); g.lineTo(x + k * w * 0.2, y - lift - 1); g.stroke(); }
+  rect("#a0644a", Math.round(x - w / 2), y - lift - 2, w, 2);
+  rect("#c88c64", Math.round(x - w * 0.18), y - lift - 1, Math.round(w * 0.36), 3);   // the hinge
+}
+function sgHits() {
+  const L = czL(), c = CZ.sg, h = [], X = L.X;
+  if (L.w) {
+    const x0 = X + 34, sp = 76;
+    if (c.phase === "pick") for (let k = 0; k < 3; k++) h.push(["shell", x0 + k * sp - 30, 70, 60, 70, k]);
+    if (["stake", "done"].includes(c.phase)) { SG_TIERS.forEach((t, i) => h.push(["tier", X + 236, 24 + i * 22, 112, 18, i])); stakeCtl(h, "stake", X + 236, 94, 112); h.push(["go", X + 236, 114, 112, 22, 0]); }
+  } else {
+    const x0 = X + 22, sp = 38;
+    if (c.phase === "pick") for (let k = 0; k < 3; k++) h.push(["shell", x0 + k * sp - 17, 50, 34, 50, k]);
+    if (["stake", "done"].includes(c.phase)) { SG_TIERS.forEach((t, i) => h.push(["tier", X + 4 + i * 38, 126, 36, 19, i])); stakeCtl(h, "stake", X + 4, 150, 112); h.push(["go", X + 14, 170, 92, 16, 0]); }
+  }
+  return h;
+}
+function drawSg() {
+  const c = CZ.sg, L = czL(), X = L.X, w = L.w, T = SG_TIERS[c.tier];
+  tavernBg();
+  czTitle(L, "THE SHELL GAME", GOLD);
+  const x0 = w ? X + 34 : X + 22, sp = w ? 76 : 38, y0 = w ? 132 : 92, sw = w ? 52 : 30;
+  rect("#0e4a2e", w ? X : X + 2, w ? 64 : 42, w ? 228 : 116, w ? 84 : 58); outline(w ? X : X + 2, w ? 64 : 42, w ? 228 : 116, w ? 84 : 58, "#5a3a22");   // the felt
+  if (w) { spr("oldman", X + 6, 22, false, 1); ldBubble(X + 30, 24, 150, c.say); }
+  else ldBubble(X + 10, 26, 100, c.say);
+  const showPearl = c.phase === "show" || c.phase === "done";
+  for (let shell = 0; shell < 3; shell++) {
+    const [x, y] = sgShellXY(c, shell, x0, sp, y0);
+    const lift = c.phase === "show" && c.t > 0.15 && c.t < 1.15 && shell === c.pearl ? sw * 0.5 : c.phase === "done" && (c.slot[shell] === c.pick || shell === c.pearl) ? sw * 0.5 : 0;
+    if (showPearl && shell === c.pearl && lift) { disc("#f6f2ea", x, y - Math.round(sw * 0.1), Math.max(2, Math.round(sw * 0.1))); rect(WHITE, Math.round(x - sw * 0.05), Math.round(y - sw * 0.15), 1, 1); }
+    sgShell(x, y, sw, Math.round(lift));
+    if (c.phase === "pick") text(String(c.slot[shell] + 1), x, y + (w ? 10 : 7), 1, "#a0c8b4", "center", null);
+  }
+  if (c.phase === "cover") {                                // his hands over all three shells
+    const jig = Math.round(Math.sin(c.t * 30) * 2);
+    for (let k = 0; k < 2; k++) {                             // two big hands, fingers spread over the felt
+      const hx = Math.round(x0 + (k ? sp * 1.5 : sp * 0.5) + jig * (k ? -1 : 1)), hw = Math.round(sw * 1.5), hy = y0 - Math.round(sw * 0.85), hh = Math.round(sw * 0.55), fw = Math.max(2, Math.round(hw / 6));
+      g.fillStyle = "#e6c8a0"; g.beginPath(); g.ellipse(hx, hy + hh * 0.6, hw / 2, hh * 0.6, 0, 0, Math.PI * 2); g.fill();
+      for (let f = 0; f < 4; f++) { const fx = Math.round(hx - hw / 2 + fw * 0.6 + f * fw * 1.25); rect("#e6c8a0", fx, hy - Math.round(hh * 0.5), fw, Math.round(hh * 0.9)); rect("#c8a07a", fx + fw - 1, hy - Math.round(hh * 0.4), 1, Math.round(hh * 0.7)); }
+      rect("#e6c8a0", k ? hx + Math.round(hw / 2) - fw : hx - Math.round(hw / 2), hy + Math.round(hh * 0.3), fw, Math.round(hh * 0.5));   // the thumb
+      rect("#b4784a", hx - Math.round(hw / 2), hy + hh + 1, hw, 2);                                                                        // his sleeve cuff
+    }
+  }
+  text(c.phase === "shuffle" ? T[0] + " SHUFFLE" : (c.msg || "").slice(0, w ? 36 : 19), w ? X + 114 : X + 60, w ? 160 : 110, 1, c.phase === "done" && c.won ? GOLD : WHITE, "center", null);
+  for (const [id, x, y, bw, bh, v] of sgHits()) {
+    if (id === "tier") { const t = SG_TIERS[v], sel = v === c.tier; box(x, y, bw, bh, sel ? GOLD : CHIP); text(w ? t[0] + "  X" + t[1] : t[0], x + bw / 2, y + (w ? bh / 2 : 5), 1, sel ? GOLD : "#a0c8b4", "center", null); if (!w) text("X" + t[1], x + bw / 2, y + 14, 1, sel ? WHITE : "#6a9a84", "center", null); }
+    else if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, "STAKE");
+    else if (id === "go") btn(x, y, bw, bh, c.phase === "done" ? "AGAIN" : "PLAY", tav().chips >= c.bet ? GOLD : GREY);
+  }
+  if (w) {
+    ["AT THE END HIS", "HANDS COVER THE", "SHELLS. SOMETIMES", "HE SWAPS AGAIN.", "ABOUT 95% BACK"].forEach((l, i) => text(l, X + 292, 146 + i * 9, 1, "#a08c70", "center", null));
+  }
+  const busy = !["stake", "done"].includes(c.phase);
+  text(busy ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function sgTap(rx, ly) {
+  const c = CZ.sg, h = hitAt(sgHits(), rx, ly);
+  if (!h) { if (ly > 186 && ["stake", "done"].includes(c.phase)) closeOverlay(); return; }
+  const [id, , , , , v] = h;
+  if (id === "shell") sgPick(v);
+  else if (id === "tier") { c.tier = v; play("tick"); }
+  else if (id === "stake") { c.bet = stakeStep(c.bet, v); play("tick"); }
+  else if (id === "go") sgStart();
+}
+function sgKey(code, dir) {
+  const c = CZ.sg;
+  if (c.phase === "pick") { const k = { Digit1: 0, Digit2: 1, Digit3: 2, ArrowLeft: 0, ArrowDown: 1, ArrowRight: 2 }[code]; if (k !== undefined) sgPick(k); return; }
+  if (!["stake", "done"].includes(c.phase)) return;
+  if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); }
+  else if (code === "ArrowUp" || code === "KeyW") { c.tier = (c.tier + 1) % 3; play("tick"); }
+  else if (code === "Space" || code === "Enter") sgStart();
+}
+EXTRA_OV.shell = { draw: drawSg, tap: sgTap, key: sgKey, back: () => czLeave(CZ.sg, CZ.sg && !["stake", "done"].includes(CZ.sg.phase), "shell", "tables"), music: true };
+
+// ---- DOUBLOON PUSHER: the arcade coin pusher, seen from above. Drop doubloons onto the shelf; the pusher shoves the pile
+// forward. Doubloons that fall off the front are yours; ones that slip into the side gutters are the house's. Every
+// doubloon carries the value it was dropped at, so changing your coin size can't pull out more than went in. Your shelf
+// is saved (`tav.dp`), so leaving and coming back doesn't refill it. The gutters are tuned so a steady stream of drops
+// pays back about 94% aiming dead centre, ~91% with the chute swinging and less near the edges (gutters 22 deep: 20 gave
+// 96.6% in the middle, 26 gave 91%). tools/tests/test_casino7.py simulates thousands of drops at every aim.
+const DP = { W: 100, D: 124, R: 4.6, GAP: 22, SIDE: 0, PUSH0: 8, PUSHA: 9, PUSHW: 1.5 };
+CZ.dp = null;
+function dpCoins() {                                        // the saved shelf: [[x, y, value]...]; a fresh one is full of house coins worth 1
+  const q = tav();
+  if (!q.dp || !Array.isArray(q.dp.c)) {                   // about as full as a shelf settles in play (~130 coins)
+    const c = [], st = DP.R * 2 + 0.3;
+    for (let y = 20, row = 0; y < DP.D - 12; y += st * 0.87, row++) for (let x = DP.R + 1 + (row % 2) * st / 2; x < DP.W - DP.R - 1; x += st) c.push([Math.round(x * 10) / 10, Math.round(y * 10) / 10, 1]);
+    q.dp = { c, v: 1 };
+  }
+  return q.dp.c;
+}
+function dpOpen() {
+  if (!CZ.dp) CZ.dp = { bet: 10, aim: 0.5, dir: 1, t: 0, coins: dpCoins().map(([x, y, v]) => ({ x, y, vx: 0, vy: 0, v })), falling: [], queue: 0, next: 0, win: 0, msg: "DROP A DOUBLOON", saved: 0, burst: [] };
+}
+const dpPushY = t => DP.PUSH0 + DP.PUSHA * (0.5 - 0.5 * Math.cos(t * DP.PUSHW * Math.PI));
+// One physics step (dt = 1/60), shared by the screen and the tests. -> [paid value, house value]
+function dpStep(s, dt) {
+  s.t += dt;
+  const py = dpPushY(s.t), pv = (py - dpPushY(s.t - dt)) / dt, R = DP.R, cs = s.coins;
+  for (const c of cs) { c.x += c.vx * dt; c.y += c.vy * dt; c.vx *= 0.86; c.vy *= 0.86; }
+  for (let it = 0; it < 4; it++) {
+    for (const c of cs) if (c.y < py + R) { c.y = py + R; if (pv > 0) c.vy = Math.max(c.vy, pv); }
+    for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+      const a = cs[i], b = cs[j], dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+      if (d2 >= 4 * R * R || d2 === 0) continue;
+      const d = Math.sqrt(d2), o = (2 * R - d) / 2, nx = dx / d, ny = dy / d;
+      const aPin = a.y <= py + R + 0.01, bPin = b.y <= py + R + 0.01;     // the pusher face doesn't give way
+      if (aPin && !bPin) { b.x += nx * o * 2; b.y += ny * o * 2; } else if (bPin && !aPin) { a.x -= nx * o * 2; a.y -= ny * o * 2; } else { a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o; }
+      const rv = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+      if (rv < 0) { const k = rv * 0.5; a.vx += k * nx; a.vy += k * ny; b.vx -= k * nx; b.vy -= k * ny; }
+    }
+    for (const c of cs) {                                   // walls: solid at the back, open gutters for the last GAP of the shelf
+      if (c.y < DP.D - DP.GAP) { if (c.x < R) { c.x = R; c.vx = Math.abs(c.vx) * 0.3; } if (c.x > DP.W - R) { c.x = DP.W - R; c.vx = -Math.abs(c.vx) * 0.3; } }
+    }
+  }
+  let paid = 0, house = 0;
+  s.coins = cs.filter(c => {
+    if (c.y > DP.D) { paid += c.v; s.falling && s.falling.push({ x: c.x, y: DP.D, t: 0, v: c.v, win: true }); return false; }
+    if (c.x < -R * 0.2 || c.x > DP.W + R * 0.2) { house += c.v; s.falling && s.falling.push({ x: c.x, y: c.y, t: 0, v: c.v, win: false }); return false; }
+    return true;
+  });
+  return [paid, house];
+}
+function dpDrop(s, x, v) { s.coins.push({ x: clamp(x, DP.R, DP.W - DP.R), y: dpPushY(s.t) + DP.R + 0.5, vx: (Math.random() - 0.5) * 6, vy: 18 + Math.random() * 10, v }); }
+const dpAimX = s => DP.R + s.aim * (DP.W - 2 * DP.R);
+function dpTry() {
+  const c = CZ.dp;
+  if (tav().chips < c.bet || c.bet < 1) { c.msg = "NOT ENOUGH CHIPS"; c.queue = 0; play("miss"); return false; }
+  addChips(-c.bet); dpDrop(c, dpAimX(c) + (Math.random() - 0.5) * 10, c.bet); c.dirty = true; play("tick", 0.5); return true;
+}
+function dpTick(dt) {
+  const c = CZ.dp; if (!c || S.overlay !== "pusher") return;
+  c.aim += c.dir * dt * 0.45; if (c.aim > 1) { c.aim = 1; c.dir = -1; } if (c.aim < 0) { c.aim = 0; c.dir = 1; }   // the chute swings
+  c.next -= dt; if (c.queue > 0 && c.next <= 0) { if (dpTry()) { c.queue--; c.next = 0.35; } }
+  const steps = Math.min(4, Math.round(dt * 60)) || 1;
+  for (let k = 0; k < steps; k++) {
+    const [paid] = dpStep(c, 1 / 60);
+    if (paid) { addChips(paid, "win"); c.win += paid; c.burst.push([c.t, paid]); c.msg = "+" + fmtChips(paid, 1e6); c.dirty = true; play("chime", 0.6); }
+  }
+  c.burst = c.burst.filter(b => c.t - b[0] < 1.5);
+  if (c.burst.length >= 10) tavAward("pusher");
+  for (const f of c.falling) f.t += dt;
+  c.falling = c.falling.filter(f => f.t < 0.8);
+  c.saved += dt; if (c.dirty && c.saved > 3) dpSave();
+}
+function dpSave() { const c = CZ.dp; if (!c) return; tav().dp = { c: c.coins.map(o => [Math.round(o.x * 10) / 10, Math.round(o.y * 10) / 10, o.v]), v: 1 }; c.dirty = false; c.saved = 0; saveStore(); }
+function dpHits() {
+  const L = czL(), h = [], X = L.X;
+  if (L.w) { const px = X + 236; stakeCtl(h, "stake", px, 40, 112); h.push(["drop", px, 62, 112, 24, 0], ["drop5", px, 90, 112, 18, 0]); }
+  else { stakeCtl(h, "stake", X + 4, 155, 112); h.push(["drop", X + 4, 173, 54, 14, 0], ["drop5", X + 62, 173, 54, 14, 0]); }
+  return h;
+}
+function drawDp() {
+  const c = CZ.dp, L = czL(), X = L.X, w = L.w, k = w ? 1.3 : 0.88, fx = w ? X + 40 : X + 16, fy = w ? 24 : 28;
+  rect("#1a1208", 0, 0, LW, LH);
+  czTitle(L, "DOUBLOON PUSHER", GOLD);
+  const W = DP.W * k, D = DP.D * k, gy = fy + (DP.D - DP.GAP) * k;
+  rect("#3a2414", fx - 4, fy - 4, W + 8, D + 4);             // the cabinet
+  rect("#2a5a3a", fx, fy, W, D);                             // the shelf
+  rect("#0a0a0a", fx - 4, gy, 4, D - (gy - fy)); rect("#0a0a0a", fx + W, gy, 4, D - (gy - fy));   // the gutters
+  rect("#c89c3c", fx, fy + D, W, 2);                         // the front lip
+  const py = dpPushY(c.t) * k;
+  rect("#a07a3a", fx, fy, W, py); rect("#e6c46e", fx, fy + py - 2, W, 2);   // the pusher
+  const ax = fx + dpAimX(c) * k;
+  poly("#c8c8d2", [[ax - 4, fy - 4], [ax + 4, fy - 4], [ax, fy + 3]]);       // the chute
+  const r = Math.max(2, Math.round(DP.R * k));
+  for (const o of c.coins) { const big = o.v > c.bet; disc(o.v <= 1 ? "#b08a3a" : big ? "#ffe680" : GOLD, fx + o.x * k, fy + o.y * k, r); disc(o.v <= 1 ? "#8a6a2a" : "#c8961e", fx + o.x * k, fy + o.y * k, Math.max(1, r - 2)); }
+  for (const f of c.falling) { const a = 1 - f.t / 0.8; g.globalAlpha = Math.max(0, a); disc(f.win ? GOLD : "#6a5a3a", fx + f.x * k, fy + f.y * k + f.t * 30, Math.max(1, Math.round(r * a))); g.globalAlpha = 1; if (f.win && f.t < 0.6 && f.v > 1) text("+" + fmtChips(f.v), fx + f.x * k, fy + D + 8 - f.t * 14, 1, GOLD, "center", null); }
+  for (const [id, x, y, bw, bh, v] of dpHits()) {
+    if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, w ? "STAKE" : "BET");
+    else if (id === "drop") btn(x, y, bw, bh, "DROP", tav().chips >= c.bet ? GOLD : GREY);
+    else if (id === "drop5") btn(x, y, bw, bh, c.queue ? "DROPPING " + c.queue : "DROP 5", CHIP);
+  }
+  if (w) {
+    const px = X + 236;
+    text(c.msg.slice(0, 18), px + 56, 120, 1, /^\+/.test(c.msg) ? GOLD : WHITE, "center", null);
+    text("THIS VISIT " + fmtChips(c.win, 1e6), px + 56, 132, 1, "#c8b48c", "center", null);
+    ["FRONT EDGE: YOURS", "GUTTERS: HOUSE'S", "", "SPACE DROPS ONE", "UP DROPS FIVE"].forEach((l, i) => text(l, px + 56, 148 + i * 9, 1, "#8a7a5a", "center", null));
+  } else text(c.msg.slice(0, 19), X + 60, 147, 1, /^\+/.test(c.msg) ? GOLD : WHITE, "center", null);
+  text("TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
+}
+function dpTap(rx, ly) {
+  const c = CZ.dp, h = hitAt(dpHits(), rx, ly);
+  if (!h) { if (ly > 186) { dpSave(); closeOverlay(); } return; }
+  if (h[0] === "stake") { c.bet = stakeStep(c.bet, h[5]); play("tick"); }
+  else if (h[0] === "drop") dpTry();
+  else if (h[0] === "drop5") { c.queue += 5; }
+}
+function dpKey(code, dir) { const c = CZ.dp; if (dir) { c.bet = stakeStep(c.bet, dir); play("tick"); } else if (code === "Space" || code === "Enter") dpTry(); else if (code === "ArrowUp" || code === "KeyW") c.queue += 5; }
+EXTRA_OV.pusher = { draw: drawDp, tap: dpTap, key: dpKey, back: () => { dpSave(); return "machines"; }, music: true };
+
+// hook the four into the menus, the openers and the clock
+HUBS.tables.games.push(["compass", "COMPASS ROSE", "ROULETTE, 32 POINTS"], ["liar", "LIAR'S DICE", "BLUFF THE OLD MAN"], ["shell", "SHELL GAME", "FIND THE PEARL"]);
+HUBS.machines.games.push(["pusher", "DOUBLOON PUSHER", "PUSH THEM OFF"]);
+Object.assign(GAME_OPEN, {
+  compass: () => { crOpen(); openOverlay("compass"); }, liar: () => { ldOpen(); openOverlay("liar"); },
+  shell: () => { sgOpen(); openOverlay("shell"); }, pusher: () => { dpOpen(); openOverlay("pusher"); },
+});
+Object.assign(STAKE_REF, { compass: () => [CZ.cr, "bet"], liar: () => [CZ.ld, "bet"], shell: () => [CZ.sg, "bet"], pusher: () => [CZ.dp, "bet"] });
+
+function casinoTick(dt) { snapTick(dt); caTick(dt); rdTick(dt); whTick(dt); nhTick(dt); cupTick(dt); crTick(dt); ldTick(dt); sgTick(dt); dpTick(dt); roundsAnnounce(); }
 
 window.CASINO = { rdLine, DECOR, get DECOR_LIST() { return decorList(); }, DECOR_ALL, jpPot, jpLast, jpWin, JP_ODDS, JP_CAP, cupData, cupDeck, cupEnter, cupDeal, cupHit, cupStand, cupTick, cupNext, cupBoard, cupClaim, CUP_HANDS, decorData, decorDraw, decorBar, buyRound, roundsToday, ROUND_PRICE, tdMult, tdStart, tdPick, tdCash, NH_FISH, NH_PAY, nhQuick, nhToggle, nhCast, nhTick, get td() { return CZ.td; }, get nh() { return CZ.nh; }, CA_PAY, caRoll, caSettle, caTick, RD_STRIPS, rdPays, rdSpin, rdTick, WH_SEG, whSpin, whTick, get ca() { return CZ.ca; }, get rd() { return CZ.rd; }, get wh() { return CZ.wh; }, HUBS, GAME_OPEN, snapCrash, snapGo, snapCash, snapTick, bigP, bigCall, bigCash, bigDeal, BF_POOL, LOCKER, DEALER, czIdx, czOwn, czBuy, dealerStock, dealerWeek, dealerDaysLeft, DEALER_ORDER, CZ, czShopHits, get snap() { return CZ.snap; }, get big() { return CZ.big; } };
