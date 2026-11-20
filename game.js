@@ -354,7 +354,9 @@ const TITLES = [["rookie", "ROOKIE", "WHERE EVERYONE STARTS"]]
   .concat([["treasure", "TREASURE HUNTER", "5 CRATES PAST 10 JELLIES"], ["fullnet", "FULL NET", "ALL 5 IN NET HAUL"]])
   .concat([["onthehouse", "ON THE HOUSE", "BUY 10 ROUNDS"]])
   .concat([["megajack", "MEGA JACKPOT", "HIT THE REEL DEAL JACKPOT"], ["tablechamp", "TABLE CHAMP", "WIN A WEEKLY TOURNAMENT"], ["podium", "PODIUM", "TOP 3 IN A TOURNAMENT"]])
-  .concat([["zone" + REEF_Z, ZONE_TITLES[REEF_Z], "LOG ALL OF " + ZONES[REEF_Z][0]]]);   // the Coral Reef, Nov 19, 2026
+  .concat([["zone" + REEF_Z, ZONE_TITLES[REEF_Z], "LOG ALL OF " + ZONES[REEF_Z][0]]])   // the Coral Reef, Nov 19, 2026
+  .concat([["navigator", "NAVIGATOR", "HIT ONE POINT ON THE COMPASS"], ["liarliar", "LIAR LIAR", "WIN 10 GAMES OF LIAR'S DICE"],   // casino.js, Nov 20, 2026
+    ["sharpeye", "SHARP EYE", "FIND THE PEARL ON BLUR"], ["pusher", "PUSHER", "10 DOUBLOONS OFF AT ONCE"]]);
 const FLIP_TITLES = TITLES.filter(t => /^fzone|^flegends$|^bestiary$|^allofme$/.test(t[0])).map(t => t[0]);   // these live in the Bestiary, not the shop
 const SHOP_TITLE_IDS = TITLES.map((t, i) => i).filter(i => TITLES[i][0] !== "soggy" && !FLIP_TITLES.includes(TITLES[i][0]));   // SOGGY is a secret reward and lives on the Secrets page
 const titleName = id => (TITLES.find(t => t[0] === id) || TITLES[0])[1];
