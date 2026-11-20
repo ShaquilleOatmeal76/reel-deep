@@ -2669,6 +2669,7 @@ const betHas = k => betLegs(tav().bet).includes(k);
 function betAvail(i) {
   const id = BETS[i][0];
   if (id === "newsp" || id === "newtr") return false;                          // retired Nov 20, 2026: impossible once your log fills up
+  if (id === "online") return false;                                           // retired Nov 20, 2026: ON THE LINE (within 15 lb) almost never hit
   if ((id === "top10" || id === "beat1") && !LB.url) return false;             // no shared board here
   if ((id === "beatlast") && !tav().hist.length) return false;
   if (id === "wanted") return false;                                           // it has its own slot on the board
