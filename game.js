@@ -2962,6 +2962,7 @@ const SHOP_ROWS = [
   ["jptrail", "CHERRY FIZZ", 2000, "JACKPOT SET: BUBBLES"], ["jpflair", "777", 2500, "JACKPOT SET: FISH FLAIR"],
   ["hsline", "DICE LINE", 1500, "HIGH STAKES: A LINE"], ["hshook", "DICE HOOK", 1200, "HIGH STAKES: A HOOK"],
   ["hstrail", "TUMBLING DICE", 2000, "HIGH STAKES: BUBBLES"], ["hsflair", "CARD SUITS", 2500, "HIGH STAKES: FISH FLAIR"],
+  ["rename", "RENAME A FISH", 100, "A NAME OF YOUR OWN, IN YOUR LOG ONLY"],   // was in the back room until Nov 20, 2026
   ["carve", "CARVE INITIALS", 100, "INTO THE TAVERN WALL"],
   ["map", "TREASURE MAP", 60, "WHERE THIS WEEK'S GOLD BOOT HIDES"],
   ["magnet", "BOTTLE MAGNET", 120, "MORE BOTTLES, 3 DIVES"],
@@ -2984,6 +2985,7 @@ function shopRowState(i) {                                  // -> [label shown, 
   if (id === "compass") return store.isle.compass ? [lab, null, "THE SHIPWRIGHT HAS IT"] : store.dives >= 50 || store.isle.built ? [lab, price, note] : ["???", null, "AFTER 50 DIVES"];
   if (id === "dream") return store.sec.woke ? [lab, price, note] : ["???", null, "WAKE SOMETHING UP FIRST"];
   if (id === "jukebox") return [lab, q.jukebox ? null : price, q.jukebox ? "PICK A SONG" : note];
+  if (id === "rename") { const n = Object.keys(q.names || {}).length; return [lab, null, n ? "YOU'VE RENAMED " + n + ". " + RENAME + " CHIPS EACH" : RENAME + " CHIPS A FISH, IN YOUR LOG ONLY"]; }
   if (id === "carve") return [lab, price, q.carved ? "YOURS SAYS " + q.carved + ". CARVE AGAIN?" : note];
   return [lab, price, note];
 }
@@ -2997,6 +2999,7 @@ function bootDepth() { return Math.round(RNG(hashStr("boot" + weekString())).uni
 function shopBuy(i) {
   const q = tav(), id = SHOP_ROWS[i][0], [, price] = shopRowState(i), cm = TAV_COSM[id];
   if (CZ_ROWS.includes(id) && typeof casinoOpen === "function") { casinoOpen(id); return; }
+  if (id === "rename") { TAV.renSel = 0; openOverlay("rename"); return; }    // pays per fish, on the rename screen
   if (id === "story" && q.stories) { if (price && q.chips >= price) { addChips(-price); q.stories++; play("fanfare"); } TAV.story = q.stories - 1; openOverlay("story"); return; }
   if (id === "fish" && q.fish) { TAV.fishBack = null; openOverlay("myfish"); return; }
   if (id === "finprix") { if (q.fish) pitOpen("garage"); else play("miss"); return; }
@@ -3343,7 +3346,8 @@ function tavRows() {                                         // -> [label, colou
   const dr = dailyReady(), hubs = !!EXTRA_OV.tables;          // casino.js groups the games into TABLES and MACHINES (Nov 18, 2026)
   const r = (hubs ? [["TABLES", CHIP, "tables"], ["MACHINES", CHIP, "machines"], ["THE DERBY", CHIP, "derby"]] : [["CATCH 21", CHIP, "c21"], ["THE DERBY", CHIP, "derby"], ["PLINKO", CHIP, "plinko"]])
     .concat([["FIN PRIX PIT", ORANGE, "pit"], ["BUY THINGS", GOLD, "shop"], [dr ? "TAKE 50 FREE" : "MORE TOMORROW", dr ? LIME : GREY, "daily"]]);
-  if (store.sec.sleeper) r.push(["THE BACK ROOM", "#ff6e6e", "vip"]);              // opens once you've beaten the Sleeper
+  // THE BACK ROOM (VIP Catch 21, VIP Derby, Rename a Fish) was removed Nov 20, 2026 (Kade): with no bet limits it had no perk left.
+  // Rename a Fish moved to the chip shop. The VIP code paths stay (c21New(true), derbyNew(0, true)) but nothing opens them.
   return r;
 }
 const tavRowLay = n => n > 6 ? [92, 14, 12] : n > 5 ? [94, 16, 14] : [94, 18, 15];   // [first y, step, box height]
@@ -3414,7 +3418,7 @@ function drawChipShop() {
   const [, price, note] = shopRowState(TAV.shopSel);
   box(4, 134, 112, 34, GOLD);
   wrap(note, 18).slice(0, 2).forEach((l, i) => text(l, 60, 141 + i * 9, 1, "#e8dcc4", "center", null));
-  const sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid], opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || ["locker", "dealer", "decor"].includes(sid);
+  const sid = SHOP_ROWS[TAV.shopSel][0], cm = TAV_COSM[sid], opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || ["locker", "dealer", "decor", "rename"].includes(sid);
   const lab = opens ? "TAP AGAIN TO OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAP AGAIN: TAKE OFF" : "TAP AGAIN: PUT ON") : price === null ? (sid === "story" && tav().stories ? "TAP AGAIN TO READ" : "") : (tav().chips >= price ? (price >= 1000 ? "TAP TO BUY " : "TAP AGAIN: BUY ") : "NEEDS ") + price;   // 4-digit prices need the shorter line
   if (lab) text(sid === "dream" && price !== null && tav().chips >= price ? "DREAM FOR " + price : lab, 60, 160, 1, price !== null && tav().chips < price ? GREY : CHIP, "center", null);
   text("TAP HERE TO GO BACK", 60, 194, 1, WHITE, "center", null);
@@ -3537,7 +3541,7 @@ function renameFish(fid) {
   addChips(-RENAME); q.names[fid] = nm; saveStore(); play("fanfare");
 }
 function tavernTap(lx, ly) {                                 // -> true if handled
-  const o = S.overlay, back = () => { S.overlay = o === "tavern" ? null : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip" : hubBack(o); play("back"); };
+  const o = S.overlay, back = () => { S.overlay = o === "tavern" ? null : o === "rename" ? "chipshop" : hubBack(o); play("back"); };
   if (o === "tavern") {
     if (ly < 15 && lx >= 94) { TAV.board = 0; BOARDS.forEach(([k]) => tavLoad(k)); openOverlay("tavboard"); return true; }
     const rows = tavRows(), nr = rows.length, [y0, st, bh] = tavRowLay(nr), i = Math.floor((ly - y0) / st);
@@ -4515,7 +4519,7 @@ function drawChipShopWide() {
   g.restore();
   text(lab, px + pw / 2, 102, 1, WHITE, "center", null);
   wrap(note, 19).slice(0, 3).forEach((l, i) => text(l, px + pw / 2, 115 + i * 10, 1, "#e8dcc4", "center", null));
-  const opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || ["locker", "dealer", "decor"].includes(sid);
+  const opens = (sid === "fish" && tav().fish) || (sid === "jukebox" && tav().jukebox) || ["locker", "dealer", "decor", "rename"].includes(sid);
   const act = opens ? "OPEN" : cm && price === null ? (store.eq[cm[0]] === cm[1] ? "TAKE OFF" : "PUT ON") : price === null ? (sid === "story" && tav().stories ? "READ" : "") : sid === "dream" ? "DREAM FOR " + price : (tav().chips >= price ? "BUY " : "NEEDS ") + price;
   if (act) btn(px, 150, pw, 18, act, price !== null && tav().chips < price ? GREY : CHIP);
   closeLine("TAP HERE TO GO BACK");
@@ -5259,7 +5263,7 @@ function closeOverlay() {
   if (S.overlay === "help") { store.seenHelp = true; saveStore(); }
   const o = S.overlay, ex = EXTRA_OV[o] && EXTRA_OV[o].back;   // overlays from the other files say where Back goes (casino.js)
   if (ex) { S.overlay = typeof ex === "function" ? ex() : ex; play("back"); return; }
-  S.overlay = o === "note" && S.noteBack ? S.noteBack : (o === "c21" && TAV.c21.vip) || (o === "derby" && TAV.derby.vip) || o === "rename" ? "vip"
+  S.overlay = o === "note" && S.noteBack ? S.noteBack : o === "rename" ? "chipshop"
     : o === "myfish" && TAV.fishBack ? TAV.fishBack : o === "derbytable" ? "derby" : ["c21", "derby", "plinko", "chipshop", "tavboard", "vip", "pit"].includes(o) ? hubBack(o) : ["story", "jukebox", "myfish", "scratch"].includes(o) ? "chipshop" : null;
   play("back");
 }
