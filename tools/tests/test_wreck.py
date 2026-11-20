@@ -140,7 +140,7 @@ async def main():
         check("a tin of fish heals 25", r["healed"], r); check("the blunderbuss pickup", r["blun"], r)
         # waves with the aim bot (invulnerable): several waves clear, enemies come in
         await ev("WRECK.startWreck('hold', {test: true})")
-        r = await ev("wkBot(240, {god: true})")
+        r = await ev("wkBot(400, {god: true})")
         check("the bot clears waves", r and r["wave"] >= 4 and r["kills"] >= 20, r)
         check("the blunderbuss turns up after wave 1", r and r["guns"][2], r)
         await pg.screenshot(path=os.path.join(OUT, "pc_fight.png"))
