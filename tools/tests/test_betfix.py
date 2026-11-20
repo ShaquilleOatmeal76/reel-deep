@@ -23,7 +23,7 @@ window.T_rows = {
   },
   junk() { return [6, 0, 0, 0, "|", 1]; },
 };
-window.MASK = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_";
+window.MASK = MASK_CH;
 window.T_rng = (s => () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648)(42);
 """
 
@@ -71,8 +71,8 @@ async def main():
             for (let c = 0; c < cycles; c++) {
               if (tank) for (let k = 0; k < 19; k++) { q.hist.push(T_rows.junk()); if (q.hist.length > 20) q.hist.shift(); R.betRecord(q.hist[q.hist.length - 1]); }
               let best = 0, bi = 0;
-              if (tank) R.BETS.forEach((b, i) => { if (b[0] === "beatlast" || b[0] === "top10" || b[0] === "beat1") return; const v = b[3] * R.betPays(R.betChance(i)); if (v > best) { best = v; bi = i; } });
-              else { const bd = R.betBoard().filter(i => !["beatlast", "top10", "beat1"].includes(R.BETS[i][0])); bi = bd[Math.floor(rng() * bd.length)]; }
+              if (tank) R.BETS.forEach((b, i) => { if (["beatlast", "top10", "beat1", "wanted", "newsp", "newtr"].includes(b[0])) return; const v = b[3] * R.betPays(R.betChance(i)); if (v > best) { best = v; bi = i; } });
+              else { const bd = R.betBoard().filter(i => !["beatlast", "top10", "beat1", "wanted"].includes(R.BETS[i][0])); bi = bd[Math.floor(rng() * bd.length)]; }
               const pays = R.betPays(R.betChance(bi)), row = T_rows.honest(rng), won = row[4].split("|")[0].includes(MASK[bi]);
               staked += 75; if (won) back += Math.floor(75 * pays);
               q.hist.push(row); if (q.hist.length > 20) q.hist.shift(); R.betRecord(row);

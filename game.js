@@ -671,7 +671,7 @@ function release() {
   S.popups.push(["LET IT GO: " + SPEC[c[0]][1], 2.0, CYAN]);
   if (full) { S.fullUp = false; setState(S.resume || "down"); }
 }
-const lureOK = i => !(LURES[i][0] === "angler" && tav().bet && tav().bet.k === "nopulse");   // the NO PULSES bet greys out the Angler's Hook
+const lureOK = i => !(LURES[i][0] === "angler" && betHas("nopulse"));   // the NO PULSES bet greys out the Angler's Hook
 const betBlocked = k => k === "nopulse" && LURES[S.lure][0] === "angler";                   // ...and the other way round
 function pickLure(i, dir) {                                // choose a lure, skipping one that's greyed out
   for (let n = 0; n < LURES.length; n++, i = (i + (dir || 1) + LURES.length) % LURES.length) if (lureOK(i)) { S.lure = i; play("tick"); return; }
@@ -977,9 +977,10 @@ function beginHaul() {
   if (S.bossWon) extra.push(["THE SLEEPER SLEEPS", "#c8a0ff"]);
   if (S.bottom) extra.push(["SEA FLOOR +" + C.BOTTOM_BONUS, CYAN]);
   const dive = { total, mult, base, emptyFloor: !!S.emptyFloor, catch: S.catch, reached: S.reached, bottom: S.bottom, sets, bounty: S.bounty, newN, recN,
-    stung: !!S.stung, pulsed: !!S.pulsed, riseN: S.riseN || 0, last: tav().hist.length ? tav().hist[tav().hist.length - 1][0] : null,
+    stung: !!S.stung, bitten: S.bitten || 0, wanted: wantedFish(), pulsed: !!S.pulsed, riseN: S.riseN || 0, last: tav().hist.length ? tav().hist[tav().hist.length - 1][0] : null,
     lastLow: tav().hist.length ? tav().hist[tav().hist.length - 1][0] < 0.5 * betLine() : false,
     best: store.best, board: LB.url && LB.today ? LB.today.map(e => e.s).sort((a, b) => b - a) : null };
+  S.lastDive = dive;                                       // for the tests' dive bot
   let coins = total > 0 ? Math.floor(total / 20) + 1 : 0;   // /20 since Nov 18, 2026 (was /25)
   if (ids.includes("poop")) coins += 500;
   store.coins += coins;
@@ -2048,7 +2049,8 @@ const BET_CAP = 25, HW_FADE = 0.98, JUNK_K = 0.25;
 // Only bets a short, thrown dive could win are voided on a junk dive (Nov 19, 2026). Before, every bet was, so a real dive
 // cut short at depth (a jellyfish, a shark) voided bets it had already won, like PAST 900 M or A TROPHY. Pricing still
 // leaves junk dives out for every bet, so tanking can't move the odds.
-const JUNK_VOID = new Set(["odd", "seven", "pair", "triple", "onezone", "tight", "heavylast", "clean", "nopulse", "all10", "bounty", "record"]);
+const JUNK_VOID = new Set(["odd", "seven", "pair", "triple", "onezone", "tight", "heavylast", "clean", "nopulse", "all10", "bounty", "record",
+  "nobites", "stairs", "downhill", "twins", "balanced"]);
 const junkVoids = k => JUNK_VOID.has(k);
 const junkRow = r => r[5] === 1;                            // 6th field of a history row: a junk dive (rows from before have none)
 function betHW() { const q = tav(); if (!q.bhw || typeof q.bhw !== "object") q.bhw = { d: "", line: 0 }; return q.bhw; }
@@ -2083,6 +2085,17 @@ function betRecord(row) {                                   // after every dive:
 const ZONE_N = i => d => d.catch.some(c => SPEC[c[0]][2] === i);
 const FULL = d => d.catch.length === C.CAPACITY;
 const isLeg = c => !!SPEC[c[0]][7];
+// Fish families for the dive bets (Nov 20, 2026). Lists of fish ids; a fish may be in two (the lantern shark glows).
+const FAMS = {
+  shark: ["shark", "blacktip", "leopard", "mako", "hammer", "goblin", "lshark", "whitetip", "nurse", "sleeper", "frill", "megalodon"],
+  ink: ["squid", "octo", "cuttle", "nautilus", "vampire", "glimmer", "embers", "bigfin", "dumbo", "kraken", "colossal", "trueking"],
+  eel: ["eel", "conger", "glasseel", "magma", "cusk", "faceless", "lamprey", "hagfish", "phantom"],
+  shell: ["crab", "lobster", "mantis", "isopod", "geode", "yeti", "shrimp", "spider", "amphipod", "gcrab", "ironsnail"],
+  ray: ["ray", "opal", "scald", "sunray", "pmanta"],
+  glow: ["lantern", "hatchet", "flash", "angler", "dragon", "loosejaw", "lshark", "dread"],
+};
+const famN = (d, f) => d.catch.filter(c => FAMS[f].includes(c[0])).length;
+const zoneRun = d => { if (!FULL(d)) return false; const r = [...new Set(d.catch.map(c => ZRANK[SPEC[c[0]][2]]))].sort((a, b) => a - b); return r.length === 3 && r[2] - r[0] === 2; };
 const BETS = [
   ["over", "OVER {L} LB", "SCORE OVER THE LINE", 0.5, (d, L) => d.total > L],
   ["under", "UNDER {L} LB", "3 FISH BELOW 400 M", 0.45, (d, L) => d.total >= L ? false : FULL(d) && d.catch.every(c => (c[3] || 0) >= 400) ? true : null],
@@ -2134,9 +2147,34 @@ const BETS = [
   ["newtr", "NEW+TROPHY", "NEW SPECIES, TROPHY", 0.05, d => d.newN > 0 && d.catch.some(c => c[2])],
   ["deepover", "900 M+OVER", "900 M AND OVER {L}", 0.2, (d, L) => d.reached >= 900 && d.total > L],
   ["nopulse", "NO PULSES", "FULL HOOK, NO PULSE", 0.3, d => FULL(d) && !d.pulsed],
+  // Nov 20, 2026: fish families, combos, shapes and the WANTED fish. Priors measured with tools/tests/dive_bot.js.
+  ["fshark", "A SHARK", "ANY SHARK", 0.454, d => famN(d, "shark") >= 1],
+  ["fink", "INK SLINGER", "SQUID OR OCTOPUS", 0.656, d => famN(d, "ink") >= 1],
+  ["feel", "SLIPPERY", "ANY EEL", 0.64, d => famN(d, "eel") >= 1],
+  ["fshell", "SHELLFISH", "CRAB/LOBSTER/SHRIMP", 0.663, d => famN(d, "shell") >= 1],
+  ["fray", "A RAY", "ANY RAY", 0.535, d => famN(d, "ray") >= 1],
+  ["fglow", "LIGHTS ON", "A GLOWING FISH", 0.603, d => famN(d, "glow") >= 1],
+  ["surfturf", "SURF+TURF", "SHARK + SHELLFISH", 0.349, d => famN(d, "shark") >= 1 && famN(d, "shell") >= 1],
+  ["calamari", "CALAMARI", "2 SQUID/OCTOPUS", 0.558, d => famN(d, "ink") >= 2],
+  ["sushi", "SUSHI ROLL", "AN EEL AND A SQUID", 0.211, d => famN(d, "eel") >= 1 && famN(d, "ink") >= 1],
+  ["sharkweek", "SHARK WEEK", "2 SHARKS", 0.396, d => famN(d, "shark") >= 2],
+  ["boil", "SEAFOOD BOIL", "SHELL, INK AND EEL", 0.12, d => famN(d, "shell") >= 1 && famN(d, "ink") >= 1 && famN(d, "eel") >= 1],
+  ["nobites", "NO BITES", "FULL HOOK, NO BITES", 0.92, d => FULL(d) && !d.bitten],
+  ["stairs", "STAIRCASE", "EACH FISH HEAVIER", 0.149, d => FULL(d) && d.catch[0][1] < d.catch[1][1] && d.catch[1][1] < d.catch[2][1]],
+  ["downhill", "DOWNHILL", "EACH FISH LIGHTER", 0.17, d => FULL(d) && d.catch[0][1] > d.catch[1][1] && d.catch[1][1] > d.catch[2][1]],
+  ["twins", "TWINS", "2 FISH WITHIN 2 LB", 0.218, d => d.catch.some((a, i) => d.catch.some((b, j) => j > i && a[1] >= 10 && b[1] >= 10 && Math.abs(a[1] - b[1]) <= 2))],
+  ["balanced", "BALANCED", "3 FISH WITHIN 10 LB", 0.082, d => FULL(d) && d.catch.every(c => c[1] >= 20) && Math.max(...d.catch.map(c => c[1])) - Math.min(...d.catch.map(c => c[1])) <= 10],
+  ["fish100", "100 LB FISH", "ONE FISH 100 LB+", 0.251, d => d.catch.some(c => c[1] >= 100)],
+  ["bookends", "BOOKENDS", "ABOVE 400+BELOW 900", 0.133, d => d.catch.some(c => (c[3] || 0) < 400) && d.catch.some(c => (c[3] || 0) >= 900)],
+  ["neighbours", "NEIGHBOURS", "3 ZONES IN A ROW", 0.12, zoneRun],
+  ["postcard", "POSTCARD", "REEF FISH + FLOOR", 0.2, d => d.bottom && d.catch.some(c => SPEC[c[0]][2] === REEF_Z)],
+  ["bounty2", "BOUNTY X2", "TWO BOUNTY FISH", 0.15, d => d.catch.filter(c => c[0] === d.bounty).length >= 2],
+  ["wanted", "WANTED", "THE WANTED FISH", 0.1, d => !d.wanted ? null : d.catch.some(c => c[0] === d.wanted)],
 ];
 const BET_I = Object.fromEntries(BETS.map((b, i) => [b[0], i]));
-const MASK_CH = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_";   // one character per bet (64 max)
+// One character per bet in each history row (Nov 20, 2026: extended past 64 for the new bets; "|" splits the row, so it's
+// never used, and neither are quotes or backslashes). Old rows only use the first 64, which keep their meaning.
+const MASK_CH = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_!#$%&()*+,./:;<=>?@[]^{}~";
 function betMask(dive, line) {                              // -> "w..|v.." bets this dive won | bets it couldn't decide
   let won = "", skip = "";
   BETS.forEach((b, i) => { const r = b[4](dive, line); if (r === null) skip += MASK_CH[i]; else if (r) won += MASK_CH[i]; });
@@ -2155,45 +2193,528 @@ function windowChance(i) {                                  // your record on be
 }
 const LIFE_K = 10, PRIOR_FLOOR = 0.9;
 function lifeChance(i) { const e = betLife()[i] || [0, 0]; return (e[1] + LIFE_K * BETS[i][3]) / (e[0] + LIFE_K); }
-function betChance(i) {                                     // the chance a bet is priced at
-  return clamp(Math.max(PRIOR_FLOOR * BETS[i][3], lifeChance(i)), 0.01, 0.97);
+
+// ---- WANTED (Nov 20, 2026): one named fish per board, from Twilight down, never a legendary or a time-of-day fish. The fish
+// is seeded by the dive count like the board, so reopening can't reroll it. WANTED_P is how often a dive lands each fish
+// (measured with tools/tests/dive_bot.js); your own record scales it (`tav.wrec` = [fish expected, fish caught] over real
+// WANTED bets you've settled), never below 0.9x. Hunting a fish on purpose works, so the more WANTED bets you win, the less they pay you.
+const WANTED_P = {
+  amethyst: 0.411, amphipod: 0.318, angler: 0.471, ash: 0.383, barracuda: 0.374, barreleye: 0.306, bigfin: 0.188,
+  blob: 0.364, boneeater: 0.507, bonefish: 0.397, bonito: 0.285, cavefish: 0.49, cinder: 0.474, conger: 0.35,
+  cusk: 0.413, dragon: 0.483, dumbo: 0.06, eel: 0.391, embers: 0.347, faceless: 0.334, fangtooth: 0.478, frill: 0.193,
+  gcrab: 0.072, geode: 0.409, glasseel: 0.414, glimmer: 0.316, goblin: 0.218, grenadier: 0.481, grouper: 0.499,
+  gulper: 0.455, hagfish: 0.503, hammer: 0.144, hatchet: 0.432, ironsnail: 0.293, isopod: 0.401, lamprey: 0.467,
+  lantern: 0.287, lionfish: 0.437, lizard: 0.441, lobster: 0.402, loosejaw: 0.382, lshark: 0.183, magma: 0.51,
+  mahi: 0.35, mako: 0.111, nautilus: 0.265, oarfish: 0.178, octo: 0.341, opal: 0.389, prism: 0.487, quartz: 0.406,
+  ratfish: 0.398, ray: 0.168, scald: 0.406, seapig: 0.073, shard: 0.456, shark: 0.19, shrimp: 0.492, skull: 0.35,
+  sleeper: 0.185, snailfish: 0.346, snapper: 0.416, spider: 0.331, squid: 0.339, sulfur: 0.447, swallower: 0.327,
+  sword: 0.256, telescope: 0.274, tripod: 0.093, tuna: 0.395, vampire: 0.314, viper: 0.531, wolf: 0.337, yeti: 0.447
+};                                        // filled from the bot run below this block
+function wantedPool() { return Object.keys(WANTED_P).filter(id => SPEC[id] && SPEC[id][6] === null && !SPEC[id][7]); }
+function wantedFish() {
+  const pool = wantedPool();
+  if (!pool.length) return null;
+  return pool[Math.floor(RNG(hashStr("wanted" + (store.dives || 0) + (store.name || ""))).random() * pool.length)];
+}
+function wrec() { const q = tav(); if (!Array.isArray(q.wrec)) q.wrec = [0, 0]; return q.wrec; }
+const wantedK = () => { const w = wrec(); return clamp((w[1] + 3) / (w[0] + 3), PRIOR_FLOOR, 1.6); };
+function wantedRecord(fish, won) {                          // after a settled WANTED bet (alone or in a parlay)
+  if (!WANTED_P[fish]) return;
+  const w = wrec(); w[0] = Math.round((w[0] + WANTED_P[fish]) * 1000) / 1000; if (won) w[1]++;
+}
+// Your record on the bets you actually take (Nov 20, 2026): `tav.btake` = {betId: [settled, won]}. Family and WANTED bets reward
+// going after them, so a bet you keep winning when you take it gets priced from that, not just from every dive you've made.
+const TAKE_K = 8;
+function btake() { const q = tav(); if (!q.btake || typeof q.btake !== "object") q.btake = {}; return q.btake; }
+function takeChance(i) { const e = btake()[BETS[i][0]] || [0, 0]; return (e[1] + TAKE_K * BETS[i][3]) / (e[0] + TAKE_K); }
+function betChance(i, w) {                                  // the chance a bet is priced at
+  if (BETS[i][0] === "wanted") { w = w || wantedFish(); return clamp((WANTED_P[w] || BETS[i][3]) * wantedK(), 0.01, 0.9); }
+  return clamp(Math.max(PRIOR_FLOOR * BETS[i][3], lifeChance(i), takeChance(i)), 0.01, 0.97);
 }
 const betPays = q => { const x = EDGE / q; return Math.min(BET_CAP, Math.max(1.1, x >= 10 ? Math.floor(x) : Math.floor(x * 10) / 10)); };
+
+// ---- Parlays (Nov 20, 2026): tick 2 or 3 bets; all must win. Priced as the product of each bet's own chance times how much
+// those bets go together (PAIR_LIFT, measured with the dive bot: PAST 900 M and TRENCH FISH come together far more often
+// than chance; STAIRCASE and DOWNHILL never do). A WANTED leg uses its fish's zone ("Z" + zone). Any leg void = stake back.
+// PARLAY_EDGE: good dives win several bets at once in ways the pairs miss, so parlays are priced 9% likelier; measured on a
+// separate batch of bot dives, 2- and 3-bet parlays then pay back about 95%. Past x100 a parlay can't be placed.
+const PARLAY_CAP = 100, PARLAY_MAX = 3, PARLAY_EDGE = 1.09;
+const PAIR_LIFT = {
+  "Z0+balanced": 0.22, "Z0+beatlast": 0.84, "Z0+boil": 0.46, "Z0+bookends": 2.41, "Z0+bounty": 6.95, "Z0+d600": 0.79,
+  "Z0+d900": 0.73, "Z0+deephook": 0, "Z0+deepover": 0.57, "Z0+deeptrio": 0, "Z0+downhill": 0.63, "Z0+feel": 0.6,
+  "Z0+fglow": 0.54, "Z0+fish100": 0.66, "Z0+fish200": 0.74, "Z0+floor": 0.5, "Z0+floor3": 0.55, "Z0+fray": 1.67,
+  "Z0+fshark": 0.65, "Z0+fshell": 0.6, "Z0+heavylast": 1.17, "Z0+legend": 1.7, "Z0+lgtr": 2.39, "Z0+neighbours": 0.36,
+  "Z0+nopulse": 1.17, "Z0+odd": 0.82, "Z0+onezone": 0.34, "Z0+online": 0.82, "Z0+over": 0.73, "Z0+over15": 0.84,
+  "Z0+over2": 0.7, "Z0+pair": 0.4, "Z0+pb": 0.59, "Z0+postcard": 0.5, "Z0+record": 1.25, "Z0+rise": 0.52,
+  "Z0+setx3": 1.23, "Z0+seven": 0.53, "Z0+stairs": 1.33, "Z0+sushi": 0.48, "Z0+tight": 0.3, "Z0+tour": 1.87,
+  "Z0+trbounty": 6.65, "Z0+triple": 0.42, "Z0+trophy": 1.68, "Z0+trophy2": 2.19, "Z0+twins": 0.62, "Z0+under": 0,
+  "Z0+z5": 0.86, "Z0+z6": 0.63, "Z0+z7": 0.48, "Z0+z8": 0.59, "Z0+z9": 0.8, "Z1+all10": 0.83, "Z1+balanced": 0.67,
+  "Z1+beatlast": 0.83, "Z1+boil": 0.47, "Z1+bookends": 2.42, "Z1+bounty": 0.72, "Z1+calamari": 0.53, "Z1+d600": 0.82,
+  "Z1+d900": 0.73, "Z1+deephook": 0, "Z1+deepover": 0.71, "Z1+deeptrio": 0, "Z1+downhill": 0.75, "Z1+feel": 0.77,
+  "Z1+fglow": 0.53, "Z1+fink": 0.65, "Z1+fish100": 1.19, "Z1+fish200": 0.61, "Z1+fish50": 1.14, "Z1+floor": 0.49,
+  "Z1+floor3": 0.61, "Z1+floorlg": 0.79, "Z1+floortr": 0.78, "Z1+fray": 0.71, "Z1+fshark": 0.8, "Z1+fshell": 0.72,
+  "Z1+legend": 1.87, "Z1+lgtr": 2.11, "Z1+onezone": 0.26, "Z1+online": 0.87, "Z1+over2": 0.75, "Z1+pair": 0.45,
+  "Z1+pb": 1.34, "Z1+postcard": 0.78, "Z1+record": 1.26, "Z1+rise": 0.57, "Z1+seven": 1.43, "Z1+sushi": 0.76,
+  "Z1+tight": 0.34, "Z1+tour": 1.79, "Z1+trbounty": 0.79, "Z1+triple": 0.65, "Z1+trophy": 1.42, "Z1+trophy2": 1.86,
+  "Z1+twins": 0.84, "Z1+under": 0, "Z1+z4": 0.8, "Z1+z5": 0.63, "Z1+z6": 0.87, "Z1+z7": 0.81, "Z1+z8": 0.63,
+  "Z1+z9": 0.66, "Z10+all10": 0.78, "Z10+balanced": 0.24, "Z10+bookends": 2.22, "Z10+bounty": 0.55,
+  "Z10+calamari": 1.53, "Z10+d600": 0.73, "Z10+d900": 0.68, "Z10+deephook": 0, "Z10+deepover": 0.71, "Z10+deeptrio": 0,
+  "Z10+feel": 0.74, "Z10+fglow": 0.84, "Z10+fink": 0.82, "Z10+fish100": 1.47, "Z10+fish200": 0.54, "Z10+fish50": 1.16,
+  "Z10+floor": 0.34, "Z10+floor3": 0.46, "Z10+floorlg": 0.66, "Z10+floortr": 0.52, "Z10+fray": 2.29, "Z10+fshark": 1.4,
+  "Z10+fshell": 0.88, "Z10+legend": 1.97, "Z10+lgtr": 2.21, "Z10+neighbours": 1.56, "Z10+nopulse": 1.14,
+  "Z10+odd": 0.82, "Z10+onezone": 0.23, "Z10+over2": 0.82, "Z10+pair": 0.54, "Z10+pb": 0.74, "Z10+postcard": 5.8,
+  "Z10+record": 1.3, "Z10+rise": 0.41, "Z10+seven": 1.22, "Z10+surfturf": 1.58, "Z10+sushi": 0.65, "Z10+tight": 0.35,
+  "Z10+tour": 1.85, "Z10+trbounty": 0.6, "Z10+triple": 0.67, "Z10+trophy": 1.37, "Z10+trophy2": 2.06,
+  "Z10+twins": 0.71, "Z10+under": 0, "Z10+z3": 1.16, "Z10+z4": 0.86, "Z10+z5": 0.79, "Z10+z6": 0.64, "Z10+z7": 0.72,
+  "Z10+z8": 0.51, "Z10+z9": 0.61, "Z2+balanced": 0.21, "Z2+beatlast": 0.82, "Z2+boil": 0.4, "Z2+bookends": 2.08,
+  "Z2+bounty": 1.35, "Z2+d600": 0.7, "Z2+d900": 0.63, "Z2+deephook": 0, "Z2+deepover": 0.66, "Z2+deeptrio": 0,
+  "Z2+downhill": 1.22, "Z2+feel": 0.66, "Z2+fglow": 1.52, "Z2+fish100": 1.18, "Z2+fish200": 0.64, "Z2+fish50": 1.22,
+  "Z2+floor": 0.52, "Z2+floor3": 0.59, "Z2+floortr": 0.75, "Z2+fray": 1.75, "Z2+fshark": 3.54, "Z2+fshell": 0.58,
+  "Z2+legend": 1.6, "Z2+lgtr": 1.69, "Z2+neighbours": 1.57, "Z2+nopulse": 1.12, "Z2+onezone": 0.44, "Z2+online": 0.87,
+  "Z2+pair": 0.62, "Z2+pb": 0.65, "Z2+postcard": 0.45, "Z2+record": 1.29, "Z2+rise": 0.56, "Z2+setx3": 1.46,
+  "Z2+seven": 1.16, "Z2+stairs": 0.84, "Z2+surfturf": 2.22, "Z2+tight": 0.54, "Z2+tour": 1.73, "Z2+trbounty": 1.32,
+  "Z2+trophy": 1.26, "Z2+trophy2": 1.57, "Z2+twins": 0.68, "Z2+under": 0, "Z2+z3": 1.4, "Z2+z4": 0.84, "Z2+z5": 0.75,
+  "Z2+z6": 0.59, "Z2+z7": 0.6, "Z2+z8": 0.57, "Z2+z9": 0.6, "Z3+balanced": 0.22, "Z3+beatlast": 0.74,
+  "Z3+bookends": 1.43, "Z3+calamari": 1.46, "Z3+d600": 0.74, "Z3+d900": 0.65, "Z3+deephook": 0, "Z3+deepover": 0.61,
+  "Z3+deeptrio": 0, "Z3+downhill": 1.32, "Z3+feel": 1.56, "Z3+fish200": 0.41, "Z3+fish50": 1.2, "Z3+floor": 0.46,
+  "Z3+floor3": 0.52, "Z3+floortr": 0.52, "Z3+fshark": 0.74, "Z3+fshell": 0.75, "Z3+legend": 1.38, "Z3+lgtr": 1.56,
+  "Z3+neighbours": 1.53, "Z3+nopulse": 1.17, "Z3+onezone": 0.33, "Z3+over15": 0.79, "Z3+over2": 0.7, "Z3+pair": 0.59,
+  "Z3+postcard": 0.68, "Z3+record": 1.32, "Z3+rise": 0.5, "Z3+setx3": 1.38, "Z3+seven": 1.18, "Z3+surfturf": 0.84,
+  "Z3+sushi": 1.4, "Z3+tight": 0.41, "Z3+tour": 1.77, "Z3+trbounty": 0.84, "Z3+triple": 0.74, "Z3+trophy": 1.36,
+  "Z3+trophy2": 1.81, "Z3+twins": 0.73, "Z3+under": 0.68, "Z3+z3": 7.98, "Z3+z6": 0.67, "Z3+z7": 0.57, "Z3+z8": 0.4,
+  "Z3+z9": 0.61, "Z4+balanced": 0.3, "Z4+beatlast": 0.85, "Z4+boil": 0.48, "Z4+bookends": 0.55, "Z4+bounty": 0.69,
+  "Z4+d600": 0.81, "Z4+d900": 0.75, "Z4+deephook": 0.65, "Z4+deepover": 0.71, "Z4+deeptrio": 0, "Z4+feel": 0.75,
+  "Z4+fglow": 3.28, "Z4+fink": 0.86, "Z4+fish200": 1.28, "Z4+floor": 0.58, "Z4+floor3": 0.68, "Z4+floorlg": 0.44,
+  "Z4+fshark": 1.4, "Z4+fshell": 0.66, "Z4+heavylast": 1.12, "Z4+lgtr": 1.27, "Z4+neighbours": 1.26,
+  "Z4+onezone": 0.38, "Z4+online": 0.79, "Z4+pair": 0.7, "Z4+pb": 1.14, "Z4+postcard": 0.72, "Z4+record": 1.15,
+  "Z4+rise": 0.67, "Z4+stairs": 1.19, "Z4+surfturf": 0.7, "Z4+sushi": 0.63, "Z4+tight": 0.46, "Z4+tour": 1.66,
+  "Z4+trbounty": 0.64, "Z4+triple": 0.57, "Z4+trophy": 1.29, "Z4+trophy2": 1.65, "Z4+under": 1.15, "Z4+z4": 5.54,
+  "Z4+z6": 0.63, "Z4+z7": 0.73, "Z4+z8": 0.53, "Z4+z9": 0.73, "Z5+balanced": 0.78, "Z5+boil": 1.41,
+  "Z5+bookends": 0.39, "Z5+bounty": 0.77, "Z5+d900": 0.69, "Z5+deephook": 1.26, "Z5+deepover": 0.76, "Z5+deeptrio": 0,
+  "Z5+fglow": 0.58, "Z5+floor": 0.58, "Z5+floor3": 0.7, "Z5+floorlg": 0.82, "Z5+floortr": 0.78, "Z5+fray": 2,
+  "Z5+fshark": 0.45, "Z5+heavylast": 1.21, "Z5+lgtr": 1.22, "Z5+neighbours": 1.49, "Z5+onezone": 0.58,
+  "Z5+over2": 1.16, "Z5+pair": 0.88, "Z5+postcard": 0.59, "Z5+record": 1.14, "Z5+rise": 0.62, "Z5+seven": 1.22,
+  "Z5+stairs": 1.23, "Z5+surfturf": 0.75, "Z5+tight": 0.72, "Z5+tour": 1.62, "Z5+trbounty": 0.85, "Z5+triple": 0.63,
+  "Z5+trophy": 1.19, "Z5+trophy2": 1.54, "Z5+under": 1.15, "Z5+z5": 6.36, "Z5+z7": 0.58, "Z5+z8": 0.59, "Z5+z9": 0.65,
+  "Z6+boil": 1.67, "Z6+bookends": 0.49, "Z6+bounty": 0.43, "Z6+calamari": 1.22, "Z6+d600": 1.16, "Z6+d900": 0.7,
+  "Z6+deephook": 1.3, "Z6+deepover": 0.81, "Z6+deeptrio": 0, "Z6+feel": 1.38, "Z6+fglow": 0.62, "Z6+floor": 0.62,
+  "Z6+floor3": 0.72, "Z6+floorlg": 0.6, "Z6+fray": 2.28, "Z6+fshark": 0.5, "Z6+fshell": 1.45, "Z6+heavylast": 1.13,
+  "Z6+legend": 0.8, "Z6+neighbours": 1.43, "Z6+onezone": 0.68, "Z6+pair": 0.74, "Z6+postcard": 0.52, "Z6+rise": 0.71,
+  "Z6+setx2": 0.81, "Z6+setx3": 0.83, "Z6+seven": 1.16, "Z6+sushi": 1.51, "Z6+tight": 0.82, "Z6+tour": 1.45,
+  "Z6+trbounty": 0.48, "Z6+triple": 0.82, "Z6+trophy2": 1.15, "Z6+under": 1.18, "Z6+z3": 0.67, "Z6+z4": 0.63,
+  "Z6+z6": 5.16, "Z6+z7": 0.82, "Z6+z8": 0.55, "Z6+z9": 0.69, "Z7+all10": 1.14, "Z7+balanced": 1.73,
+  "Z7+beatlast": 1.3, "Z7+boil": 1.74, "Z7+bounty": 0.43, "Z7+calamari": 0.32, "Z7+d600": 1.16, "Z7+d900": 1.14,
+  "Z7+deephook": 1.35, "Z7+deepover": 1.29, "Z7+deeptrio": 1.72, "Z7+feel": 2.13, "Z7+fglow": 0.68, "Z7+fink": 0.73,
+  "Z7+floor": 0.77, "Z7+floorlg": 0.43, "Z7+floortr": 0.74, "Z7+fray": 0.34, "Z7+fshark": 1.12, "Z7+legend": 0.75,
+  "Z7+neighbours": 2.34, "Z7+odd": 0.61, "Z7+onezone": 0.55, "Z7+over": 1.27, "Z7+over15": 1.25, "Z7+over2": 1.34,
+  "Z7+pair": 0.56, "Z7+pb": 1.26, "Z7+postcard": 0.57, "Z7+rise": 0.85, "Z7+setx2": 1.51, "Z7+setx3": 1.75,
+  "Z7+seven": 0.59, "Z7+stairs": 1.15, "Z7+surfturf": 1.32, "Z7+sushi": 2.09, "Z7+tight": 0.73, "Z7+tour": 1.48,
+  "Z7+trbounty": 0.48, "Z7+triple": 0.55, "Z7+twins": 1.16, "Z7+z3": 0.57, "Z7+z4": 0.73, "Z7+z5": 0.58, "Z7+z6": 0.82,
+  "Z7+z7": 3.93, "Z7+z9": 0.82, "Z8+all10": 1.14, "Z8+beatlast": 1.67, "Z8+bookends": 1.18, "Z8+bounty": 0.48,
+  "Z8+calamari": 0.61, "Z8+d600": 1.16, "Z8+d900": 1.48, "Z8+deephook": 1.43, "Z8+deepover": 1.82, "Z8+deeptrio": 1.94,
+  "Z8+feel": 1.19, "Z8+fglow": 1.76, "Z8+fink": 1.14, "Z8+fish100": 1.17, "Z8+fish200": 1.44, "Z8+fish50": 1.2,
+  "Z8+floor": 0.88, "Z8+floorlg": 0.85, "Z8+fray": 0.58, "Z8+heavylast": 1.13, "Z8+legend": 0.84, "Z8+lgtr": 0.82,
+  "Z8+neighbours": 2.28, "Z8+odd": 0.53, "Z8+onezone": 0.62, "Z8+online": 1.23, "Z8+over": 1.5, "Z8+over15": 1.63,
+  "Z8+over2": 1.72, "Z8+pair": 0.63, "Z8+pb": 1.47, "Z8+postcard": 0.78, "Z8+setx2": 1.55, "Z8+setx3": 1.75,
+  "Z8+seven": 0.39, "Z8+stairs": 1.17, "Z8+surfturf": 1.43, "Z8+sushi": 1.26, "Z8+tight": 0.76, "Z8+tour": 1.4,
+  "Z8+trbounty": 0.43, "Z8+triple": 0.61, "Z8+twins": 0.86, "Z8+under": 0.76, "Z8+z3": 0.4, "Z8+z4": 0.53,
+  "Z8+z5": 0.59, "Z8+z6": 0.55, "Z8+z8": 4.47, "Z9+beatlast": 1.18, "Z9+boil": 1.21, "Z9+bookends": 1.46,
+  "Z9+bounty": 0.48, "Z9+bounty2": 0.67, "Z9+d600": 1.16, "Z9+d900": 1.48, "Z9+deepover": 1.49, "Z9+deeptrio": 1.32,
+  "Z9+feel": 0.73, "Z9+fglow": 0.66, "Z9+fink": 1.24, "Z9+fish200": 1.36, "Z9+floor": 1.92, "Z9+floor3": 1.96,
+  "Z9+floorlg": 1.85, "Z9+floortr": 1.85, "Z9+fray": 0.36, "Z9+fshark": 0.52, "Z9+fshell": 1.25, "Z9+neighbours": 0.85,
+  "Z9+nopulse": 0.86, "Z9+onezone": 0.57, "Z9+over": 1.23, "Z9+over15": 1.29, "Z9+over2": 1.33, "Z9+pb": 1.38,
+  "Z9+postcard": 1.58, "Z9+rise": 1.94, "Z9+setx2": 1.14, "Z9+seven": 0.86, "Z9+sharkweek": 0.57, "Z9+tight": 0.53,
+  "Z9+trbounty": 0.54, "Z9+triple": 0.56, "Z9+trophy2": 0.81, "Z9+under": 0.83, "Z9+z3": 0.61, "Z9+z4": 0.73,
+  "Z9+z5": 0.65, "Z9+z6": 0.69, "Z9+z7": 0.82, "Z9+z9": 2, "all10+balanced": 1.22, "all10+boil": 1.16,
+  "all10+bounty": 0.64, "all10+bounty2": 0.55, "all10+deephook": 1.2, "all10+deepover": 1.13, "all10+deeptrio": 1.23,
+  "all10+floor": 0.8, "all10+floor3": 1.15, "all10+floorlg": 0.88, "all10+online": 1.14, "all10+over": 1.13,
+  "all10+over2": 1.12, "all10+setx2": 1.13, "all10+setx3": 1.19, "all10+seven": 0.87, "all10+sharkweek": 1.12,
+  "all10+sushi": 1.13, "all10+trbounty": 0.73, "all10+trophy2": 1.16, "all10+twins": 1.14, "all10+z7": 1.14,
+  "all10+z8": 1.14, "balanced+beatlast": 0.76, "balanced+bookends": 0.4, "balanced+bounty": 0.78,
+  "balanced+calamari": 1.17, "balanced+d600": 1.14, "balanced+deephook": 1.8, "balanced+deepover": 0.63,
+  "balanced+deeptrio": 2.35, "balanced+downhill": 0.62, "balanced+feel": 1.59, "balanced+fglow": 0.77,
+  "balanced+fink": 0.86, "balanced+fish100": 0.05, "balanced+fish200": 0.05, "balanced+fish50": 0.08,
+  "balanced+floor": 0.73, "balanced+floorlg": 0.16, "balanced+floortr": 0.17, "balanced+fray": 0.62,
+  "balanced+fshark": 0.5, "balanced+heavylast": 1.32, "balanced+legend": 0.05, "balanced+lgtr": 0.08,
+  "balanced+odd": 1.21, "balanced+onezone": 2.1, "balanced+online": 1.17, "balanced+over": 0.62,
+  "balanced+over15": 0.24, "balanced+over2": 0.14, "balanced+pair": 2.61, "balanced+pb": 0.34,
+  "balanced+postcard": 0.55, "balanced+record": 0.55, "balanced+setx2": 1.31, "balanced+setx3": 1.68,
+  "balanced+surfturf": 0.65, "balanced+sushi": 1.19, "balanced+tight": 2.03, "balanced+tour": 0.47,
+  "balanced+trbounty": 0.85, "balanced+triple": 3.49, "balanced+trophy": 0.29, "balanced+trophy2": 0.13,
+  "balanced+twins": 3.42, "balanced+under": 1.57, "balanced+z3": 0.22, "balanced+z4": 0.3, "balanced+z5": 0.78,
+  "balanced+z7": 1.73, "beatlast+boil": 1.29, "beatlast+bookends": 1.57, "beatlast+bounty": 0.79,
+  "beatlast+calamari": 0.63, "beatlast+d600": 1.55, "beatlast+d900": 1.79, "beatlast+deephook": 1.69,
+  "beatlast+deepover": 3.23, "beatlast+deeptrio": 2.34, "beatlast+feel": 1.38, "beatlast+fink": 1.2,
+  "beatlast+fish100": 2.72, "beatlast+fish200": 3.52, "beatlast+fish50": 2.25, "beatlast+floor": 1.51,
+  "beatlast+floor3": 2, "beatlast+floorlg": 3.15, "beatlast+floortr": 2.17, "beatlast+fshark": 1.33,
+  "beatlast+legend": 2.46, "beatlast+lgtr": 3.23, "beatlast+neighbours": 1.97, "beatlast+odd": 0.58,
+  "beatlast+onezone": 0.88, "beatlast+online": 1.55, "beatlast+over": 3.19, "beatlast+over15": 3.62,
+  "beatlast+over2": 3.77, "beatlast+pair": 0.87, "beatlast+pb": 3.8, "beatlast+postcard": 1.87,
+  "beatlast+record": 1.14, "beatlast+rise": 1.81, "beatlast+setx2": 2.23, "beatlast+setx3": 2.54,
+  "beatlast+seven": 0.27, "beatlast+surfturf": 0.64, "beatlast+sushi": 1.28, "beatlast+tight": 0.82,
+  "beatlast+tour": 2.16, "beatlast+trophy": 1.68, "beatlast+trophy2": 2.49, "beatlast+twins": 0.67,
+  "beatlast+under": 0.32, "beatlast+z3": 0.67, "beatlast+z5": 1.33, "beatlast+z6": 1.28, "beatlast+z7": 1.93,
+  "beatlast+z8": 2.52, "beatlast+z9": 1.72, "boil+bookends": 0.86, "boil+d600": 1.43, "boil+d900": 1.18,
+  "boil+deephook": 1.85, "boil+deepover": 1.19, "boil+deeptrio": 1.36, "boil+downhill": 1.48, "boil+feel": 3.86,
+  "boil+fglow": 0.35, "boil+fink": 3.5, "boil+fish100": 0.86, "boil+fish200": 0.46, "boil+fish50": 1.13,
+  "boil+floor": 1.5, "boil+floor3": 2.01, "boil+floortr": 1.97, "boil+fray": 0.58, "boil+fshell": 3.27,
+  "boil+heavylast": 0.82, "boil+legend": 0.3, "boil+lgtr": 0.54, "boil+odd": 0.57, "boil+onezone": 0.53,
+  "boil+over": 1.36, "boil+over15": 1.36, "boil+pair": 0.32, "boil+rise": 1.77, "boil+setx2": 1.55,
+  "boil+stairs": 0.72, "boil+sushi": 10.02, "boil+tight": 0.72, "boil+tour": 1.45, "boil+trophy": 1.25,
+  "boil+trophy2": 1.21, "boil+twins": 0.83, "boil+z3": 1.57, "boil+z4": 0.45, "boil+z5": 1.45, "boil+z6": 2.19,
+  "boil+z7": 2.05, "boil+z8": 1.3, "boil+z9": 1.44, "bookends+bounty": 1.36, "bookends+calamari": 1.2,
+  "bookends+d600": 1.64, "bookends+d900": 2.18, "bookends+deephook": 0, "bookends+deepover": 2.08,
+  "bookends+deeptrio": 0, "bookends+downhill": 0.79, "bookends+fglow": 0.76, "bookends+fish100": 1.76,
+  "bookends+fish200": 1.42, "bookends+fish50": 1.63, "bookends+floor": 1.41, "bookends+floor3": 1.79,
+  "bookends+floorlg": 2.3, "bookends+floortr": 2.2, "bookends+fray": 0.87, "bookends+fshell": 1.23,
+  "bookends+legend": 2.19, "bookends+lgtr": 2.92, "bookends+neighbours": 0.13, "bookends+odd": 0.78,
+  "bookends+onezone": 0, "bookends+online": 1.36, "bookends+over": 1.71, "bookends+over15": 1.82,
+  "bookends+over2": 1.63, "bookends+pair": 0.47, "bookends+pb": 1.89, "bookends+postcard": 4.27,
+  "bookends+record": 1.24, "bookends+rise": 1.62, "bookends+setx2": 1.59, "bookends+setx3": 0.83,
+  "bookends+seven": 0.87, "bookends+stairs": 1.23, "bookends+surfturf": 1.94, "bookends+sushi": 1.23,
+  "bookends+tight": 0, "bookends+tour": 2.88, "bookends+trbounty": 1.74, "bookends+triple": 0.26,
+  "bookends+trophy": 1.88, "bookends+trophy2": 2.34, "bookends+twins": 0.77, "bookends+under": 0, "bookends+z3": 1.33,
+  "bookends+z4": 0.58, "bookends+z5": 0.47, "bookends+z6": 0.66, "bookends+z7": 1.42, "bookends+z8": 1.76,
+  "bookends+z9": 2.15, "bounty+d600": 0.46, "bounty+d900": 0.47, "bounty+deephook": 0.1, "bounty+deepover": 0.52,
+  "bounty+deeptrio": 0.18, "bounty+downhill": 0.47, "bounty+feel": 0.66, "bounty+fglow": 0.59, "bounty+fink": 0.58,
+  "bounty+fish100": 0.71, "bounty+fish200": 0.74, "bounty+fish50": 0.73, "bounty+floor": 0.47, "bounty+floor3": 0.62,
+  "bounty+floorlg": 0.84, "bounty+fshell": 0.29, "bounty+heavylast": 0.81, "bounty+legend": 1.33, "bounty+lgtr": 2.01,
+  "bounty+neighbours": 0.64, "bounty+nopulse": 1.25, "bounty+onezone": 1.38, "bounty+online": 0.52,
+  "bounty+over15": 1.21, "bounty+over2": 0.87, "bounty+pair": 0.81, "bounty+pb": 0.66, "bounty+record": 1.13,
+  "bounty+rise": 0.54, "bounty+setx2": 0.75, "bounty+setx3": 0.56, "bounty+seven": 0.77, "bounty+stairs": 0.65,
+  "bounty+sushi": 0.78, "bounty+tour": 1.14, "bounty+trophy": 1.78, "bounty+trophy2": 1.76, "bounty+twins": 0.58,
+  "bounty+under": 0.26, "bounty+z4": 0.69, "bounty+z5": 0.77, "bounty+z6": 0.43, "bounty+z7": 0.43, "bounty+z8": 0.48,
+  "bounty+z9": 0.48, "bounty2+d600": 0.32, "bounty2+d900": 0.38, "bounty2+deephook": 0.46, "bounty2+deepover": 0.6,
+  "bounty2+deeptrio": 0.64, "bounty2+feel": 0.58, "bounty2+fink": 0.55, "bounty2+fish100": 0.53,
+  "bounty2+fish50": 0.63, "bounty2+floor": 0.64, "bounty2+fshell": 0.53, "bounty2+nopulse": 1.14, "bounty2+over": 0.55,
+  "bounty2+setx2": 0.45, "bounty2+tour": 0.6, "bounty2+trophy": 1.13, "bounty2+z4": 0.64, "bounty2+z7": 0.63,
+  "bounty2+z8": 0.67, "bounty2+z9": 0.46, "calamari+deepover": 1.39, "calamari+deeptrio": 0.78,
+  "calamari+downhill": 0.71, "calamari+feel": 0.34, "calamari+fglow": 0.42, "calamari+fink": 4.02,
+  "calamari+fish200": 0.79, "calamari+fish50": 0.86, "calamari+floor3": 1.5, "calamari+fshark": 1.23,
+  "calamari+fshell": 0.65, "calamari+heavylast": 1.25, "calamari+legend": 0.87, "calamari+lgtr": 0.68,
+  "calamari+odd": 1.35, "calamari+onezone": 1.31, "calamari+online": 1.93, "calamari+over": 1.36,
+  "calamari+over2": 0.77, "calamari+pair": 3.27, "calamari+rise": 1.26, "calamari+setx2": 0.8, "calamari+setx3": 0.74,
+  "calamari+seven": 0.5, "calamari+stairs": 1.51, "calamari+sushi": 1.4, "calamari+tight": 1.16, "calamari+tour": 0.81,
+  "calamari+twins": 1.75, "calamari+under": 0.76, "calamari+z3": 1.29, "calamari+z6": 1.23, "calamari+z7": 0.33,
+  "calamari+z8": 0.69, "clean+floor": 0.75, "clean+floorlg": 0.82, "clean+floortr": 0.82, "d600+d900": 1.65,
+  "d600+deephook": 1.54, "d600+deepover": 1.64, "d600+deeptrio": 1.64, "d600+feel": 1.37, "d600+fglow": 0.82,
+  "d600+fink": 1.12, "d600+fish100": 1.45, "d600+fish200": 1.59, "d600+fish50": 1.38, "d600+floor": 1.64,
+  "d600+floor3": 1.64, "d600+floorlg": 1.63, "d600+floortr": 1.64, "d600+fshark": 0.62, "d600+fshell": 1.36,
+  "d600+legend": 1.24, "d600+lgtr": 1.36, "d600+neighbours": 1.15, "d600+online": 1.5, "d600+over": 1.57,
+  "d600+over15": 1.58, "d600+over2": 1.6, "d600+pb": 1.44, "d600+postcard": 1.56, "d600+rise": 1.64,
+  "d600+setx2": 1.52, "d600+setx3": 1.28, "d600+sharkweek": 0.68, "d600+sushi": 1.37, "d600+tour": 1.47,
+  "d600+trbounty": 0.61, "d600+triple": 0.8, "d600+trophy": 1.24, "d600+trophy2": 1.34, "d600+z3": 0.67,
+  "d600+z4": 0.87, "d600+z5": 1.5, "d600+z6": 1.64, "d600+z7": 1.64, "d600+z8": 1.64, "d600+z9": 1.65,
+  "d900+deephook": 1.53, "d900+deepover": 2.18, "d900+deeptrio": 2.05, "d900+feel": 1.22, "d900+fink": 1.21,
+  "d900+fish100": 1.61, "d900+fish200": 1.88, "d900+fish50": 1.48, "d900+floor": 2.18, "d900+floor3": 2.18,
+  "d900+floorlg": 2.15, "d900+floortr": 2.17, "d900+fray": 0.48, "d900+fshark": 0.59, "d900+fshell": 1.36,
+  "d900+legend": 1.31, "d900+lgtr": 1.44, "d900+neighbours": 1.19, "d900+odd": 0.84, "d900+onezone": 0.73,
+  "d900+online": 1.65, "d900+over": 1.79, "d900+over15": 1.84, "d900+over2": 1.87, "d900+pb": 1.71,
+  "d900+postcard": 1.99, "d900+rise": 2.18, "d900+setx2": 1.72, "d900+setx3": 1.27, "d900+seven": 0.78,
+  "d900+sharkweek": 0.52, "d900+sushi": 1.29, "d900+tight": 0.71, "d900+tour": 1.53, "d900+trbounty": 0.63,
+  "d900+triple": 0.67, "d900+trophy": 1.26, "d900+trophy2": 1.29, "d900+under": 0.78, "d900+z3": 0.6, "d900+z4": 0.82,
+  "d900+z5": 0.85, "d900+z7": 1.68, "d900+z8": 2.18, "d900+z9": 2.18, "deephook+deepover": 1.82,
+  "deephook+deeptrio": 2.91, "deephook+feel": 1.48, "deephook+fink": 1.16, "deephook+fish100": 1.29,
+  "deephook+fish200": 1.66, "deephook+fish50": 1.22, "deephook+floor": 1.29, "deephook+floor3": 2.02,
+  "deephook+floorlg": 1.15, "deephook+floortr": 1.32, "deephook+fshark": 0.52, "deephook+fshell": 1.49,
+  "deephook+heavylast": 1.13, "deephook+legend": 0.73, "deephook+lgtr": 0.57, "deephook+neighbours": 1.76,
+  "deephook+onezone": 1.68, "deephook+online": 1.67, "deephook+over": 1.6, "deephook+over15": 1.62,
+  "deephook+over2": 1.75, "deephook+pair": 1.42, "deephook+pb": 1.42, "deephook+postcard": 0.21,
+  "deephook+record": 0.83, "deephook+rise": 1.65, "deephook+setx2": 1.68, "deephook+setx3": 1.4,
+  "deephook+seven": 0.72, "deephook+surfturf": 0.68, "deephook+sushi": 1.47, "deephook+tight": 1.68,
+  "deephook+tour": 0.76, "deephook+trbounty": 0.14, "deephook+triple": 1.43, "deephook+trophy": 0.87,
+  "deephook+trophy2": 0.7, "deephook+twins": 1.31, "deephook+under": 1.16, "deephook+z3": 0, "deephook+z5": 1.83,
+  "deephook+z6": 1.82, "deephook+z7": 1.85, "deephook+z8": 1.98, "deephook+z9": 1.49, "deepover+deeptrio": 2.57,
+  "deepover+downhill": 1.14, "deepover+feel": 1.28, "deepover+fink": 1.26, "deepover+fish100": 3.06,
+  "deepover+fish200": 4.28, "deepover+fish50": 2.31, "deepover+floor": 1.9, "deepover+floor3": 2.6,
+  "deepover+floorlg": 4.1, "deepover+floortr": 2.75, "deepover+fray": 0.63, "deepover+fshark": 0.85,
+  "deepover+fshell": 1.19, "deepover+legend": 2.55, "deepover+lgtr": 3.01, "deepover+neighbours": 1.94,
+  "deepover+odd": 0.61, "deepover+onezone": 0.78, "deepover+online": 1.73, "deepover+over": 4.23,
+  "deepover+over15": 4.34, "deepover+over2": 4.39, "deepover+pair": 0.87, "deepover+pb": 3.6,
+  "deepover+postcard": 2.09, "deepover+record": 1.24, "deepover+rise": 2.22, "deepover+setx2": 2.29,
+  "deepover+setx3": 2.42, "deepover+seven": 0.53, "deepover+surfturf": 1.2, "deepover+sushi": 1.58,
+  "deepover+tight": 0.71, "deepover+tour": 2.17, "deepover+trbounty": 0.77, "deepover+trophy": 1.73,
+  "deepover+trophy2": 2.33, "deepover+twins": 0.67, "deepover+under": 0, "deepover+z3": 0.57, "deepover+z4": 0.77,
+  "deepover+z6": 1.14, "deepover+z7": 1.96, "deepover+z8": 2.8, "deepover+z9": 2.21, "deeptrio+feel": 1.55,
+  "deeptrio+fglow": 0.79, "deeptrio+fink": 1.26, "deeptrio+fish100": 1.4, "deeptrio+fish200": 1.79,
+  "deeptrio+fish50": 1.31, "deeptrio+floor": 1.73, "deeptrio+floor3": 2.7, "deeptrio+floorlg": 1.38,
+  "deeptrio+floortr": 1.22, "deeptrio+fray": 0, "deeptrio+fshark": 0.82, "deeptrio+fshell": 1.39,
+  "deeptrio+legend": 0.76, "deeptrio+lgtr": 0.43, "deeptrio+neighbours": 2.36, "deeptrio+odd": 0.61,
+  "deeptrio+onezone": 2.23, "deeptrio+online": 2.26, "deeptrio+over": 2.2, "deeptrio+over15": 2.13,
+  "deeptrio+over2": 2.33, "deeptrio+pair": 1.64, "deeptrio+pb": 1.61, "deeptrio+postcard": 0.36,
+  "deeptrio+record": 0.67, "deeptrio+rise": 2.21, "deeptrio+setx2": 2.8, "deeptrio+setx3": 2.39,
+  "deeptrio+seven": 0.13, "deeptrio+surfturf": 0.77, "deeptrio+sushi": 1.4, "deeptrio+tight": 2.13,
+  "deeptrio+tour": 0.27, "deeptrio+trbounty": 0.25, "deeptrio+triple": 1.68, "deeptrio+trophy": 0.67,
+  "deeptrio+trophy2": 0.29, "deeptrio+twins": 1.33, "deeptrio+z3": 0, "deeptrio+z4": 0, "deeptrio+z5": 0,
+  "deeptrio+z6": 0, "deeptrio+z7": 2.61, "deeptrio+z8": 2.98, "deeptrio+z9": 1.95, "downhill+fish100": 1.24,
+  "downhill+fish50": 1.25, "downhill+floor3": 1.3, "downhill+floorlg": 1.17, "downhill+floortr": 0.82,
+  "downhill+fray": 1.24, "downhill+heavylast": 0, "downhill+legend": 1.41, "downhill+lgtr": 1.19, "downhill+pb": 0.44,
+  "downhill+postcard": 0.74, "downhill+setx3": 0.59, "downhill+seven": 0.86, "downhill+stairs": 0,
+  "downhill+surfturf": 1.19, "downhill+sushi": 1.17, "downhill+trbounty": 0.39, "downhill+triple": 0.74,
+  "downhill+trophy2": 0.45, "downhill+twins": 0.81, "downhill+z3": 1.32, "feel+fglow": 0.65, "feel+fink": 0.77,
+  "feel+fish100": 1.23, "feel+fish50": 1.2, "feel+floor": 0.84, "feel+floorlg": 0.56, "feel+floortr": 0.85,
+  "feel+fray": 0.7, "feel+fshark": 0.53, "feel+heavylast": 1.18, "feel+neighbours": 2.17, "feel+odd": 0.77,
+  "feel+onezone": 0.82, "feel+online": 1.4, "feel+over": 1.31, "feel+over15": 1.22, "feel+over2": 1.2,
+  "feel+pair": 0.65, "feel+pb": 1.27, "feel+postcard": 0.46, "feel+setx2": 1.57, "feel+setx3": 1.51,
+  "feel+seven": 0.75, "feel+stairs": 1.19, "feel+surfturf": 0.65, "feel+sushi": 4.62, "feel+tour": 1.71,
+  "feel+trbounty": 0.83, "feel+triple": 0.63, "feel+trophy2": 1.3, "feel+z3": 2.11, "feel+z4": 0.82, "feel+z5": 1.44,
+  "feel+z6": 1.76, "feel+z7": 2.76, "feel+z8": 1.53, "fglow+fink": 0.78, "fglow+floor": 0.58, "fglow+floor3": 0.71,
+  "fglow+floorlg": 0.54, "fglow+fray": 0.85, "fglow+fshark": 1.3, "fglow+fshell": 0.69, "fglow+heavylast": 1.13,
+  "fglow+lgtr": 0.85, "fglow+neighbours": 1.33, "fglow+onezone": 0.83, "fglow+pair": 0.73, "fglow+rise": 0.68,
+  "fglow+sushi": 0.4, "fglow+tour": 1.2, "fglow+trbounty": 0.75, "fglow+trophy2": 1.13, "fglow+under": 1.21,
+  "fglow+z4": 3.74, "fglow+z5": 0.59, "fglow+z6": 0.62, "fglow+z7": 0.68, "fglow+z8": 1.77, "fglow+z9": 0.65,
+  "fink+floor": 1.27, "fink+floor3": 1.41, "fink+floortr": 1.3, "fink+fshark": 0.7, "fink+fshell": 0.83,
+  "fink+neighbours": 1.12, "fink+online": 1.27, "fink+over": 1.21, "fink+over15": 1.24, "fink+over2": 1.17,
+  "fink+pair": 0.76, "fink+postcard": 0.83, "fink+rise": 1.41, "fink+setx2": 1.13, "fink+surfturf": 0.6,
+  "fink+sushi": 4.09, "fink+trbounty": 0.56, "fink+triple": 0.32, "fink+twins": 0.88, "fink+z3": 1.2, "fink+z7": 0.81,
+  "fink+z8": 1.27, "fink+z9": 1.36, "fish100+fish200": 3.92, "fish100+fish50": 2.56, "fish100+floor": 1.45,
+  "fish100+floor3": 1.65, "fish100+floorlg": 3.61, "fish100+floortr": 2.43, "fish100+fray": 1.34,
+  "fish100+fshark": 1.23, "fish100+heavylast": 0.8, "fish100+legend": 3.4, "fish100+lgtr": 3.52,
+  "fish100+neighbours": 1.97, "fish100+odd": 0.84, "fish100+onezone": 0.6, "fish100+online": 1.47,
+  "fish100+over": 3.05, "fish100+over15": 3.6, "fish100+over2": 3.82, "fish100+pair": 0.49, "fish100+pb": 2.79,
+  "fish100+postcard": 1.6, "fish100+record": 1.32, "fish100+rise": 1.55, "fish100+setx2": 1.68, "fish100+setx3": 1.91,
+  "fish100+sharkweek": 1.33, "fish100+stairs": 0.83, "fish100+surfturf": 1.57, "fish100+sushi": 1.29,
+  "fish100+tight": 0.55, "fish100+tour": 1.93, "fish100+triple": 0.23, "fish100+trophy": 1.8, "fish100+trophy2": 2.37,
+  "fish100+twins": 0.42, "fish100+under": 0.21, "fish100+z5": 1.34, "fish100+z6": 1.51, "fish100+z7": 1.63,
+  "fish100+z8": 1.8, "fish100+z9": 1.64, "fish200+fish50": 2.55, "fish200+floor": 1.77, "fish200+floor3": 2.03,
+  "fish200+floorlg": 7.56, "fish200+floortr": 1.85, "fish200+fray": 0.55, "fish200+fshark": 1.13,
+  "fish200+legend": 5.26, "fish200+lgtr": 5.4, "fish200+neighbours": 1.83, "fish200+odd": 0.85,
+  "fish200+onezone": 0.64, "fish200+online": 0.42, "fish200+over": 3.99, "fish200+over15": 6.13, "fish200+over2": 7.93,
+  "fish200+pair": 0.4, "fish200+pb": 5.52, "fish200+postcard": 1.59, "fish200+record": 1.15, "fish200+rise": 1.83,
+  "fish200+setx2": 1.75, "fish200+setx3": 2.63, "fish200+seven": 0.71, "fish200+stairs": 1.24,
+  "fish200+surfturf": 1.38, "fish200+sushi": 0.84, "fish200+tight": 0.57, "fish200+tour": 1.73, "fish200+triple": 0.36,
+  "fish200+trophy": 1.4, "fish200+trophy2": 1.77, "fish200+twins": 0.39, "fish200+under": 0.06, "fish200+z3": 0.38,
+  "fish200+z4": 1.4, "fish200+z5": 1.4, "fish200+z6": 1.37, "fish200+z7": 1.45, "fish200+z8": 2.2, "fish200+z9": 2.01,
+  "fish50+floor": 1.26, "fish50+floor3": 1.45, "fish50+floorlg": 2.51, "fish50+floortr": 2.15, "fish50+fray": 1.39,
+  "fish50+fshark": 1.25, "fish50+heavylast": 0.8, "fish50+legend": 2.56, "fish50+lgtr": 2.54,
+  "fish50+neighbours": 1.61, "fish50+onezone": 0.69, "fish50+online": 1.62, "fish50+over": 2.32, "fish50+over15": 2.47,
+  "fish50+over2": 2.52, "fish50+pair": 0.59, "fish50+pb": 2.08, "fish50+postcard": 1.42, "fish50+record": 1.28,
+  "fish50+rise": 1.36, "fish50+setx2": 1.56, "fish50+setx3": 1.57, "fish50+sharkweek": 1.12, "fish50+stairs": 0.84,
+  "fish50+surfturf": 1.53, "fish50+sushi": 1.28, "fish50+tight": 0.69, "fish50+tour": 1.77, "fish50+trbounty": 0.85,
+  "fish50+triple": 0.32, "fish50+trophy": 1.82, "fish50+trophy2": 2.27, "fish50+twins": 0.48, "fish50+under": 0.46,
+  "fish50+z3": 1.14, "fish50+z4": 1.17, "fish50+z5": 1.33, "fish50+z6": 1.4, "fish50+z7": 1.4, "fish50+z8": 1.83,
+  "fish50+z9": 1.43, "floor+floor3": 6.09, "floor+floorlg": 5.76, "floor+floortr": 5.98, "floor+fray": 0.34,
+  "floor+fshark": 0.38, "floor+fshell": 1.45, "floor+heavylast": 0.86, "floor+lgtr": 0.7, "floor+nobites": 0.75,
+  "floor+nopulse": 0.66, "floor+onezone": 0.53, "floor+online": 1.55, "floor+over": 1.56, "floor+over15": 1.6,
+  "floor+over2": 1.58, "floor+pb": 1.47, "floor+postcard": 4.33, "floor+record": 0.81, "floor+rise": 6.11,
+  "floor+setx2": 1.2, "floor+seven": 1.22, "floor+stairs": 0.8, "floor+sushi": 1.13, "floor+tight": 0.47,
+  "floor+tour": 0.87, "floor+trbounty": 0.63, "floor+triple": 0.59, "floor+trophy2": 0.68, "floor+under": 0.69,
+  "floor+z3": 0.43, "floor+z4": 0.61, "floor+z5": 0.71, "floor+z6": 0.8, "floor+z8": 1.23, "floor+z9": 2.8,
+  "floor3+floorlg": 6.57, "floor3+floortr": 6.94, "floor3+fray": 0.41, "floor3+fshark": 0.43, "floor3+fshell": 1.66,
+  "floor3+heavylast": 1.23, "floor3+legend": 1.25, "floor3+neighbours": 1.42, "floor3+onezone": 0.76,
+  "floor3+online": 1.99, "floor3+over": 2.14, "floor3+over15": 2.14, "floor3+over2": 2.15, "floor3+pair": 1.14,
+  "floor3+pb": 1.87, "floor3+postcard": 4.94, "floor3+record": 0.88, "floor3+rise": 7.74, "floor3+setx2": 1.87,
+  "floor3+setx3": 1.47, "floor3+stairs": 1.15, "floor3+sushi": 1.61, "floor3+tight": 0.67, "floor3+tour": 1.35,
+  "floor3+trbounty": 0.86, "floor3+triple": 0.77, "floor3+trophy": 1.15, "floor3+twins": 1.21, "floor3+under": 0.75,
+  "floor3+z3": 0.5, "floor3+z4": 0.74, "floor3+z5": 0.87, "floor3+z7": 1.4, "floor3+z8": 1.57, "floor3+z9": 2.89,
+  "floorlg+floortr": 3.72, "floorlg+fray": 0.58, "floorlg+fshark": 0.39, "floorlg+fshell": 1.19,
+  "floorlg+heavylast": 0.4, "floorlg+legend": 5.82, "floorlg+lgtr": 3.45, "floorlg+nobites": 0.83,
+  "floorlg+nopulse": 0.71, "floorlg+odd": 1.12, "floorlg+onezone": 0.56, "floorlg+online": 1.15, "floorlg+over": 3.41,
+  "floorlg+over15": 4.93, "floorlg+over2": 5.75, "floorlg+pair": 0.57, "floorlg+pb": 2.57, "floorlg+rise": 6.1,
+  "floorlg+setx2": 1.17, "floorlg+setx3": 1.56, "floorlg+stairs": 0.38, "floorlg+sushi": 0.73, "floorlg+tight": 0.5,
+  "floorlg+triple": 0.63, "floorlg+trophy": 0.71, "floorlg+trophy2": 0.52, "floorlg+twins": 0.63,
+  "floorlg+under": 0.05, "floorlg+z3": 0.86, "floorlg+z4": 0.48, "floorlg+z6": 0.82, "floorlg+z7": 0.64,
+  "floorlg+z8": 1.27, "floorlg+z9": 2.7, "floortr+fray": 0.47, "floortr+fshark": 0.6, "floortr+fshell": 1.56,
+  "floortr+heavylast": 1.14, "floortr+legend": 0.77, "floortr+lgtr": 1.94, "floortr+neighbours": 0.84,
+  "floortr+nobites": 0.82, "floortr+nopulse": 0.7, "floortr+onezone": 0.16, "floortr+online": 1.78,
+  "floortr+over": 2.27, "floortr+over15": 2.37, "floortr+over2": 2.07, "floortr+pair": 0.72, "floortr+pb": 2.3,
+  "floortr+postcard": 4.1, "floortr+record": 1.58, "floortr+rise": 6.47, "floortr+setx2": 1.27, "floortr+seven": 1.17,
+  "floortr+surfturf": 1.3, "floortr+sushi": 1.2, "floortr+tight": 0.14, "floortr+tour": 1.4, "floortr+trbounty": 1.26,
+  "floortr+triple": 0.46, "floortr+trophy": 2.87, "floortr+trophy2": 1.92, "floortr+twins": 0.61,
+  "floortr+under": 0.38, "floortr+z3": 0.49, "floortr+z6": 1.28, "floortr+z8": 1.52, "floortr+z9": 2.72,
+  "fray+fshark": 0.63, "fray+heavylast": 0.88, "fray+legend": 1.74, "fray+lgtr": 1.78, "fray+nopulse": 1.15,
+  "fray+odd": 1.32, "fray+online": 1.44, "fray+over2": 0.81, "fray+pair": 0.74, "fray+pb": 0.63, "fray+record": 1.13,
+  "fray+rise": 0.4, "fray+setx2": 0.78, "fray+setx3": 0.77, "fray+seven": 1.74, "fray+stairs": 0.72,
+  "fray+surfturf": 0.66, "fray+sushi": 0.62, "fray+tour": 1.36, "fray+trbounty": 0.77, "fray+triple": 0.53,
+  "fray+trophy": 1.18, "fray+trophy2": 1.5, "fray+twins": 0.75, "fray+z3": 0.84, "fray+z4": 0.86, "fray+z5": 2.3,
+  "fray+z6": 2.61, "fray+z7": 0.4, "fray+z8": 0.7, "fray+z9": 0.42, "fshark+fshell": 0.68, "fshark+legend": 0.87,
+  "fshark+neighbours": 0.68, "fshark+nopulse": 1.13, "fshark+onezone": 1.32, "fshark+over": 1.15, "fshark+over2": 1.27,
+  "fshark+pair": 0.61, "fshark+pb": 1.22, "fshark+rise": 0.42, "fshark+setx3": 0.74, "fshark+seven": 1.25,
+  "fshark+stairs": 0.86, "fshark+sushi": 0.31, "fshark+tight": 1.17, "fshark+trophy2": 0.84, "fshark+twins": 0.67,
+  "fshark+under": 0.55, "fshark+z3": 0.76, "fshark+z5": 0.49, "fshark+z6": 0.5, "fshark+z9": 0.48,
+  "fshell+online": 1.24, "fshell+pair": 0.79, "fshell+pb": 0.75, "fshell+postcard": 1.82, "fshell+rise": 1.6,
+  "fshell+setx2": 1.2, "fshell+setx3": 0.81, "fshell+sharkweek": 0.66, "fshell+stairs": 0.83, "fshell+surfturf": 3.07,
+  "fshell+sushi": 0.64, "fshell+trbounty": 0.35, "fshell+triple": 0.66, "fshell+under": 1.14, "fshell+z4": 0.81,
+  "fshell+z5": 1.18, "fshell+z6": 1.85, "fshell+z8": 1.33, "fshell+z9": 1.49, "heavylast+legend": 0.61,
+  "heavylast+odd": 0.87, "heavylast+over2": 1.22, "heavylast+pair": 1.2, "heavylast+pb": 1.9,
+  "heavylast+postcard": 0.67, "heavylast+setx2": 1.17, "heavylast+setx3": 1.7, "heavylast+seven": 0.85,
+  "heavylast+stairs": 3.61, "heavylast+surfturf": 0.72, "heavylast+sushi": 1.12, "heavylast+tight": 1.13,
+  "heavylast+tour": 1.2, "heavylast+trbounty": 0.81, "heavylast+triple": 0.72, "heavylast+trophy2": 1.43,
+  "heavylast+twins": 1.24, "heavylast+under": 1.13, "heavylast+z4": 1.12, "heavylast+z5": 1.21, "heavylast+z6": 1.13,
+  "heavylast+z8": 1.13, "legend+lgtr": 6.06, "legend+neighbours": 1.78, "legend+onezone": 0.56, "legend+over": 2.72,
+  "legend+over15": 3.57, "legend+over2": 4.29, "legend+pair": 0.35, "legend+pb": 3.48, "legend+postcard": 1.64,
+  "legend+rise": 1.13, "legend+setx2": 1.44, "legend+setx3": 1.69, "legend+stairs": 0.63, "legend+surfturf": 1.16,
+  "legend+sushi": 0.71, "legend+tight": 0.54, "legend+tour": 1.97, "legend+trbounty": 1.4, "legend+triple": 0.23,
+  "legend+trophy2": 0.84, "legend+twins": 0.42, "legend+under": 0.07, "legend+z3": 1.28, "legend+z4": 1.19,
+  "legend+z5": 1.21, "legend+z7": 1.13, "legend+z8": 1.27, "legend+z9": 1.36, "lgtr+neighbours": 2.6, "lgtr+odd": 0.78,
+  "lgtr+onezone": 0.13, "lgtr+online": 1.28, "lgtr+over": 3.4, "lgtr+over15": 4.65, "lgtr+over2": 5.44,
+  "lgtr+pair": 0.14, "lgtr+pb": 5.15, "lgtr+postcard": 1.52, "lgtr+record": 1.6, "lgtr+rise": 0.83, "lgtr+setx2": 1.96,
+  "lgtr+setx3": 3.62, "lgtr+seven": 0.69, "lgtr+stairs": 0.87, "lgtr+sushi": 0.71, "lgtr+tight": 0.08,
+  "lgtr+tour": 3.01, "lgtr+trbounty": 2.64, "lgtr+triple": 0.44, "lgtr+trophy": 2.87, "lgtr+trophy2": 2.15,
+  "lgtr+twins": 0.25, "lgtr+under": 0.05, "lgtr+z3": 1.46, "lgtr+z4": 1.38, "lgtr+z5": 1.51, "lgtr+z6": 1.26,
+  "lgtr+z7": 1.6, "lgtr+z8": 1.25, "lgtr+z9": 1.37, "neighbours+odd": 0.75, "neighbours+onezone": 0.09,
+  "neighbours+online": 1.38, "neighbours+over": 2.42, "neighbours+over15": 2.6, "neighbours+over2": 3.19,
+  "neighbours+pair": 0.11, "neighbours+pb": 2.15, "neighbours+rise": 1.2, "neighbours+setx2": 2.72,
+  "neighbours+setx3": 9.32, "neighbours+seven": 0.76, "neighbours+sushi": 2.3, "neighbours+tight": 0.08,
+  "neighbours+tour": 4.77, "neighbours+trophy": 1.58, "neighbours+trophy2": 1.75, "neighbours+under": 0.46,
+  "neighbours+z3": 1.52, "neighbours+z4": 1.35, "neighbours+z5": 1.74, "neighbours+z6": 1.84, "neighbours+z7": 3.26,
+  "neighbours+z8": 3.21, "neighbours+z9": 1.18, "nopulse+onezone": 1.14, "nopulse+rise": 0.8,
+  "nopulse+sharkweek": 1.18, "nopulse+surfturf": 1.19, "nopulse+tight": 1.13, "nopulse+trbounty": 1.23,
+  "nopulse+triple": 1.17, "nopulse+z3": 1.17, "nopulse+z9": 0.86, "odd+onezone": 1.2, "odd+online": 0.74,
+  "odd+over": 0.6, "odd+over15": 0.53, "odd+over2": 0.52, "odd+pair": 1.79, "odd+pb": 0.75, "odd+postcard": 1.7,
+  "odd+setx2": 0.33, "odd+setx3": 1.21, "odd+seven": 3.44, "odd+surfturf": 0.53, "odd+sushi": 0.64, "odd+tight": 1.17,
+  "odd+tour": 0.13, "odd+triple": 1.31, "odd+trophy2": 0.51, "odd+twins": 1.16, "odd+under": 1.34, "odd+z7": 0.61,
+  "odd+z8": 0.53, "onezone+online": 1.15, "onezone+over": 0.76, "onezone+over15": 0.65, "onezone+over2": 0.67,
+  "onezone+pair": 2.42, "onezone+pb": 0.66, "onezone+postcard": 0.3, "onezone+record": 0.68, "onezone+rise": 0.64,
+  "onezone+seven": 0.64, "onezone+surfturf": 0.4, "onezone+sushi": 0.41, "onezone+tight": 3.58, "onezone+tour": 0,
+  "onezone+trbounty": 1.34, "onezone+triple": 3.52, "onezone+trophy": 0.43, "onezone+trophy2": 0.15,
+  "onezone+twins": 1.49, "onezone+under": 1.42, "onezone+z3": 0.33, "onezone+z4": 0.38, "onezone+z5": 0.58,
+  "onezone+z6": 0.68, "onezone+z7": 0.55, "onezone+z8": 0.62, "onezone+z9": 0.57, "online+over": 1.94,
+  "online+over15": 0.09, "online+over2": 0.14, "online+pair": 1.41, "online+pb": 0.64, "online+record": 1.14,
+  "online+rise": 1.9, "online+setx2": 1.91, "online+seven": 0.32, "online+sushi": 1.55, "online+tour": 1.63,
+  "online+trbounty": 0.63, "online+trophy": 1.36, "online+trophy2": 1.82, "online+under": 0.75, "online+z3": 0.83,
+  "online+z4": 0.86, "online+z5": 1.12, "online+z6": 1.46, "online+z7": 1.62, "online+z8": 1.85, "online+z9": 1.58,
+  "over+over15": 4.22, "over+over2": 4.19, "over+pair": 0.86, "over+pb": 3.46, "over+postcard": 1.82,
+  "over+record": 1.27, "over+rise": 1.83, "over+setx2": 2.28, "over+setx3": 2.93, "over+seven": 0.5,
+  "over+surfturf": 1.34, "over+sushi": 1.57, "over+tight": 0.69, "over+tour": 2.38, "over+trbounty": 1.22,
+  "over+triple": 1.23, "over+trophy": 1.77, "over+trophy2": 2.71, "over+twins": 0.65, "over+under": 0, "over+z3": 0.84,
+  "over+z5": 1.3, "over+z6": 1.41, "over+z7": 1.92, "over+z8": 2.3, "over+z9": 1.82, "over15+over2": 7.23,
+  "over15+pair": 0.66, "over15+pb": 5.15, "over15+postcard": 2.02, "over15+record": 1.36, "over15+rise": 1.84,
+  "over15+setx2": 2.34, "over15+setx3": 3.9, "over15+seven": 0.47, "over15+stairs": 1.21, "over15+surfturf": 1.5,
+  "over15+sushi": 1.49, "over15+tight": 0.59, "over15+tour": 2.54, "over15+trbounty": 1.58, "over15+trophy": 1.88,
+  "over15+trophy2": 3.12, "over15+twins": 0.47, "over15+under": 0, "over15+z3": 0.74, "over15+z5": 1.38,
+  "over15+z6": 1.41, "over15+z7": 1.89, "over15+z8": 2.5, "over15+z9": 1.91, "over2+pair": 0.6, "over2+pb": 6.96,
+  "over2+postcard": 1.57, "over2+record": 1.34, "over2+rise": 1.85, "over2+setx2": 2.45, "over2+setx3": 5.14,
+  "over2+seven": 0.51, "over2+stairs": 1.31, "over2+surfturf": 1.37, "over2+sushi": 1.35, "over2+tight": 0.62,
+  "over2+tour": 2.61, "over2+trbounty": 1.18, "over2+trophy": 1.79, "over2+trophy2": 3.1, "over2+twins": 0.45,
+  "over2+under": 0, "over2+z3": 0.66, "over2+z5": 1.45, "over2+z6": 1.35, "over2+z7": 2.01, "over2+z8": 2.63,
+  "over2+z9": 1.96, "pair+pb": 0.79, "pair+record": 0.77, "pair+setx2": 0.81, "pair+setx3": 1.24, "pair+stairs": 1.13,
+  "pair+surfturf": 0.47, "pair+sushi": 0.36, "pair+tight": 2.19, "pair+tour": 0, "pair+trbounty": 0.78,
+  "pair+triple": 4.37, "pair+trophy": 0.65, "pair+trophy2": 0.23, "pair+twins": 2.25, "pair+under": 1.28,
+  "pair+z3": 0.59, "pair+z4": 0.7, "pair+z5": 0.88, "pair+z6": 0.74, "pair+z7": 0.56, "pair+z8": 0.63, "pb+rise": 1.66,
+  "pb+setx2": 2.14, "pb+setx3": 5.13, "pb+seven": 0.82, "pb+stairs": 1.81, "pb+sushi": 1.34, "pb+tight": 0.71,
+  "pb+tour": 2.5, "pb+trophy": 1.79, "pb+trophy2": 3.27, "pb+twins": 0.55, "pb+under": 0.12, "pb+z4": 1.2,
+  "pb+z5": 1.3, "pb+z6": 1.25, "pb+z7": 1.8, "pb+z8": 2.12, "pb+z9": 1.96, "postcard+record": 1.37,
+  "postcard+rise": 5.04, "postcard+stairs": 0.8, "postcard+tight": 0.27, "postcard+tour": 1.6, "postcard+trophy": 1.36,
+  "postcard+trophy2": 1.93, "postcard+under": 0.25, "postcard+z3": 0.83, "postcard+z4": 0.72, "postcard+z5": 0.64,
+  "postcard+z6": 0.6, "postcard+z7": 0.71, "postcard+z9": 2.12, "record+rise": 0.85, "record+setx3": 1.19,
+  "record+seven": 0.87, "record+sharkweek": 1.24, "record+surfturf": 1.22, "record+tight": 0.7, "record+tour": 1.26,
+  "record+trbounty": 1.22, "record+triple": 0.59, "record+trophy": 1.52, "record+trophy2": 1.83, "record+twins": 0.77,
+  "record+under": 0.68, "record+z3": 1.32, "record+z4": 1.15, "record+z5": 1.14, "rise+setx2": 1.53,
+  "rise+setx3": 1.23, "rise+seven": 1.27, "rise+sushi": 1.37, "rise+tight": 0.57, "rise+trbounty": 0.75,
+  "rise+triple": 0.69, "rise+trophy2": 0.84, "rise+twins": 1.13, "rise+under": 0.73, "rise+z3": 0.5, "rise+z4": 0.73,
+  "rise+z5": 0.8, "rise+z7": 1.25, "rise+z8": 1.39, "rise+z9": 2.85, "setx2+setx3": 2.75, "setx2+seven": 0.13,
+  "setx2+sharkweek": 1.17, "setx2+stairs": 1.22, "setx2+surfturf": 1.21, "setx2+sushi": 1.6, "setx2+tour": 2.81,
+  "setx2+triple": 1.75, "setx2+trophy": 1.38, "setx2+trophy2": 2.16, "setx2+under": 0.64, "setx2+z5": 1.15,
+  "setx2+z6": 1.12, "setx2+z7": 2.25, "setx2+z8": 2.34, "setx2+z9": 1.66, "setx3+seven": 1.32, "setx3+stairs": 1.95,
+  "setx3+sushi": 1.37, "setx3+tight": 0.81, "setx3+tour": 3.37, "setx3+trbounty": 0.65, "setx3+triple": 9.48,
+  "setx3+trophy": 1.64, "setx3+trophy2": 5.29, "setx3+twins": 1.27, "setx3+under": 0.33, "setx3+z3": 1.2,
+  "setx3+z5": 1.21, "setx3+z7": 2.38, "setx3+z8": 2.4, "setx3+z9": 1.34, "seven+stairs": 0.77, "seven+sushi": 0.85,
+  "seven+tight": 0.71, "seven+tour": 0.17, "seven+trbounty": 0.55, "seven+triple": 1.48, "seven+trophy2": 0.53,
+  "seven+under": 1.36, "seven+z3": 1.18, "seven+z5": 1.22, "seven+z6": 1.16, "seven+z7": 0.59, "seven+z8": 0.39,
+  "seven+z9": 0.86, "sharkweek+trophy": 1.19, "sharkweek+under": 0.65, "sharkweek+z9": 0.6, "stairs+sushi": 1.16,
+  "stairs+tour": 1.33, "stairs+trbounty": 0.58, "stairs+triple": 0.49, "stairs+trophy2": 1.5, "stairs+z4": 1.19,
+  "stairs+z5": 1.23, "stairs+z7": 1.15, "stairs+z8": 1.17, "surfturf+tight": 0.37, "surfturf+tour": 1.54,
+  "surfturf+trophy": 1.13, "surfturf+trophy2": 0.86, "surfturf+twins": 0.83, "surfturf+under": 0.68,
+  "surfturf+z3": 0.87, "surfturf+z6": 1.27, "surfturf+z7": 1.32, "surfturf+z8": 1.44, "sushi+tight": 0.58,
+  "sushi+tour": 1.89, "sushi+triple": 0.6, "sushi+trophy": 1.28, "sushi+trophy2": 1.44, "sushi+twins": 0.81,
+  "sushi+under": 0.87, "sushi+z3": 2.17, "sushi+z4": 0.7, "sushi+z5": 1.21, "sushi+z6": 1.88, "sushi+z7": 2.59,
+  "sushi+z8": 1.57, "sushi+z9": 1.28, "tight+tour": 0.05, "tight+triple": 3.08, "tight+trophy": 0.4,
+  "tight+trophy2": 0.12, "tight+twins": 1.46, "tight+under": 1.49, "tight+z3": 0.41, "tight+z4": 0.46,
+  "tight+z5": 0.72, "tight+z6": 0.82, "tight+z7": 0.73, "tight+z8": 0.76, "tight+z9": 0.53, "tour+trbounty": 1.53,
+  "tour+triple": 0.2, "tour+trophy": 1.93, "tour+trophy2": 3.35, "tour+twins": 0.71, "tour+under": 0.34,
+  "tour+z3": 1.68, "tour+z4": 1.82, "tour+z5": 2.01, "tour+z6": 2.01, "tour+z7": 2.19, "tour+z8": 2.1, "tour+z9": 1.56,
+  "trbounty+trophy": 2.65, "trbounty+trophy2": 2.33, "trbounty+twins": 0.65, "trbounty+under": 0.25,
+  "trbounty+z3": 0.74, "trbounty+z4": 0.62, "trbounty+z6": 0.57, "trbounty+z7": 0.61, "trbounty+z8": 0.55,
+  "trbounty+z9": 0.69, "triple+trophy": 0.33, "triple+trophy2": 0.39, "triple+twins": 2.96, "triple+z3": 0.74,
+  "triple+z4": 0.57, "triple+z5": 0.63, "triple+z6": 0.82, "triple+z7": 0.55, "triple+z8": 0.61, "triple+z9": 0.56,
+  "trophy+trophy2": 2.88, "trophy+twins": 0.66, "trophy+under": 0.52, "trophy+z3": 1.27, "trophy+z4": 1.35,
+  "trophy+z5": 1.36, "trophy+z6": 1.36, "trophy+z7": 1.35, "trophy+z8": 1.27, "trophy+z9": 1.24, "trophy2+twins": 0.49,
+  "trophy2+under": 0.19, "trophy2+z3": 1.7, "trophy2+z4": 1.77, "trophy2+z5": 1.89, "trophy2+z6": 1.56,
+  "trophy2+z7": 1.47, "trophy2+z8": 1.43, "trophy2+z9": 1.17, "twins+under": 1.44, "twins+z3": 0.73, "twins+z7": 1.16,
+  "twins+z8": 0.86, "under+z4": 1.27, "under+z5": 1.16, "under+z7": 0.85, "under+z8": 0.68, "under+z9": 0.74,
+  "z3+z4": 1.21, "z3+z5": 0.74, "z3+z6": 0.6, "z3+z7": 0.53, "z3+z8": 0.39, "z3+z9": 0.56, "z4+z6": 0.69,
+  "z4+z7": 0.81, "z4+z8": 0.61, "z4+z9": 0.79, "z5+z6": 1.2, "z5+z7": 0.73, "z5+z8": 0.74, "z5+z9": 0.81,
+  "z6+z7": 1.14, "z6+z8": 0.76, "z7+z8": 1.34, "z7+z9": 1.19, "z8+z9": 1.4
+};                                       // filled from the bot run below this block
+const liftKey = (i, w) => BETS[i][0] === "wanted" ? "Z" + SPEC[w][2] : BETS[i][0];
+function pairLift(a, b, w) { const x = liftKey(a, w), y = liftKey(b, w), k = x < y ? x + "+" + y : y + "+" + x, v = PAIR_LIFT[k]; return v === undefined ? 1 : v; }
+function parlayChance(legs, w) {
+  let p = legs.reduce((a, i) => a * betChance(i, w), PARLAY_EDGE);
+  for (let a = 0; a < legs.length; a++) for (let b = a + 1; b < legs.length; b++) p *= pairLift(legs[a], legs[b], w);
+  return p;
+}
+const parlayPays = p => { if (p <= 0 || EDGE / p > PARLAY_CAP) return 0; const x = EDGE / p; return Math.max(1.1, x >= 10 ? Math.floor(x) : Math.floor(x * 10) / 10); };   // 0 = too long a shot
+const parlayDead = (legs, w) => legs.some((a, x) => legs.some((b, y) => y > x && pairLift(a, b, w) === 0));   // two legs that can't both win
+const betLegs = b => (!b ? [] : b.k === "parlay" ? b.legs : [b.k]);
+const betHas = k => betLegs(tav().bet).includes(k);
+
 function betAvail(i) {
   const id = BETS[i][0];
+  if (id === "newsp" || id === "newtr") return false;                          // retired Nov 20, 2026: impossible once your log fills up
   if ((id === "top10" || id === "beat1") && !LB.url) return false;             // no shared board here
-  if ((id === "newsp" || id === "newtr") && LOGGED.every(s => store.log[s[0]])) return false;   // nothing new left to log
   if ((id === "beatlast") && !tav().hist.length) return false;
+  if (id === "wanted") return false;                                           // it has its own slot on the board
   return true;
 }
-function betText(t, line) { return t.replace("{L}", line).replace("{2L}", 2 * line).replace("{1.5L}", Math.round(1.5 * line / 10) * 10); }
-function betBoard() {                                       // -> five bet indexes for this dive: 2 safer, 2 medium, 1 long shot
+function betText(t, line, w) {
+  const ws = w && SPEC[w], wz = ws && ZONES[ws[2]];
+  return t.replace("{L}", line).replace("{2L}", 2 * line).replace("{1.5L}", Math.round(1.5 * line / 10) * 10).replace("{B}", SPEC[todaysBounty()] ? SPEC[todaysBounty()][1] : "THE BOUNTY")
+    .replace("{P}", store.best || 0).replace("{J}", Math.ceil(JUNK_K * line)).replace("{W}", ws ? ws[1] : "").replace("{WZ}", wz ? wz[0] : "").replace("{WM}", wz ? wz[1] + "-" + wz[2] + " M" : "");
+}
+function betBoard() {                                       // -> five bet indexes: 2 safer, 1 medium, the WANTED fish, 1 long shot
   const r = RNG(hashStr("bets" + (store.dives || 0) + (store.name || ""))), ch = BETS.map((b, i) => betChance(i));
   const all = BETS.map((b, i) => i).filter(betAvail);
   const tier = (lo, hi) => all.filter(i => ch[i] >= lo && ch[i] < hi);
   const pick = (pool, n, out) => { pool = pool.filter(i => !out.includes(i)); for (let k = 0; k < n && pool.length; k++) out.push(pool.splice(Math.floor(r.random() * pool.length), 1)[0]); };
-  const out = [];
-  pick(tier(0.3, 1), 2, out); pick(tier(0.08, 0.3), 2, out); pick(tier(0, 0.08), 1, out);
+  const out = [], wanted = wantedFish() ? 1 : 0;
+  pick(tier(0.3, 1), 2, out); pick(tier(0.08, 0.3), 2 - wanted, out); pick(tier(0, 0.08), 1, out);
+  if (wanted) out.push(BET_I.wanted);
   pick(all, 5 - out.length, out);                           // a thin tier: fill from anywhere
   return out.sort((a, b) => ch[b] - ch[a]);
 }
-function betOdds() {                                        // [[id, label, pays, what it means]] for this dive's board
-  const line = betLine();
-  return betBoard().map(i => [BETS[i][0], betText(BETS[i][1], line), betPays(betChance(i)), betText(BETS[i][2], line)]);
+const betTier = (i, p) => BETS[i][0] === "wanted" ? "WANTED" : p >= 0.3 ? "SAFER" : p >= 0.08 ? "MEDIUM" : "LONG SHOT";
+function betOdds() {                                        // [[id, label, pays, what it means, index, tier]] for this dive's board
+  const line = betLine(), w = wantedFish();
+  return betBoard().map(i => { const p = betChance(i, w); return [BETS[i][0], BETS[i][0] === "wanted" ? SPEC[w][1] : betText(BETS[i][1], line), betPays(p), betText(BETS[i][2], line, w), i, betTier(i, p)]; });
 }
-function betLabel(b) { const i = BET_I[b.k]; return i === undefined ? b.k.toUpperCase() : betText(BETS[i][1], b.line).replace(" LB", ""); }
+function betLabel(b) {
+  if (b.k === "parlay") return b.legs.length + "-BET PARLAY";
+  if (b.k === "wanted") return "WANTED";
+  const i = BET_I[b.k]; return i === undefined ? b.k.toUpperCase() : betText(BETS[i][1], b.line).replace(" LB", "");
+}
+function betSlip() {                                        // what PLACE BET would place: {legs, pays, parlay, dead}
+  const b = TAV.bet, w = b.w;
+  if (b.ticks.length >= 2) {
+    const legs = b.ticks.map(t => b.opts[t][4]), dead = parlayDead(legs, w);
+    const pays = dead ? 0 : parlayPays(parlayChance(legs, w));
+    return { legs, ticks: b.ticks.slice(), parlay: true, dead, long: !dead && !pays, pays };
+  }
+  return { legs: [b.opts[b.sel][4]], ticks: [b.sel], parlay: false, dead: false, pays: b.opts[b.sel][2] };
+}
+function betTick(n) {                                       // tick or untick a bet for a parlay (3 at most)
+  const b = TAV.bet, k = b.ticks.indexOf(n);
+  if (k >= 0) b.ticks.splice(k, 1); else if (b.ticks.length < PARLAY_MAX) b.ticks.push(n); else { play("miss"); return; }
+  b.sel = n; play("tick");
+}
 function openBet() {
   claimDaily();
   const q = tav(), o = betOdds();
-  let sel = 0, stake = 10;
-  if (q.bet && !q.bet.cast) { sel = Math.max(0, o.findIndex(r => r[0] === q.bet.k)); stake = q.bet.stake; q.chips += q.bet.stake; q.bet = null; saveStore(); }   // re-open: the stake comes back first
-  TAV.bet = { opts: o, sel, stake: stakeStep(stake, 0) };
+  let sel = 0, stake = 10, ticks = [];
+  if (q.bet && !q.bet.cast) {                               // re-open: the stake comes back first
+    if (q.bet.k === "parlay") { ticks = q.bet.legs.map(k => o.findIndex(r => r[0] === k)).filter(t => t >= 0); if (ticks.length < 2) ticks = []; sel = ticks[0] || 0; }
+    else sel = Math.max(0, o.findIndex(r => r[0] === q.bet.k));
+    stake = q.bet.stake; q.chips += q.bet.stake; q.bet = null; saveStore();
+  }
+  TAV.bet = { opts: o, sel, stake: stakeStep(stake, 0), ticks, card: false, w: wantedFish() };
   openOverlay("bet");
 }
 function placeBet() {
-  const b = TAV.bet, q = tav(), [k, , pays] = b.opts[b.sel];
-  if (q.chips < b.stake || b.stake < 1 || betBlocked(k)) { play("miss"); return; }
-  q.chips -= b.stake; q.bet = { k, stake: b.stake, pays, line: betLine(), cast: false };
+  const b = TAV.bet, q = tav(), s = betSlip(), ks = s.legs.map(i => BETS[i][0]);
+  if (q.chips < b.stake || b.stake < 1 || ks.some(betBlocked) || s.dead || s.long) { play("miss"); return; }
+  q.chips -= b.stake;
+  q.bet = s.parlay ? { k: "parlay", legs: ks, stake: b.stake, pays: s.pays, line: betLine(), cast: false, w: b.w }
+    : { k: ks[0], stake: b.stake, pays: s.pays, line: betLine(), cast: false, w: b.w };
   saveStore(); play("select"); S.overlay = null;
 }
 function loseCastBet(msg) {                                 // a cast bet that never reached the haul (gave up, or left the page) is lost
@@ -2206,13 +2727,99 @@ function settleBet(dive) {                                  // -> a popup line f
   const b = tav().bet;
   if (!b) return null;
   tav().bet = null;
-  const i = BET_I[b.k], won = i === undefined || (dive.total < JUNK_K * b.line && junkVoids(b.k)) ? null : BETS[i][4](dive, b.line);   // a thrown dive voids only the bets it could win
-  if (won === null) { addChips(b.stake); return ["BET VOID: STAKE BACK", 4, CHIP]; }    // e.g. UNDER without a real dive
-  if (!won) { saveStore(); return ["BET LOST", 3, ORANGE]; }
+  const d = b.w ? Object.assign({}, dive, { wanted: b.w }) : dive, junk = dive.total < JUNK_K * b.line;
+  const res = betLegs(b).map(k => { const i = BET_I[k]; return i === undefined || (junk && junkVoids(k)) ? null : BETS[i][4](d, b.line); });   // a thrown dive voids only the bets it could win
+  const par = b.k === "parlay", T = btake();
+  betLegs(b).forEach((k, n) => { if (res[n] === null || BET_I[k] === undefined) return; const e = T[k] || (T[k] = [0, 0]); e[0]++; if (res[n]) e[1]++; if (k === "wanted") wantedRecord(b.w, res[n]); });
+  if (res.some(r => r === null)) { addChips(b.stake); return [par ? "PARLAY VOID: STAKE BACK" : "BET VOID: STAKE BACK", 4, CHIP]; }    // e.g. UNDER without a real dive
+  if (res.some(r => !r)) { saveStore(); return [par ? "PARLAY LOST (" + res.filter(r => r).length + "/" + res.length + ")" : "BET LOST", 3, ORANGE]; }
   const pay = Math.round(b.stake * b.pays);   // round, not floor: odd stakes are allowed since Nov 19, 2026
   addChips(pay, "win");
   if (b.pays >= 8) tavAward("longshot");
-  return ["BET WON! +" + pay + " CHIPS", 4.5, CHIP];
+  return [(par ? "PARLAY WON! +" : "BET WON! +") + pay + " CHIPS", 4.5, CHIP];
+}
+
+// ---- What every dive bet means, in full (Nov 20, 2026), shown before you take it. {L} line, {2L}, {1.5L}, {B} today's
+// bounty fish, {P} your best, {W} the wanted fish, {WZ}/{WM} its zone and depths. `fam` draws the fish that count.
+const BET_HELP = {
+  over: ["YOUR FINAL SCORE, WITH SET BONUSES AND THE FLOOR BONUS, MUST BEAT {L}. THE LINE IS THE MIDDLE OF YOUR RECENT DIVES."],
+  under: ["SCORE {L} OR LESS, BUT ONLY ON A REAL DIVE: ALL 3 FISH CAUGHT BELOW 400 M. ANYTHING ELSE UNDER THE LINE GIVES YOUR STAKE BACK."],
+  floor: ["SINK ALL THE WAY TO THE SEA FLOOR AT 1158 M. A FULL HOOK SENDS YOU UP, SO LEAVE ROOM ON IT."],
+  trophy: ["LAND A TROPHY FISH, ONE WITH RED-ORANGE SPARKLES. YOU HAVE TO WIN ITS FIGHT TO KEEP IT."],
+  legend: ["LAND A LEGENDARY FISH, THE ONES WITH A GOLD AURA AND CIRCLING STARS. WIN THE FIGHT TO KEEP IT."],
+  over2: ["SCORE MORE THAN {2L}, DOUBLE YOUR LINE OF {L}."],
+  over15: ["SCORE MORE THAN {1.5L}, ONE AND A HALF TIMES YOUR LINE OF {L}."],
+  online: ["FINISH WITHIN 15 OF {L}, ABOVE OR BELOW. YOU NEED AT LEAST ONE FISH."],
+  fish50: ["LAND ONE FISH THAT WEIGHS 50 LB OR MORE ON ITS OWN. THE BOUNTY X3 DOESN'T COUNT HERE."],
+  fish200: ["LAND ONE FISH THAT WEIGHS 200 LB OR MORE ON ITS OWN. THE BOUNTY X3 DOESN'T COUNT HERE."],
+  all10: ["FILL THE HOOK WITH 3 FISH, AND EVERY ONE MUST WEIGH 10 LB OR MORE."],
+  beatlast: ["SCORE MORE THAN YOUR LAST DIVE. IF YOUR LAST DIVE WAS THROWN AWAY, YOUR STAKE COMES BACK."],
+  odd: ["YOUR FINAL SCORE IS AN ODD NUMBER, LIKE 141 OR 207. A SCORE OF 0 LOSES."],
+  seven: ["YOUR FINAL SCORE ENDS IN 7, LIKE 147 OR 307."],
+  heavylast: ["FILL THE HOOK, AND THE THIRD FISH YOU CATCH IS THE HEAVIEST OF THE THREE. A TIE FOR HEAVIEST STILL WINS."],
+  d600: ["GET YOUR HOOK DEEPER THAN 600 M AT ANY POINT IN THE DIVE. WHAT YOU CATCH DOESN'T MATTER."],
+  d900: ["GET YOUR HOOK DEEPER THAN 900 M AT ANY POINT IN THE DIVE. WHAT YOU CATCH DOESN'T MATTER."],
+  floor3: ["TOUCH THE FLOOR AT 1158 M AND COME HOME WITH A FULL HOOK. FISH CAUGHT ON THE RIDE UP COUNT."],
+  deephook: ["FILL THE HOOK WITH 3 FISH, ALL CAUGHT DEEPER THAN 500 M."],
+  rise: ["TOUCH THE FLOOR WITH ROOM ON YOUR HOOK, THEN CATCH A FISH ON THE SLOW RIDE BACK UP."],
+  tight: ["FILL THE HOOK WITH 3 FISH, ALL CAUGHT WITHIN 50 M OF EACH OTHER."],
+  onezone: ["FILL THE HOOK WITH 3 FISH THAT ALL LIVE IN THE SAME ZONE."],
+  tour: ["FILL THE HOOK WITH 3 FISH FROM 3 DIFFERENT ZONES. THAT'S THE GRAND TOUR SET BONUS."],
+  deeptrio: ["FILL THE HOOK WITH 3 FISH FROM THE BONE YARD OR DEEPER, 830 M AND DOWN. THAT'S THE DEEP TRIO SET BONUS."],
+  trophy2: ["LAND 2 TROPHY FISH ON ONE DIVE. LEGENDARIES DON'T COUNT AS TROPHIES HERE."],
+  pair: ["CATCH 2 OF THE SAME SPECIES ON ONE DIVE. 3 OF A KIND WINS TOO."],
+  triple: ["FILL THE HOOK WITH 3 OF THE SAME SPECIES."],
+  bounty: ["LAND TODAY'S BOUNTY FISH, THE {B}. IT'S THE SAME FISH FOR EVERYONE TODAY."],
+  newsp: ["LAND A SPECIES THAT ISN'T IN YOUR LOG YET."],
+  record: ["BEAT YOUR LOG'S RECORD WEIGHT FOR A SPECIES YOU'VE CAUGHT BEFORE. A FIRST CATCH DOESN'T COUNT."],
+  setx2: ["GET SET BONUSES WORTH X2 OR MORE. A PAIR +0.5, 3 ZONES +1, 3 TROPHIES +1, DEEP TRIO +1, 3 OF A KIND +2."],
+  setx3: ["GET SET BONUSES WORTH X3 OR MORE. A PAIR +0.5, 3 ZONES +1, 3 TROPHIES +1, DEEP TRIO +1, 3 OF A KIND +2."],
+  clean: ["FILL THE HOOK WITH 3 FISH AND NEVER TOUCH A JELLYFISH."],
+  pb: ["BEAT YOUR BEST SCORE EVER, {P}."],
+  top10: ["SCORE HIGH ENOUGH TO MAKE TODAY'S TOP 10 ON THE SHARED SCOREBOARD."],
+  beat1: ["BEAT THE SCORE AT THE TOP OF TODAY'S SHARED SCOREBOARD."],
+  floortr: ["TOUCH THE FLOOR AT 1158 M AND LAND A TROPHY FISH ON THE SAME DIVE."],
+  floorlg: ["TOUCH THE FLOOR AT 1158 M AND LAND A LEGENDARY ON THE SAME DIVE."],
+  lgtr: ["LAND A LEGENDARY AND A TROPHY FISH ON THE SAME DIVE."],
+  trbounty: ["LAND A TROPHY FISH AND TODAY'S BOUNTY FISH, THE {B}, ON THE SAME DIVE."],
+  newtr: ["LAND A SPECIES NEW TO YOUR LOG AND A TROPHY FISH."],
+  deepover: ["GET DEEPER THAN 900 M AND SCORE MORE THAN {L}, BOTH ON THE SAME DIVE."],
+  nopulse: ["FILL THE HOOK WITHOUT USING A SINGLE PULSE. CAN'T BE TAKEN WITH THE ANGLER'S HOOK."],
+  fshark: ["LAND ANY SHARK. HOOK IT FROM BEHIND: TOUCH A SHARK'S FRONT HALF AND IT BITES YOUR LAST FISH OFF. THESE COUNT:", ["shark"]],
+  fink: ["LAND ANY SQUID OR OCTOPUS. THESE COUNT:", ["ink"]],
+  feel: ["LAND ANY EEL. THESE COUNT:", ["eel"]],
+  fshell: ["LAND ANY CRAB, LOBSTER, SHRIMP OR OTHER SHELLED CRITTER. THESE COUNT:", ["shell"]],
+  fray: ["LAND ANY RAY. THESE COUNT:", ["ray"]],
+  fglow: ["LAND A FISH THAT MAKES ITS OWN LIGHT. THESE COUNT:", ["glow"]],
+  surfturf: ["LAND A SHARK, FROM BEHIND, AND A SHELLFISH ON THE SAME DIVE. SHARKS, THEN SHELLFISH:", ["shark", "shell"]],
+  calamari: ["LAND 2 SQUID OR OCTOPUS ON ONE DIVE. ANY 2 OF THESE:", ["ink"]],
+  sushi: ["LAND AN EEL AND A SQUID OR OCTOPUS ON THE SAME DIVE. EELS, THEN INK:", ["eel", "ink"]],
+  sharkweek: ["LAND 2 SHARKS ON ONE DIVE, BOTH FROM BEHIND OR THEY BITE. ANY 2 OF THESE:", ["shark"]],
+  boil: ["FILL THE HOOK WITH ONE OF EACH: A SHELLFISH, A SQUID OR OCTOPUS, AND AN EEL. THE FISH IN EACH FAMILY ARE SHOWN ON THEIR OWN BETS."],
+  nobites: ["FILL THE HOOK WITH 3 FISH AND NEVER GET BITTEN BY A SHARK. LOSING A FISH TO A BITE LOSES THE BET."],
+  stairs: ["FILL THE HOOK, AND EACH FISH WEIGHS MORE THAN THE ONE YOU CAUGHT BEFORE IT, LIKE 8, 20, 35. A TIE LOSES."],
+  downhill: ["FILL THE HOOK, AND EACH FISH WEIGHS LESS THAN THE ONE YOU CAUGHT BEFORE IT, LIKE 35, 20, 8. A TIE LOSES."],
+  twins: ["LAND 2 FISH THAT BOTH WEIGH 10 LB OR MORE AND ARE WITHIN 2 LB OF EACH OTHER, LIKE 24 AND 26."],
+  balanced: ["FILL THE HOOK WITH 3 FISH OF 20 LB OR MORE, WITH NO MORE THAN 10 LB BETWEEN THE LIGHTEST AND THE HEAVIEST."],
+  fish100: ["LAND ONE FISH THAT WEIGHS 100 LB OR MORE ON ITS OWN. THE BOUNTY X3 DOESN'T COUNT HERE."],
+  bookends: ["LAND ONE FISH SHALLOWER THAN 400 M AND ANOTHER DEEPER THAN 900 M, BOTH ON THE SAME DIVE."],
+  neighbours: ["FILL THE HOOK WITH 3 FISH FROM 3 ZONES THAT SIT RIGHT NEXT TO EACH OTHER, LIKE THE WRECK, THE ABYSS AND THE CAVES."],
+  postcard: ["LAND A CORAL REEF FISH, ABOUT 170 TO 250 M, AND TOUCH THE FLOOR AT 1158 M ON THE SAME DIVE."],
+  bounty2: ["LAND 2 OF TODAY'S BOUNTY FISH, THE {B}, ON ONE DIVE."],
+  wanted: ["LAND A {W}. IT LIVES IN {WZ}, {WM}. THERE'S A NEW WANTED FISH EVERY DIVE."],
+};
+[3, 4, 5, 6, 7, 8, 9].forEach(z => {                       // the zone bets: WRECK FISH ... FLOOR FISH
+  BET_HELP["z" + z] = ["LAND ANY FISH THAT LIVES IN " + ZONES[z][0] + ", " + ZONES[z][1] + " TO " + ZONES[z][2] + " M. WHAT COUNTS IS THE FISH'S HOME ZONE, NOT WHERE YOU CAUGHT IT."];
+});
+const BET_VOID = { under: "NO 3 FISH BELOW 400", beatlast: "LAST DIVE THROWN", top10: "BOARD OFFLINE", beat1: "BOARD OFFLINE" };
+function betVoidText(k, line) { return BET_VOID[k] || (junkVoids(k) ? "HAUL UNDER " + Math.ceil(JUNK_K * line) + " LB" : null); }
+const chanceText = p => (p >= 0.25 ? "ABOUT " + Math.round(p * 10) + " IN 10" : "ABOUT 1 IN " + Math.round(1 / p));
+function betRecordText(i) {                                 // -> [label, text]: "WON 4 OF 9" on the bets you took, or how every dive went
+  const k = BETS[i][0], t = btake()[k];
+  if (t && t[0]) return ["YOUR BETS", "WON " + t[1] + " OF " + t[0]];
+  if (k === "wanted") return ["YOUR BETS", "NONE YET"];
+  const e = betLife()[i];
+  return e && e[0] ? ["YOUR DIVES", "HIT " + e[1] + " OF " + e[0]] : ["YOUR RECORD", "NEW BET"];
 }
 
 // ---- Catch 21: blackjack with fish cards weighing 1 to 11 lb. Trophy cards count double; a legendary card wins outright.
@@ -2769,29 +3376,6 @@ function drawC21() {
   text("TAP HERE TO LEAVE", 60, 194, 1, WHITE, "center", null);
   g.restore();
 }
-function drawBet() {                                         // betting on the next dive, from the cast screen
-  rect("#08140f", 0, 0, LW, LH);
-  g.save(); g.translate(OX, 0);
-  const b = TAV.bet;
-  text("BET ON YOUR DIVE", 60, 8, 1, CHIP, "center", null);
-  chipsLine(20);
-  b.opts.forEach(([, lab, pays], i) => {
-    const y = 29 + i * 17, sel = i === b.sel;
-    const off = betBlocked(b.opts[i][0]);
-    box(4, y, 112, 15, sel ? CHIP : "#2a4a3c"); text(lab, 8, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null); text("X" + pays, 112, y + 7, 1, off ? "#4a5a50" : sel ? GOLD : "#8a9a6a", "right", null);
-  });
-  text(b.opts[b.sel][3] || "STAKE", 60, 120, 1, b.opts[b.sel][0] === "under" ? ORANGE : "#c8e6d2", "center", null);
-  box(14, 126, 16, 15, CHIP); text("-", 22, 133, 1, CHIP, "center", null);
-  text(b.stake < 1000 ? b.stake : fmtChips(b.stake), 60, 133, b.stake < 1000 ? 2 : 1, WHITE, "center");
-  box(74, 126, 16, 15, CHIP); text("+", 82, 133, 1, CHIP, "center", null);
-  box(94, 126, 22, 15, CHIP); text("MAX", 105, 133, 1, CHIP, "center", null);
-  text("WIN " + fmtChips(Math.round(b.stake * b.opts[b.sel][2])), 60, 148, 1, GREY, "center", null);
-  const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 1 && !blk;
-  box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
-  if (junkVoids(b.opts[b.sel][0])) text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids this bet
-  text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
-  g.restore();
-}
 function drawChipShop() {
   tavernBg();
   g.save(); g.translate(OX, 0);
@@ -3016,14 +3600,7 @@ function tavernTap(lx, ly) {                                 // -> true if handl
     else if (ly > 186) back();
     return true;
   }
-  if (o === "bet") {
-    const b = TAV.bet, i = Math.floor((ly - 29) / 17);
-    if (ly >= 29 && i < b.opts.length) { b.sel = i; play("tick"); }
-    else if (ly >= 124 && ly < 143) { b.stake = stakeStep(b.stake, lx >= 93 ? STAKE_MAX : lx < 31 ? -1 : lx < 74 ? STAKE_TYPE : 1); play("tick"); }
-    else if (ly >= 154 && ly < 174) placeBet();
-    else if (ly > 184) { S.overlay = null; play("back"); }
-    return true;
-  }
+  if (o === "bet") { betTapNarrow(lx, ly); return true; }
   return false;
 }
 function lineCol(i) {
@@ -4008,35 +4585,152 @@ function drawTavBoardWide() {
   closeLine("TAP HERE TO GO BACK");
 }
 
-// betting on your dive: the five bets with what they mean on the left, the stake on the right
+// ---- The bet screen (Nov 20, 2026): every bet explained before you take it, tick boxes for parlays. Shared helpers first.
+function betFamRow(fams, x, y, w, yMax) {                   // little sprites of every fish that counts, shrunk to fit above yMax
+  const ids = [].concat(...fams.map((f, n) => (n ? [null] : []).concat(FAMS[f]))).filter(id => id === null || DATA.atlas[id]);
+  for (const h of [9, 7, 6, 5]) {
+    let cx = x, cy = y, ok = true;
+    const put = [];
+    for (const id of ids) {
+      if (id === null) { cx += 5; continue; }                // a gap between families
+      const a = DATA.atlas[id], k = Math.min(1, h / a[3]), [sw, sh] = sprSize(id, k);
+      if (cx + sw > x + w) { cx = x; cy += h + 2; }
+      if (cy + h > yMax) { ok = false; break; }
+      put.push([id, cx, cy + h - sh, k]); cx += sw + 2;
+    }
+    if (ok || h === 5) { put.forEach(([id, px, py, k]) => spr(id, px, py, false, k)); return cy + h; }
+  }
+  return y;
+}
+function betInfo(row) {                                     // -> {title, how, fam, fish, chance, rec, void}
+  const b = TAV.bet, [k, lab, pays, , i] = row, line = betLine(), h = BET_HELP[k] || [BETS[i][2]];
+  return { title: lab, pays, how: betText(h[0], line, b.w), fam: h[1], fish: k === "wanted" ? b.w : null,
+    chance: chanceText(betChance(i, b.w)), rec: betRecordText(i), void: betVoidText(k, line) };
+}
+function betSlipLines() {                                   // -> [top line, bottom line, colour] for the slip
+  const b = TAV.bet, s = betSlip(), blocked = s.legs.some(i => betBlocked(BETS[i][0]));
+  if (s.dead) return [s.ticks.length + " BETS", "CAN'T ALL WIN", ORANGE];
+  if (s.long) return ["TOO LONG A SHOT", "OVER X" + PARLAY_CAP, ORANGE];
+  if (blocked) return ["WRONG LURE", "FOR THIS BET", ORANGE];
+  return [s.parlay ? "PARLAY: " + s.legs.length + " BETS" : "SINGLE BET", "X" + s.pays + "  WIN " + fmtChips(Math.round(b.stake * s.pays)), s.parlay ? GOLD : "#a0c8b4"];
+}
+function parlayHint(wide) {                                 // why a parlay pays what it does
+  const b = TAV.bet, s = betSlip();
+  if (!s.parlay || s.dead || s.long) return wide ? "TICK 2-3 BOXES FOR A PARLAY" : "TAP AGAIN FOR INFO";
+  const prod = s.ticks.reduce((a, t) => a * b.opts[t][2], 1);
+  if (s.pays < 0.75 * prod) return wide ? "THESE OFTEN WIN TOGETHER" : "OFTEN WIN TOGETHER";
+  if (s.pays > 1.3 * prod) return wide ? "THESE RARELY WIN TOGETHER" : "RARELY WIN TOGETHER";
+  return wide ? "ALL MUST WIN, VOID = REFUND" : "ALL MUST WIN";
+}
+const betOK = () => { const b = TAV.bet, s = betSlip(); return tav().chips >= b.stake && b.stake >= 1 && !s.dead && !s.long && !s.legs.some(i => betBlocked(BETS[i][0])); };
+function drawBetInfo(x, y, w, yBot, inf, wide) {           // the explanation: how to win, the fish, chance, record, stake back
+  const n = wide ? 27 : 19;
+  text("HOW TO WIN", x, y, 1, CYAN, "left", null);
+  const tail = (inf.void ? (wide ? 3 : 4) : 2) * 10, lim = yBot - tail;
+  let yy = y + 10;
+  for (const l of wrap(inf.how, n)) { if (yy > lim - 4) break; text(l, x, yy, 1, "#c8e6d2", "left", null); yy += 9; }
+  if (inf.fam) yy = betFamRow(inf.fam, x, yy - 3, w, lim - 2) + 4;
+  if (inf.fish) { const a = DATA.atlas[inf.fish], k = a[3] * 2 <= lim - yy - 2 && a[2] * 2 <= w ? 2 : 1; spr(inf.fish, x + w / 2 - a[2] * k / 2, yy - 2, false, k); }
+  let ty = yBot - tail + 6;
+  const row = (l, v) => { text(l, x, ty, 1, CYAN, "left", null); text(v, x + w, ty, 1, WHITE, "right", null); ty += 10; };
+  row("CHANCE", wide ? inf.chance : inf.chance.replace("ABOUT ", "")); row(wide ? inf.rec[0] : "YOURS", inf.rec[1]);
+  if (inf.void && wide) row("STAKE BACK IF", inf.void);
+  else if (inf.void) { text("STAKE BACK IF", x, ty, 1, CYAN, "left", null); text(inf.void, x + w, ty + 10, 1, WHITE, "right", null); }
+}
+const tickBox = (x, y, on) => { box(x, y, 9, 9, on ? GOLD : "#2a4a3c"); if (on) text("X", x + 5, y + 5, 1, GOLD, "center", null); };
+const BET_TIER_COL = { SAFER: "#5a8a74", MEDIUM: "#8a9a6a", WANTED: GOLD, "LONG SHOT": ORANGE };
+
+function drawBet() {                                         // phones: the list, or one bet's card
+  rect("#08140f", 0, 0, LW, LH);
+  g.save(); g.translate(OX, 0);
+  const b = TAV.bet;
+  if (b.card) {
+    const inf = betInfo(b.opts[b.sel]);
+    text(inf.title, 60, 8, 1, GOLD, "center", null); text("PAYS X" + inf.pays, 60, 19, 1, GOLD, "center", null);
+    drawBetInfo(4, 33, 112, 152, inf, false);
+    box(20, 158, 80, 16, GOLD); text("BACK TO BETS", 60, 166, 1, GOLD, "center", null);
+    g.restore(); return;
+  }
+  text("BET ON YOUR DIVE", 60, 8, 1, CHIP, "center", null);
+  chipsLine(20);
+  b.opts.forEach(([k, lab, pays], i) => {
+    const y = 29 + i * 17, sel = i === b.sel, off = betBlocked(k), fish = k === "wanted" ? b.w : null;
+    box(4, y, 112, 15, sel ? CHIP : "#2a4a3c");
+    const on = b.ticks.includes(i); box(6, y + 4, 7, 7, on ? GOLD : "#2a4a3c"); if (on) rect(GOLD, 8, y + 6, 3, 3);   // the parlay tick
+    const pl = fish ? (lab.length <= 11 ? lab : "WANTED") : lab, pc = off ? "#4a5a50" : sel ? WHITE : "#a0c8b4";
+    const pt = 15 + textW(pl, 1) + 4 + textW("X" + pays, 1) > 113 ? String(pays) : "X" + pays;   // no room: drop the X
+    text(pl, 15, y + 7, 1, fish ? GOLD : pc, "left", null);
+    if (fish) { const a = DATA.atlas[fish], k2 = Math.min(1, 9 / a[3]), x = 15 + textW(pl, 1) + 3; if (x + a[2] * k2 < 112 - textW(pt, 1) - 2) spr(fish, x, y + 3, false, k2); }
+    text(pt, 113, y + 7, 1, off ? "#4a5a50" : sel ? GOLD : "#8a9a6a", "right", null);
+  });
+  text(b.ticks.length >= 2 ? parlayHint(false) : "TAP AGAIN FOR INFO", 60, 120, 1, "#5a8a74", "center", null);
+  box(14, 126, 16, 15, CHIP); text("-", 22, 133, 1, CHIP, "center", null);
+  text(b.stake < 1000 ? b.stake : fmtChips(b.stake), 60, 133, b.stake < 1000 ? 2 : 1, WHITE, "center");
+  box(74, 126, 16, 15, CHIP); text("+", 82, 133, 1, CHIP, "center", null);
+  box(94, 126, 22, 15, CHIP); text("MAX", 105, 133, 1, CHIP, "center", null);
+  const [l1, l2, col] = betSlipLines(), s = betSlip();
+  text(s.parlay || col === ORANGE ? (col === ORANGE ? l2 : "PARLAY " + l2) : l2, 60, 148, 1, col === ORANGE ? ORANGE : s.parlay ? GOLD : GREY, "center", null);
+  const ok = betOK();
+  box(20, 156, 80, 16, ok ? GOLD : "#3c4a40"); text(ok ? "PLACE BET" : col === ORANGE ? l1 : "NOT ENOUGH CHIPS", 60, 164, 1, ok ? GOLD : GREY, "center", null);
+  const v = s.legs.map(i => betVoidText(BETS[i][0], betLine())).find(x => x && x.startsWith("HAUL"));
+  if (v) text("UNDER " + Math.ceil(JUNK_K * betLine()) + " LB: REFUND", 60, 180, 1, "#5a8a74", "center", null);   // a thrown dive voids this bet
+  text("TAP HERE FOR NO BET", 60, 192, 1, WHITE, "center", null);
+  g.restore();
+}
+function betTapNarrow(lx, ly) {
+  const b = TAV.bet;
+  if (b.card) { if ((ly >= 154 && ly < 176) || ly > 184) { b.card = false; play("back"); } return; }
+  const i = Math.floor((ly - 29) / 17);
+  if (ly >= 29 && ly < 29 + b.opts.length * 17 && i < b.opts.length) {
+    if (lx < 15) betTick(i);
+    else if (i === b.sel) { b.card = true; play("select"); }
+    else { b.sel = i; play("tick"); }
+  }
+  else if (ly >= 124 && ly < 143) { b.stake = stakeStep(b.stake, lx >= 93 ? STAKE_MAX : lx < 31 ? -1 : lx < 74 ? STAKE_TYPE : 1); play("tick"); }
+  else if (ly >= 154 && ly < 174) placeBet();
+  else if (ly > 184) { S.overlay = null; play("back"); }
+}
+
+// PC: the five bets on the left, the selected bet explained on the right, the slip along the bottom
 function betWideHits() {
-  const x0 = WX(), b = TAV.bet, h = b.opts.map((o, i) => ["opt", x0, 24 + i * 28, 214, 24, i]);
-  h.push(["minus", x0 + 230, 60, 20, 18, -1], ["plus", x0 + 328, 60, 20, 18, 1], ["max", x0 + 230, 82, 118, 14, STAKE_MAX], ["place", x0 + 230, 112, 118, 20, 0], ["stakebox", x0 + 252, 60, 74, 18, STAKE_TYPE]);
+  const x0 = WX(), b = TAV.bet, h = [];
+  b.opts.forEach((o, i) => h.push(["tick", x0, 18 + i * 25, 16, 23, i], ["opt", x0 + 16, 18 + i * 25, 148, 23, i]));
+  h.push(["minus", x0, 160, 18, 18, -1], ["stakebox", x0 + 20, 160, 50, 18, STAKE_TYPE], ["plus", x0 + 72, 160, 18, 18, 1], ["max", x0 + 94, 160, 44, 18, STAKE_MAX], ["place", x0 + 270, 160, 78, 18, 0]);
   return h;
 }
 function drawBetWide() {
   rect("#08140f", 0, 0, LW, LH);
-  const x0 = WX(), b = TAV.bet, px = x0 + 230;
+  const x0 = WX(), b = TAV.bet;
   text("BET ON YOUR DIVE", x0, 8, 1, CHIP, "left", null);
   chipsAt(x0 + 348, 8, "right");
-  for (const [id, x, y, w, h, v] of betWideHits()) {
-    if (id === "opt") { const [k, lab, pays, desc] = b.opts[v], sel = v === b.sel, off = betBlocked(k); box(x, y, w, h, sel ? CHIP : "#2a4a3c"); text(lab, x + 6, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null); text(desc || "", x + 6, y + 17, 1, k === "under" ? ORANGE : sel ? "#c8e6d2" : "#5a8a74", "left", null); text("X" + pays, x + w - 6, y + 12, 1, sel ? GOLD : "#8a9a6a", "right", null); }
-    else if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
+  b.opts.forEach(([k, lab, pays, , , tier], i) => {
+    const y = 18 + i * 25, sel = i === b.sel, off = betBlocked(k), fish = k === "wanted" ? b.w : null;
+    box(x0, y, 164, 23, sel ? CHIP : "#2a4a3c"); tickBox(x0 + 4, y + 7, b.ticks.includes(i));
+    text(lab, x0 + 18, y + 7, 1, off ? "#4a5a50" : sel ? WHITE : "#a0c8b4", "left", null);
+    if (fish) { const a = DATA.atlas[fish], k2 = Math.min(1, 10 / a[3]), x = x0 + 18 + textW(lab, 1) + 5; if (x + a[2] * k2 < x0 + 128) spr(fish, x, y + 2, false, k2); }
+    text(off ? "WRONG LURE" : tier, x0 + 18, y + 16, 1, off ? "#4a5a50" : BET_TIER_COL[tier], "left", null);
+    text("X" + pays, x0 + 158, y + 12, 1, off ? "#4a5a50" : sel ? GOLD : "#8a9a6a", "right", null);
+  });
+  text(parlayHint(true), x0 + 82, 148, 1, "#5a8a74", "center", null);
+  const px = x0 + 172, pw = 176, inf = betInfo(b.opts[b.sel]);
+  rect("#0c1e16", px, 18, pw, 129); outline(px, 18, pw, 129, "#2a4a3c");
+  text(inf.title, px + 6, 26, 1, GOLD, "left", null); text("PAYS X" + inf.pays, px + pw - 6, 26, 1, GOLD, "right", null);
+  drawBetInfo(px + 6, 39, pw - 12, 143, inf, true);
+  const [l1, l2, col] = betSlipLines();
+  for (const [id, x, y, w, h] of betWideHits()) {
+    if (id === "minus" || id === "plus") btn(x, y, w, h, id === "minus" ? "-" : "+", CHIP);
     else if (id === "max") btn(x, y, w, h, "ALL IN", CHIP);
-    else if (id === "stakebox") outline(x, y, w, h, "#2a4a3c");
-    else { const blk = betBlocked(b.opts[b.sel][0]), ok = tav().chips >= b.stake && b.stake >= 1 && !blk; btn(x, y, w, h, ok ? "PLACE BET" : blk ? "WRONG LURE" : "NOT ENOUGH CHIPS", ok ? GOLD : GREY); }
+    else if (id === "stakebox") { outline(x, y, w, h, "#2a4a3c"); text(b.stake < 100000 ? b.stake : fmtChips(b.stake), x + w / 2, y + 9, 1, WHITE, "center", null); }
+    else if (id === "place") { const ok = betOK(); btn(x, y, w, h, ok ? "PLACE BET" : col === ORANGE ? "CAN'T PLACE" : "NOT ENOUGH", ok ? GOLD : GREY); }
   }
-  text("STAKE", px + 59, 48, 1, "#a0c8b4", "center", null);
-  text(b.stake, px + 59, 69, 2, WHITE, "center");
-  text("WIN " + Math.round(b.stake * b.opts[b.sel][2]), px + 59, 103, 1, GOLD, "center", null);
-  text("NEW BETS", px + 59, 150, 1, "#5a8a74", "center", null); text("EVERY DIVE", px + 59, 160, 1, "#5a8a74", "center", null);
-  if (junkVoids(b.opts[b.sel][0])) { text("HAUL UNDER " + Math.ceil(JUNK_K * betLine()) + " LB", px + 59, 174, 1, "#5a8a74", "center", null); text("= STAKE BACK", px + 59, 184, 1, "#5a8a74", "center", null); }
+  text(l1, x0 + 204, 165, 1, col, "center", null); text(l2, x0 + 204, 174, 1, col === ORANGE ? ORANGE : GOLD, "center", null);
   closeLine("TAP HERE FOR NO BET");
 }
 function betTapWide(rx, ly) {
   const b = TAV.bet;
   tapWide(betWideHits(), rx, ly, (id, v) => {
-    if (id === "opt") { b.sel = v; play("tick"); }
+    if (id === "tick") betTick(v);
+    else if (id === "opt") { b.sel = v; play("tick"); }
     else if (id === "place") placeBet();
     else { b.stake = stakeStep(b.stake, v); play("tick"); }
   }, () => { S.overlay = null; play("back"); });

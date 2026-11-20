@@ -53,3 +53,19 @@ gets past phase 1 about three times in four and wins 1-2%.
 The bots see what a careful player sees (the light, glowing jellies, hunters' eyes) but react faster and judge lunges perfectly, so they win more than people do. With the drop 5 values, on the standard lure the good bot wins about 1 run in 3 and the ok bot about 1 in 4, which should put a good human near 1 in 5. Sonar is the safer lure (about 2 in 5), the Heavy Sinker the riskiest (about 1 in 8).
 
 The knobs (`FL_TUNE` in game.js): `hunt`/`huntZ` hunters per 12 m slice (more in later zones), `sense` how close before one notices you, `wind` its wind-up, `charge`/`go` the lunge's speed and length, `maxHunt` how many can come at once, `jelly`/`jellyZ` flesh jellies, `light`/`glowLight` the light around the hook.
+
+## How the dive bets are priced (Nov 20, 2026)
+
+`tests/dive_bot.js` plays ordinary dives (a mix of floor runners, deep divers and shallow casters, with lapses, unnoticed
+jellyfish and pulses), or hunts one family or one fish. `tests/bet_bot_run.py OUT.json DIVES '{options}'` runs it in
+several pages at once; `tests/bet_prices.py DIR` turns the runs into the numbers pasted into `game.js`:
+
+- **New bets' starting odds** (the 4th field in `BETS`). The older bets keep the odds they were tuned with. Bets you can
+  go after on purpose (the fish families and their combos) start a bit past halfway (0.55) from an ordinary dive to a hunting one.
+- **`WANTED_P`**: how often a dive lands each WANTED fish, the same 0.55 of the way from ordinary to hunting it (under 3%: left out).
+- **`PAIR_LIFT`**: how much more or less often two bets win together than chance says (0 = they can't both win). Parlays
+  are priced as each bet's own chance times these. It prints the parlays' payback on a separate hold-out batch of dives.
+
+Every player's own record then moves the price: `tav.blife` (every real dive), `tav.btake` (the bets they actually took)
+and `tav.wrec` (WANTED bets taken). Re-run all three steps after changing spawns, zones or the bets.
+`tests/test_bets2.py` checks the screen, the help text, parlays and settling.

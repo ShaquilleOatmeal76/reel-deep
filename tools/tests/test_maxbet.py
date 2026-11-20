@@ -8,7 +8,7 @@ def check(n, ok, v=""):
     if not ok: fails.append(n)
 CZH = "(h => { const m = h.find(q => q[5] === STAKE_MAX); return [m[1] + m[3] / 2, m[2] + m[4] / 2]; })"
 GAMES = [
-  ["dive bet", "openBet()", "bet", "TAV.bet.stake", 1000, "wideMenus() ? [WX() + 289, 89] : [OX + 105, 133]"],
+  ["dive bet", "openBet()", "bet", "TAV.bet.stake", 1000, "wideMenus() ? (h => [h[1] + h[3] / 2, h[2] + h[4] / 2])(betWideHits().find(q => q[0] === 'max')) : [OX + 105, 133]"],
   ["catch 21", "c21New(false)", "c21", "TAV.c21.bet", 1000, "wideMenus() ? [WX() + 144, 144] : [OX + 63, 135]"],
   ["vip catch 21", "c21New(true)", "c21", "TAV.c21.bet", 1000, "wideMenus() ? [WX() + 144, 144] : [OX + 63, 135]"],
   ["derby", "derbyNew(0,false)", "derby", "TAV.derby.bet", 1000, f"wideMenus() ? {CZH}(derbyWideHits()) : [OX + 63, 22 + TAV.derby.racers.length * derbyLane(TAV.derby) + 4 + 34]"],
