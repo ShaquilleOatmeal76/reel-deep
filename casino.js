@@ -260,8 +260,12 @@ function drawStakeCtl(x, y, w, val, col, lab) {               // lab STAKE / BET
   box(x, y, 16, 15, col); text("-", x + 8, y + 7, 1, col, "center", null);
   box(x + w - 16, y, 16, 15, col); text("+", x + w - 8, y + 7, 1, col, "center", null);
   if (mx) { box(x + w - 42, y, 24, 15, col); text("MAX", x + w - 30, y + 7, 1, col, "center", null); }
-  if (typeof val === "number") val = fmtChips(val);
-  text(mx ? "BET " + val : lab ? lab + " " + val : val, mx ? x + 16 + (w - 58) / 2 : x + w / 2, y + 7, 1, WHITE, "center", null);
+  const num = typeof val === "number" ? val : null, room = mx ? w - 60 : w - 34;   // the space between the buttons
+  if (num !== null) val = fmtChips(num);
+  let t = mx ? "BET " + val : lab ? lab + " " + val : val;
+  if (textW(t, 1) > room) t = String(val);                   // big amounts (Nov 20, 2026): drop the word, then shorten
+  if (textW(t, 1) > room && num !== null) t = fmtChips3(num);
+  text(t, mx ? x + 16 + (w - 58) / 2 : x + w / 2, y + 7, 1, WHITE, "center", null);
 }
 const fmtX = m => "X" + (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.floor(m));
 function czTitle(L, t, col) { if (L.w) { text(t, L.X, 8, 1, col || GOLD, "left", null); chipsAt(L.X + 348, 8, "right"); } else { text(t, L.X + 60, 8, 1, col || GOLD, "center", null); g.save(); g.translate(L.X, 0); chipsLine(19); g.restore(); } }
@@ -289,7 +293,7 @@ function snapCash(x) {
   c.m = x; c.win = Math.floor(c.staked * x); c.phase = "cashed"; c.st = 0;
   addChips(c.win, c.win > c.staked ? "win" : "");
   c.hist.unshift([x, 1]); c.hist.length = Math.min(c.hist.length, 12);
-  c.msg = "LANDED AT " + fmtX(x) + "! +" + c.win; play("chime");
+  c.msg = "LANDED AT " + fmtX(x) + "! +" + fmtChips(c.win, 1e6); play("chime");
   if (x >= 50) tavAward("snaphappy");
 }
 function snapBreak() {
@@ -344,7 +348,7 @@ function drawSnap() {
   for (const [id, x, y, w, h, v] of snapHits()) {
     if (id === "stake" && v < 0) drawStakeCtl(x, y, L.w ? 112 : 112, c.bet, c.phase === "reel" ? "#2a4a3c" : CHIP, L.w ? "STAKE" : "BET");
     else if (id === "auto" && v < 0) drawStakeCtl(x, y, 112, c.auto ? "X" + c.auto : "OFF", c.phase === "reel" ? "#2a4a3c" : "#8cc8a8", "AUTO");
-    else if (id === "go") { const reel = c.phase === "reel", ok = reel || tav().chips >= c.bet; btn(x, y, w, h, reel ? "CASH OUT " + Math.floor(c.staked * c.m) : "REEL IN", reel ? GOLD : ok ? CHIP : GREY); }
+    else if (id === "go") { const reel = c.phase === "reel", ok = reel || tav().chips >= c.bet; btn(x, y, w, h, reel ? "CASH OUT " + fmtChips(Math.floor(c.staked * c.m), 1e6) : "REEL IN", reel ? GOLD : ok ? CHIP : GREY); }
   }
   text(c.msg.slice(0, L.w ? 56 : 19), L.w ? X + 114 : X + 60, L.w ? 158 : 185, 1, c.phase === "snap" ? "#ff8c8c" : c.phase === "cashed" ? GOLD : "#c8e6d2", "center", null);
   if (L.w) { text("CAN SNAP ANY TIME", X + 292, 136, 1, "#5a8a74", "center", null); text("ABOUT 95% BACK", X + 292, 146, 1, "#5a8a74", "center", null); text("SPACE: REEL / CASH OUT   UP/DOWN: AUTO", X + 174, 174, 1, "#5a8a74", "center", null); }
@@ -403,7 +407,7 @@ function bigCash(capped) {
   const c = CZ.big; if (c.phase !== "play" || !c.n) { play("miss"); return; }
   c.win = Math.min(maxWin(c.staked), bigCashNow(c), Math.floor(c.staked * BF_CAP)); c.phase = "done";
   addChips(c.win, c.win > c.staked ? "win" : "");
-  c.msg = (capped ? "MAXED OUT! +" : "CASHED OUT +") + c.win; play("chime");
+  c.msg = (capped ? "MAXED OUT! +" : "CASHED OUT +") + fmtChips(c.win, 1e6); play("chime");
 }
 function bigHits() {
   const L = czL(), h = [];
@@ -429,7 +433,7 @@ function drawBig() {
     if (c.cur) fishCardBig(X + 60, 26, 70, 92, c.cur);
     else { rect("#1e285a", X + 60, 26, 70, 92); rect("#3c4a8a", X + 63, 29, 64, 86); }
     c.seen.slice(0, 6).forEach((q, i) => fishCardBig(X + 4 + (i % 2) * 26, 26 + Math.floor(i / 2) * 32, 22, 28, q, true));
-    text(c.phase === "play" ? "STREAK " + c.n : c.phase === "done" && c.win ? "WON " + c.win : "", X + 95, 128, 1, GOLD, "center", null);
+    text(c.phase === "play" ? "STREAK " + c.n : c.phase === "done" && c.win ? "WON " + fmtChips(c.win, 1e6) : "", X + 95, 128, 1, GOLD, "center", null);
     text(c.msg.slice(0, 30), X + 95, 144, 1, c.phase === "done" && !c.win ? "#ff8c8c" : WHITE, "center", null);
     ["WEIGHTS 1 TO 100", "TIES LOSE", "A LEGEND = RIGHT", "ABOUT 95% BACK"].forEach((l, i) => text(l, X + 292, 124 + i * 10, 1, "#8cc8a8", "center", null));
     text("UP: HEAVIER  DOWN: LIGHTER  SPACE: CASH", LW / 2, 172, 1, "#5a8a74", "center", null);
@@ -437,7 +441,7 @@ function drawBig() {
     if (c.cur) fishCardBig(X + 35, 28, 50, 66, c.cur);
     else { rect("#1e285a", X + 35, 28, 50, 66); rect("#3c4a8a", X + 37, 30, 46, 62); }
     c.seen.slice(0, 2).forEach((q, i) => fishCardBig(X + (i ? 98 : 4), 46, 18, 24, q, true));
-    text(c.phase === "play" ? "STREAK " + c.n : c.phase === "done" && c.win ? "WON " + c.win : "", X + 60, 102, 1, GOLD, "center", null);
+    text(c.phase === "play" ? "STREAK " + c.n : c.phase === "done" && c.win ? "WON " + fmtChips(c.win, 1e6) : "", X + 60, 102, 1, GOLD, "center", null);
     text(c.msg.slice(0, 19), X + 60, 114, 1, c.phase === "done" && !c.win ? "#ff8c8c" : WHITE, "center", null);
     text("TIES LOSE. 95% BACK", X + 60, 180, 1, "#5a8a74", "center", null);
   }
@@ -445,7 +449,7 @@ function drawBig() {
     if (id === "stake" && v < 0) drawStakeCtl(x, y, 112, c.bet, CHIP, L.w ? "STAKE" : "BET");
     else if (id === "deal") btn(x, y, w, h, "DEAL", tav().chips >= c.bet ? GOLD : GREY);
     else if (id === "hi" || id === "lo") { const p = bigP(c.cur.w, v), x2 = EDGE * c.M / p; btn(x, y, w, h, (L.w ? (v > 0 ? "HEAVIER " : "LIGHTER ") : (v > 0 ? "UP " : "DOWN ")) + fmtX(x2).replace(".00", ""), v > 0 ? CHIP : CYAN); }
-    else if (id === "cash") btn(x, y, w, h, c.n ? "CASH OUT " + bigCashNow(c) : "CALL ONE FIRST", c.n ? GOLD : GREY);
+    else if (id === "cash") btn(x, y, w, h, c.n ? "CASH OUT " + fmtChips(bigCashNow(c), 1e6) : "CALL ONE FIRST", c.n ? GOLD : GREY);
   }
   text(c.phase === "play" ? "" : "TAP HERE TO LEAVE", LW / 2, 194, 1, WHITE, "center", null);
 }
@@ -486,7 +490,7 @@ function caSettle() {
   const n = c.dice.filter(d => d === c.on).length; c.win = Math.round(c.staked * CA_PAY[n]);
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (c.dice.every(d => d === 0)) tavAward("anchors");
-  c.msg = n ? (n === 3 ? "THREE " + CA_FACES[c.on][1] + "S! +" : n === 2 ? "TWO! +" : "ONE! +") + c.win : "NO " + CA_FACES[c.on][1] + ". UNLUCKY"; play(n >= 2 ? "fanfare" : n ? "chime" : "miss");
+  c.msg = n ? (n === 3 ? "THREE " + CA_FACES[c.on][1] + "S! +" : n === 2 ? "TWO! +" : "ONE! +") + fmtChips(c.win, 1e6) : "NO " + CA_FACES[c.on][1] + ". UNLUCKY"; play(n >= 2 ? "fanfare" : n ? "chime" : "miss");
 }
 function caTick(dt) { const c = CZ.ca; if (!c || c.phase !== "roll") return; c.t += dt; c.k += dt; if (c.k > 0.07) { c.k = 0; c.dice = c.dice.map(() => Math.floor(Math.random() * 6)); play("reel"); } if (c.t > 0.9) caSettle(); }
 function caHits() {
@@ -562,7 +566,7 @@ function rdSettle() {
   if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
   if (t.every(q => q === "L")) tavAward("reeldeal");
   if (Math.random() < Math.min(1, c.staked / BASE_STAKE / JP_ODDS)) { jpWin(c); return; }
-  c.msg = x >= 25 ? "BIG CATCH! +" + c.win : x > 1 ? "WIN! +" + c.win : x === 1 ? "BAIT: STAKE BACK" : "NOTHING. AGAIN?";
+  c.msg = x >= 25 ? "BIG CATCH! +" + fmtChips(c.win, 1e6) : x > 1 ? "WIN! +" + fmtChips(c.win, 1e6) : x === 1 ? "BAIT: STAKE BACK" : "NOTHING. AGAIN?";
   play(x >= 25 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
 }
 const RD_STOP = [0.8, 1.15, 1.5];
@@ -653,7 +657,7 @@ function whTick(dt) {
     const x = WH_SEG[c.seg]; c.phase = "done"; c.win = Math.round(c.staked * x);
     if (c.win) addChips(c.win, c.win > c.staked ? "win" : "");
     if (x === 10) tavAward("helmsman");
-    c.msg = x === 10 ? "X10! TOP OF THE WHEEL! +" + c.win : x > 1 ? "X" + x + "! +" + c.win : x === 1 ? "X1: STAKE BACK" : "NOTHING. SPIN AGAIN?"; play(x >= 5 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
+    c.msg = x === 10 ? "X10! TOP OF THE WHEEL! +" + fmtChips(c.win, 1e6) : x > 1 ? "X" + x + "! +" + fmtChips(c.win, 1e6) : x === 1 ? "X1: STAKE BACK" : "NOTHING. SPIN AGAIN?"; play(x >= 5 ? "fanfare" : x > 1 ? "chime" : x ? "tick" : "miss");
   }
 }
 function whHits() {
@@ -726,7 +730,7 @@ function tdPick(i) {
 function tdCash(auto) {
   const c = CZ.td; if (c.phase !== "dive" || !c.k) { play("miss"); return; }
   c.win = tdCashNow(c); c.phase = "done"; addChips(c.win, c.win > c.staked ? "win" : "");
-  c.msg = (auto ? "ALL CLEAR! +" : "SURFACED WITH +") + c.win; play("chime");
+  c.msg = (auto ? "ALL CLEAR! +" : "SURFACED WITH +") + fmtChips(c.win, 1e6); play("chime");
 }
 function tdGrid() { const L = czL(); return L.w ? { x: L.X + 8, y: 22, cw: 40, ch: 28, gap: 2 } : { x: L.X + 5, y: 27, cw: 21, ch: 17, gap: 1 }; }
 function tdHits() {
@@ -817,7 +821,7 @@ function nhTick(dt) {
     const m = c.drawn.filter(f => c.picks.includes(f)).length, x = NH_PAY[m];
     c.phase = "done"; c.win = Math.round(c.staked * x); if (c.win) addChips(c.win, "win");
     if (m === 5) tavAward("fullnet");
-    c.msg = m + " MATCHED" + (x ? "! +" + c.win : ". AGAIN?"); play(m === 5 ? "fanfare" : x ? "chime" : "miss");
+    c.msg = m + " MATCHED" + (x ? "! +" + fmtChips(c.win, 1e6) : ". AGAIN?"); play(m === 5 ? "fanfare" : x ? "chime" : "miss");
   }
 }
 function nhHits() {
