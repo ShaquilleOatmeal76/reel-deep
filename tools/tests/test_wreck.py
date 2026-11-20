@@ -42,7 +42,7 @@ BOT = """window.wkBot = (secs, opts) => { opts = opts || {}; const Q = WRECK, dt
       P.pitch = Math.max(-85, Math.min(85, dz / bd * 119 / 0.85));
       const G = Q.GUNS[P.gun]; if (G.ammo && P.ammo[G.ammo] <= 0) Q.cycle(1);
       if (best.stag > 0 && bd < 2.3) Q.scuttle(); else K.fireHeld = true;
-      if (bd < 2.2) K.keys.add('KeyS'); if (opts.strafe !== false) K.keys.add(Math.floor(i / 90) % 2 ? 'KeyA' : 'KeyD');
+      if (bd < 2.2 && !G.melee) K.keys.add('KeyS'); if (G.melee && bd > 1.1) K.keys.add('KeyW'); if (opts.strafe !== false) K.keys.add(Math.floor(i / 90) % 2 ? 'KeyA' : 'KeyD');
       if (P.dashN === 2 && bd < 1.2) Q.dash(); }
     else if (K.picks.some(p => p.k === 'blunpick' && !p.got)) { const p = K.picks.find(p => p.k === 'blunpick'); go(p.x, p.y); }
     else if (near) go(near.x, near.y);
