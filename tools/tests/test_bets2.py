@@ -44,8 +44,8 @@ async def main():
                 check("70+ bets in the pool", await ev("BETS.length") >= 71)
                 r = await ev("""(() => { let seen = new Set(), wanted = 0, n = 0; for (let d = 0; d < 400; d++) { REEL.store.dives = d; const o = betOdds(); n++;
                     o.forEach(x => seen.add(x[0])); if (o.some(x => x[0] === 'wanted')) wanted++; if (o.length !== 5) return 'size ' + o.length; }
-                  return [seen.has('newsp') || seen.has('newtr'), wanted / n, seen.size]; })()""")
-                check("NEW SPECIES / NEW+TROPHY never dealt; WANTED on every board; many bets rotate", r[0] is False and r[1] == 1 and r[2] >= 45, r)
+                  return [seen.has('newsp') || seen.has('newtr') || seen.has('online'), wanted / n, seen.size]; })()""")
+                check("NEW SPECIES / NEW+TROPHY / ON THE LINE never dealt; WANTED on every board; many bets rotate", r[0] is False and r[1] == 1 and r[2] >= 45, r)
                 r = await ev("""(() => { const o = []; for (const d of [0, 1, 2, 3, 77]) { REEL.store.dives = d; o.push(wantedFish()); } return o; })()""")
                 check("the WANTED fish changes with the dive", len(set(r)) >= 3, r)
                 # pricing: parlays
