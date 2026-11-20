@@ -75,6 +75,49 @@ async def main():
             for (const [px, py] of [[11.5, 15.5], [12, 2.5], [18.5, 5.5], [3.5, 12.5]]) { K.P.x = px; K.P.y = py; K.P.feet = Q.floorAt(px, py);
               const d = Q.buildField(false); K.map.A.spawns.forEach(([x, y], i) => { if (d[y * K.map.w + x] < 0) out.push([px, py, i]); }); } return out; })()""")
         check("every spawn can reach you (walkers)", r == [], r)
+        # enemies climb the stairs to the gallery, wherever you stand up there
+        r = await ev("""(() => { const Q = WRECK, out = []; for (const s of [[5.5, 2.5], [12, 2.5], [20.5, 1.5], [2, 3.5]]) {
+            Q.startWreck('hold', {test: true}); const K = Q.WK, P = K.P; K.phase = 'break'; K.phaseT = 999; P.x = s[0]; P.y = s[1]; P.feet = 1.15;
+            const fs = [Q.addFoe('deck', 3.5, 15.5), Q.addFoe('crab', 20.5, 15.5), Q.addFoe('deck', 12.5, 12.5), Q.addFoe('deck', 4.5, 9.5)];
+            for (let i = 0; i < 60 * 40; i++) { P.hp = 100; Q.sim(1 / 60); }
+            fs.forEach((f, i) => { if (f.z < 1.1) out.push([s, i, +f.x.toFixed(1), +f.y.toFixed(1), f.z]); }); } return out; })()""")
+        check("enemies climb the stairs to the gallery", r == [], r)
+        # a real double jump gets you onto the tall crates
+        r = await ev("""(() => { const Q = WRECK; Q.startWreck('hold', {test: true}); const K = Q.WK, P = K.P; K.phase = 'break'; K.phaseT = 999;
+            P.x = 4.5; P.y = 9.6; P.feet = 0; P.a = -Math.PI / 2; K.keys.add('KeyW'); Q.jump();
+            for (let i = 0; i < 90; i++) { if (i === 16) Q.jump(); if (i === 36) K.keys.clear(); Q.sim(1 / 60); } K.keys.clear(); for (let i = 0; i < 30; i++) Q.sim(1 / 60); return P.feet; })()""")
+        check("a double jump reaches the tall crates", r > 0.95, r)
+        # the tutorial, done for real step by step
+        r = await ev("""(() => { const Q = WRECK; Q.startWreck('hold', {test: true, tut: true}); const K = Q.WK, P = K.P, log = [];
+            const run = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); Q.sim(1 / 60); if (i % 4 === 0) Q.render(); } };
+            const aim = f => { P.a = Math.atan2(f.y - P.y, f.x - P.x); const d = Math.hypot(f.y - P.y, f.x - P.x); P.pitch = Math.max(-85, Math.min(85, (f.z + Q.FOES[f.t].h * 0.5 - P.feet - 0.55) / d * 140)); };
+            const step = () => K.tut.i, waitNext = (i) => run(120);
+            run(90); log.push(step());
+            run(60, i => { P.a += 0.06; P.pitch = 50 * Math.sin(i / 10); }); waitNext(); log.push(step());
+            P.a = -Math.PI / 2; K.keys.add('KeyW'); run(150); K.keys.clear(); waitNext(); log.push(step());
+            P.x = 4.5; P.y = 7.5; P.feet = 1; run(10); waitNext(); log.push(step());
+            Q.dash(); run(30); Q.dash(); run(30); waitNext(); log.push(step());
+            const [gx, gy] = K.map.A.gun; P.x = gx; P.y = gy; P.feet = 1.15; run(10); waitNext(); log.push(step());
+            P.x = 12; P.y = 5.5; P.feet = Q.floorAt(12, 5.5);
+            for (let n = 0; n < 40 && K.tut.i === 5; n++) { const f = K.foes.find(f => f.dummy); if (!f) break; aim(f); Q.render(); P.fireT = 0; Q.fire(); run(5); }
+            waitNext(); log.push(step());
+            for (let n = 0; n < 40 && K.tut.i === 6; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } P.adsOn = true; run(20); aim(f); Q.render(); P.fireT = 0; Q.fire(); run(5); }
+            P.adsOn = false; run(20); waitNext(); log.push(step());
+            for (let n = 0; n < 60 && K.tut.i === 7; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; }
+              if (f.stag > 0) { P.x = f.x - 1; P.y = f.y; Q.scuttle(); run(30); continue; } aim(f); Q.render(); P.fireT = 0; P.gun = 1; Q.fire(); run(10); }
+            waitNext(); log.push(step());
+            Q.swapTo(0); run(30);
+            for (let n = 0; n < 20 && K.tut.i === 8; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } P.x = f.x - 1; P.y = f.y; P.feet = Q.floorAt(P.x, P.y); aim(f); P.fireT = 0; Q.fire(); run(20); }
+            waitNext(); log.push(step());
+            Q.swapTo(2); run(30);
+            for (let n = 0; n < 40 && K.tut.i === 9; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } aim(f); Q.render(); P.fireT = 0; P.adsOn = true; run(15); aim(f); Q.render(); Q.fire(); run(10); }
+            P.adsOn = false; waitNext(); log.push(step());
+            for (const p of K.picks.filter(p => !p.got)) { P.x = p.x; P.y = p.y; P.feet = Q.floorAt(p.x, p.y); run(3); }
+            waitNext(); log.push(step());
+            run(300); return { log, done: Q.WK !== K && !Q.WK.tut && ['intro', 'fight'].includes(Q.WK.phase), hp: P.hp }; })()""")
+        check("the tutorial goes through every step", r["log"] == list(range(0, 12)) and r["done"], r)
+        await ev("WRECK.startWreck('hold', {test: true, tut: true}); WRECK.tutGo(7)"); await pg.wait_for_timeout(400)
+        await pg.screenshot(path=os.path.join(OUT, "pc_tutorial.png"))
         # pistol, blunderbuss, stagger and Scuttle
         r = await ev("""(() => { const Q = WRECK; Q.startWreck('hold', {test: true}); const K = Q.WK, P = K.P; K.phase = 'break'; K.phaseT = 99;
             P.x = 11.5; P.y = 15.5; P.a = -Math.PI / 2; P.pitch = 0; const f = Q.addFoe('deck', 11.5, 12.5); f.born = 0; Q.render();

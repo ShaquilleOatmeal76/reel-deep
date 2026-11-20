@@ -8,7 +8,7 @@
 (() => {
 "use strict";
 const W = 480, H = 270, VH = 238, CY = 119, FOV = 0.85;   // view 480x238 above a 32 px status bar
-const TEST = (() => { try { const q = new URLSearchParams(location.search); return q.has("wreck") ? (q.get("wreck") || "hold") : null; } catch (e) { return null; } })();
+const TEST = (() => { try { const q = new URLSearchParams(location.search); return q.has("wreck") ? (q.get("wreck") || "hold") : null; } catch (e) { return null; } })();   // ?wreck, ?wreck=tutorial
 let WK = null;                                               // the run in progress (null when not in WRECKONING)
 
 // ---------------------------------------------------------------------------------------------------- pixel art
@@ -34,6 +34,7 @@ const SP = {
   ball: pix([".k.", "kMk", ".k."]),
   bub: pix([".cc.", "c..c", "c..c", ".cc."]),
   bone: pix(["w..w", "wwww", "w..w"]),
+  mark: pix(["..YYY..", "..YYY..", "..YYY..", "YYYYYYY", ".YYYYY.", "..YYY..", "...Y..."]),
   boom: pix(["..y.y..", ".yYyYy.", "yYxxxYy", ".YxxxY.", "yYxxxYy", ".yYyYy.", "..y.y.."]),
 };
 
@@ -151,7 +152,9 @@ function startWreck(id, opts) {
   S.state = "wreck"; S.overlay = null;
   WK = { id, map, test: !!opts.test, t: 0, P: newPlayer(map.A), foes: [], shots: [], puffs: [], picks: [], wave: 0, phase: "intro", phaseT: 2.5, budget: 0, spawnT: 0,
     kills: 0, score: 0, combo: 1, comboT: 0, shake: 0, msg: "", msgT: 0, banner: "", bannerT: 0, field: null, fly: null, fieldT: 0, paused: false, result: null,
-    keys: new Set(), fireHeld: false, touch: {}, dots: [], gunPick: null };
+    keys: new Set(), fireHeld: false, touch: {}, dots: [], gunPick: null,
+    st: { turn: 0, look: 0, walk: 0, dashes: 0, kills: 0, scut: 0, hooks: 0, farPuff: 0 }, tut: opts.tut ? { i: -1, t: 0, s0: null, tg: [] } : null };
+  if (WK.tut) { WK.phase = "tutorial"; WK.phaseT = 0; }
   for (let i = 0; i < 140; i++) WK.dots.push([Math.random() * map.w, Math.random() * map.h, Math.random() * 2.3]);
   WK.P.feet = floorAt(WK.P.x, WK.P.y);
   refreshPicks();
@@ -171,6 +174,7 @@ function wreckResize() {                                      // always 480x270:
 function banner(s, t) { WK.banner = s; WK.bannerT = t || 2.5; }
 function say(s) { WK.msg = s; WK.msgT = 1.6; }
 function refreshPicks() {                                     // pickups come back between waves
+  if (WK.tut) return;                                           // the tutorial hands out its own
   WK.picks = WK.map.A.picks.map(([k, x, y]) => ({ k, x, y }));
   if (WK.wave >= 1 && !WK.P.guns[2]) { const [x, y] = WK.map.A.gun; WK.picks.push({ k: "blunpick", x, y }); }
 }
@@ -204,6 +208,7 @@ function addFoe(t, x, y) {
   return f;
 }
 function waveTick(dt) {
+  if (WK.phase === "tutorial") { tutTick(dt); return; }
   if (WK.phase === "intro") { WK.phaseT -= dt; if (WK.phaseT <= 0) nextWave(); return; }
   if (WK.phase === "break") { WK.phaseT -= dt; if (WK.phaseT <= 0) nextWave(); return; }
   const cap = 8 + Math.floor(WK.wave / 2);
@@ -219,6 +224,66 @@ function waveTick(dt) {
     WK.phase = "break"; WK.phaseT = 6; banner("WAVE " + WK.wave + " CLEAR  +" + bonus, 3); play("fanfare");
     refreshPicks();
   }
+}
+
+// ---------------------------------------------------------------------------------------------------- the tutorial
+// A guided first run in the Cargo Hold before any waves: one move at a time, with training targets that don't fight back.
+// Later parts add steps for what they add (the grapple, the flare, Fury...). ?wreck=tutorial on the test link; the pause
+// menu has TUTORIAL (or SKIP TUTORIAL). Enter skips it. Each step: [text, second line, phone text, setup(), done(st, st0)].
+function spotAhead(r, sameFloor) {                               // an open spot about r cells in front of you, in sight
+  const P = WK.P;
+  for (const da of [0, 0.35, -0.35, 0.7, -0.7, 1.1, -1.1, 1.6, -1.6, 2.2, -2.2, 3.14]) for (const rr of [r, r * 0.75, r * 1.25, r * 0.5]) {
+    const x = P.x + Math.cos(P.a + da) * rr, y = P.y + Math.sin(P.a + da) * rr, c = cellAt(x, y);
+    if (c.solid || (sameFloor && Math.abs(c.f - P.feet) > 0.1) || !sightLine(P.x, P.y, P.feet + 0.55, x, y, c.f + 0.5)) continue;
+    return [(x | 0) + 0.5, (y | 0) + 0.5];
+  }
+  return [P.x + Math.cos(P.a), P.y + Math.sin(P.a)];
+}
+function dummy(t, x, y, hp) { const f = addFoe(t, x, y); f.dummy = true; if (hp) f.hp = f.max = hp; WK.tut.tg.push(f); return f; }
+const TUT = [
+  ["LOOK AROUND WITH THE MOUSE", "UP AND DOWN TOO", "DRAG ON THE RIGHT SIDE TO LOOK", null, (s, s0) => s.turn - s0.turn > 2.5 && s.look - s0.look > 40],
+  ["MOVE WITH W A S D", "", "DRAG ON THE LEFT SIDE TO MOVE", null, (s, s0) => s.walk - s0.walk > 5],
+  ["SPACE JUMPS. PRESS IT AGAIN IN THE AIR TO DOUBLE JUMP", "GET UP ON THE TALL CRATES", "JUMP, THEN JUMP AGAIN IN THE AIR", () => { WK.tut.mark = [4.5, 7.5, 1.3]; },
+    () => floorAt(WK.P.x, WK.P.y) === 1 && WK.P.feet > 0.95],
+  ["SHIFT DASHES. YOU HAVE TWO. DASH TWICE", "THEY COME BACK IN A SECOND", "TAP DASH TWICE", null, (s, s0) => s.dashes - s0.dashes >= 2],
+  ["CLIMB THE STAIRS AND GRAB THE BLUNDERBUSS", "", "", () => { const [x, y] = WK.map.A.gun; WK.picks.push({ k: "blunpick", x, y }); WK.tut.mark = [x, y, 1.6]; }, () => WK.P.guns[2]],
+  ["LEFT CLICK FIRES. SINK THE THREE TARGETS", "", "HOLD ON THE RIGHT SIDE TO FIRE", () => { for (const [x, y] of [[8.5, 9.5], [12.5, 13.5], [15.5, 9.5]]) dummy("deck", x, y); WK.P.ammo.shot = Math.max(WK.P.ammo.shot, 20); },
+    () => WK.tut.tg.every(f => !WK.foes.includes(f))],
+  ["HOLD RIGHT CLICK TO AIM DOWN THE SIGHTS", "HIT THE FAR TARGET WHILE AIMING: TIGHTER SHOTS, SLOWER FEET", "TAP AIM, THEN SHOOT THE FAR TARGET", () => { const [x, y] = spotAhead(8, false); dummy("deck", x, y); },
+    () => { const f = WK.tut.tg[0]; if (!WK.foes.includes(f)) { if (f.adsHit) return true; WK.tut.redo = true; say("AIM FIRST! RIGHT CLICK, THEN FIRE"); } return false; }],
+  ["HURT ONE UNTIL IT FLASHES ORANGE", "THEN PRESS E UP CLOSE TO SCUTTLE IT: HEALTH, AMMO, DOUBLE POINTS", "THEN TAP E UP CLOSE", () => { const [x, y] = spotAhead(3.5, true); dummy("deck", x, y, 22); },
+    (s, s0) => { if (s.scut > s0.scut) return true; if (!WK.foes.includes(WK.tut.tg[0])) { WK.tut.redo = true; say("TOO MUCH! STOP WHEN IT FLASHES, THEN E"); } return false; }],
+  ["PRESS 1 FOR THE BOAT HOOK. HOOK ONE", "A HOOK KILL SPILLS AMMO. SWITCH GUNS WITH 1-3 OR THE WHEEL", "TAP GUN FOR THE HOOK, THEN HOOK IT", () => { const [x, y] = spotAhead(2.5, true); dummy("crab", x, y); },
+    (s, s0) => { if (s.hooks > s0.hooks) return true; if (!WK.foes.includes(WK.tut.tg[0])) { WK.tut.redo = true; say("WITH THE HOOK! PRESS 1"); } return false; }],
+  ["PUFFER MINES BURST. SHOOT IT BEFORE IT GETS CLOSE", "", "", () => { const [x, y] = spotAhead(7, false); dummy("puffer", x, y); },
+    (s, s0) => { if (s.farPuff > s0.farPuff) return true; if (!WK.foes.includes(WK.tut.tg[0])) { WK.tut.redo = true; say("TOO CLOSE! SHOOT IT FROM AFAR"); } return false; }],
+  ["TINS OF FISH HEAL. DIVING HELMETS ARE ARMOR", "GRAB BOTH", "", () => { const P = WK.P; P.hp = 60; const a = spotAhead(2, true), b = spotAhead(3, true);
+      WK.picks.push({ k: "tin", x: a[0] - 0.25, y: a[1] }, { k: "helmet", x: b[0] + 0.25, y: b[1] }); },
+    () => WK.picks.filter(p => p.k === "tin" || p.k === "helmet").every(p => p.got)],
+  ["THAT'S EVERYTHING. NOW SURVIVE THE WAVES!", "", "", null, () => WK.tut.t > 3],
+];
+function tutGo(i) {
+  const T = WK.tut; T.i = i; T.t = 0; T.s0 = Object.assign({}, WK.st); T.mark = null; T.redo = false;
+  for (const f of T.tg) { const k = WK.foes.indexOf(f); if (k >= 0) WK.foes.splice(k, 1); }
+  T.tg = [];
+  if (TUT[i][3]) TUT[i][3]();
+}
+function tutTick(dt) {
+  const T = WK.tut; T.t += dt;
+  if (T.i < 0) { if (T.t > 1.2) tutGo(0); return; }
+  if (T.redo) { T.redo = false; tutGo(T.i); return; }               // a target went down the wrong way: set it up again
+  if (T.wait) { T.wait -= dt; if (T.wait <= 0) { T.wait = 0; if (T.i + 1 < TUT.length) tutGo(T.i + 1); else tutEnd(); } return; }
+  if (TUT[T.i][4](WK.st, T.s0)) { T.wait = T.i + 1 < TUT.length ? 0.9 : 0.01; T.mark = null; if (T.i + 1 < TUT.length) { say("NICE!"); play("wk_pick"); } }
+}
+function tutEnd() {                                              // straight into a real run, mouse still locked
+  const test = WK.test; startWreck(WK.id, { test });
+}
+function drawTut() {
+  const T = WK.tut, st = TUT[T.i], tch = WK.touch.on, s1 = tch && st[2] ? st[2] : st[0], s2 = tch && st[2] ? "" : st[1];
+  const w = Math.max(s1.length, s2.length) * 6 + 16, x = (W - w) / 2, y = 60, h = s2 ? 30 : 20;
+  g.globalAlpha = 0.75; rect("#0a0e1e", x, y, w, h); g.globalAlpha = 1; rect(GOLD, x, y, w, 1);
+  text(s1, W / 2, y + 9, 1, T.wait ? LIME : WHITE); if (s2) text(s2, W / 2, y + 21, 1, "#aadcff");
+  text("TUTORIAL " + (T.i + 1) + "/" + TUT.length, 6, 8, 1, GOLD, "left"); text(tch ? "PAUSE MENU: SKIP" : "ENTER: SKIP", W - 6, 8, 1, "#96a0c8", "right");
 }
 
 // ---------------------------------------------------------------------------------------------------- the flow field
@@ -246,7 +311,8 @@ function fieldDir(f, fly) {                                    // which way to g
   for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
     const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= m.w || ny >= m.h) continue;
     const v = d[ny * m.w + nx]; if (v >= bd || !can(nx, ny)) continue;
-    if (dx && dy && (!can(nx, y) || !can(x, ny))) continue;   // no corner cutting
+    if (dx && dy && (!can(nx, y) || !can(x, ny))) continue;   // no corner cutting...
+    if (dx && dy && !fly && (Math.abs(m.cells[y * m.w + nx].f - here.f) > 0.3 || Math.abs(m.cells[ny * m.w + x].f - here.f) > 0.3)) continue;   // ...or diagonals past a drop (off the stairs)
     bd = v; best = [nx + 0.5, ny + 0.5];
   }
   return best;
@@ -260,15 +326,16 @@ function sightLine(ax, ay, az, bx, by, bz) {                  // a clear line be
 // ---------------------------------------------------------------------------------------------------- the player
 function canGo(x, y) { const c = cellAt(x, y); return !c.solid && c.c - c.f > 0.8 && c.f - WK.P.feet < 0.36; }
 function move(dx, dy) {
-  const P = WK.P, r = 0.22, nx = P.x + dx, ny = P.y + dy;
+  const P = WK.P, r = 0.22, nx = P.x + dx, ny = P.y + dy, ox = P.x, oy = P.y;
   if (canGo(nx + Math.sign(dx) * r, P.y + r * 0.7) && canGo(nx + Math.sign(dx) * r, P.y - r * 0.7)) P.x = nx;
   if (canGo(P.x + r * 0.7, ny + Math.sign(dy) * r) && canGo(P.x - r * 0.7, ny + Math.sign(dy) * r)) P.y = ny;
+  WK.st.walk += Math.hypot(P.x - ox, P.y - oy);
 }
 function jump() { const P = WK.P; if (P.dead || P.jumps >= 2) return; P.vz = P.jumps ? 3.3 : 3.7; P.jumps++; play("wk_jump"); }
 function dash() {
   const P = WK.P; if (P.dead || P.dashN < 1 || P.dashT > 0) return;
   P.dashN--; P.dashT = 0.16; let mx = P.mvx, my = P.mvy; if (!mx && !my) { mx = Math.cos(P.a); my = Math.sin(P.a); }
-  const l = Math.hypot(mx, my); P.dvx = mx / l; P.dvy = my / l; play("wk_dash");
+  const l = Math.hypot(mx, my); P.dvx = mx / l; P.dvy = my / l; play("wk_dash"); WK.st.dashes++;
 }
 function hurtMe(dmg) {
   const P = WK.P; if (P.dead || (P.lunge)) return;
@@ -321,7 +388,7 @@ function fire() {
     const f = hitAt(sx, sy); if (f) hits.set(f, (hits.get(f) || 0) + G.dmg);
   }
   if (!hits.size) { const [x, y] = wallPoint(); WK.puffs.push({ k: "bub", x, y, z: P.feet + 0.5 + P.pitch / 300, vz: 0.4, t: 0.6 }); }
-  for (const [f, d] of hits) hurtFoe(f, d, 0.06);
+  for (const [f, d] of hits) { if (P.ads > 0.5) f.adsHit = true; hurtFoe(f, d, 0.06); }
 }
 function hurtFoe(f, dmg, flash) {
   if (!WK.foes.includes(f)) return;
@@ -336,6 +403,7 @@ function killFoe(f, fin) {
     vz: b ? 1 + Math.random() * 1.5 : 0.4 + Math.random() * 0.5, vx: b ? (Math.random() - 0.5) * 2 : 0, vy: b ? (Math.random() - 0.5) * 2 : 0, t: 1.2 }); }
   WK.combo = WK.comboT > 0 ? Math.min(8, WK.combo + 1) : 1; WK.comboT = 3;
   WK.score += E.pts * WK.combo * (fin ? 2 : 1); WK.kills++;
+  WK.st.kills++; if (fin) WK.st.scut++; if (f.hooked) WK.st.hooks++; if (f.t === "puffer" && Math.hypot(f.x - WK.P.x, f.y - WK.P.y) > 2.2) WK.st.farPuff++;
   if (f.t === "puffer") pop(f);
   const P = WK.P, drop = (k, n) => WK.picks.push({ k, x: f.x + (Math.random() - 0.5) * 0.4, y: f.y + (Math.random() - 0.5) * 0.4, n, life: 20 });
   if (f.hooked && !fin) { drop("harp", 6); if (P.guns[2]) drop("shot", 4); say("HOOKED! AMMO"); }   // the boat hook spills ammo
@@ -349,7 +417,7 @@ function pop(f) {                                               // a puffer burs
   WK.puffs.push({ k: "boom", x: f.x, y: f.y, z: f.z, vz: 0, t: 0.35 });
   play("wk_boom"); WK.shake = Math.max(WK.shake, 0.35);
   const P = WK.P, d = Math.hypot(P.x - f.x, P.y - f.y);
-  if (d < 1.7) hurtMe(Math.round(20 * (1 - d / 2)));
+  if (d < 1.7 && !WK.tut) hurtMe(Math.round(20 * (1 - d / 2)));
   for (const o of WK.foes.slice()) if (o !== f && Math.hypot(o.x - f.x, o.y - f.y) < 1.7) hurtFoe(o, 6, 0.1);
 }
 function scuttleTarget() {
@@ -375,6 +443,7 @@ function pickTick(dt) {
 // ---------------------------------------------------------------------------------------------------- the simulation
 function sim(dt) {
   const P = WK.P; WK.t += dt;
+  if (P.la !== undefined) { WK.st.turn += Math.abs(P.a - P.la); WK.st.look += Math.abs(P.pitch - P.lp); } P.la = P.a; P.lp = P.pitch;
   P.ads += ((P.adsOn && !P.dead && !GUNS[P.gun].melee ? 1 : 0) - P.ads) * Math.min(1, dt * 14);
   let mvx = 0, mvy = 0; const fx = Math.cos(P.a), fy = Math.sin(P.a), k = WK.keys;
   if (!P.dead) {
@@ -420,20 +489,27 @@ function foeTick(f, dt) {
   f.ph += dt * (f.t === "crab" ? 3 : 1.3); f.hit = Math.max(0, f.hit - dt); f.born = Math.max(0, f.born - dt);
   if (f.stag > 0) { f.stag -= dt; return; }
   const vx = P.x - f.x, vy = P.y - f.y, d = Math.hypot(vx, vy) || 0.001;
+  if (f.dummy) {                                                  // tutorial targets stand still; the training puffer drifts at you
+    if (E.fly) f.z = Math.max(floorAt(f.x, f.y) + 0.1, P.feet + E.fly + Math.sin(f.ph) * 0.12);
+    if (f.t === "puffer" && f.born <= 0) { const nx = f.x + vx / d * 0.5 * dt, ny = f.y + vy / d * 0.5 * dt; if (!cellAt(nx, ny).solid) { f.x = nx; f.y = ny; }
+      if (d < 0.9) { pop(f); WK.foes.splice(WK.foes.indexOf(f), 1); } }
+    return;
+  }
   const base = floorAt(f.x, f.y);
   f.z = E.fly ? Math.max(base + 0.1, Math.min(cellAt(f.x, f.y).c - E.h - 0.1, P.feet + E.fly + Math.sin(f.ph) * 0.12)) : base;
   if (f.born > 0 || P.dead) return;
   const sees = d < 11 && sightLine(f.x, f.y, f.z + E.h * 0.8, P.x, P.y, P.feet + 0.5);
   let goal = null;                                               // walk the field, or straight at you once close and in sight
   if (E.keep && sees && d < E.keep + 1.5) goal = d < E.keep - 1 ? [f.x - vx / d, f.y - vy / d] : null;   // shooters keep their distance
-  else if (sees && d < 2.5) goal = [P.x, P.y];
+  else if (sees && d < 2.5 && (E.fly || Math.abs(P.feet - f.z) < 0.4)) goal = [P.x, P.y];   // same level: straight in
   else goal = fieldDir(f, !!E.fly) || (sees ? [P.x, P.y] : null);
   if (goal) {
     let gx = goal[0] - f.x, gy = goal[1] - f.y; const gl = Math.hypot(gx, gy) || 1; gx /= gl; gy /= gl;
     if (f.t === "crab") { const w = Math.sin(f.ph * 3) * 0.7; const ox = -gy * w, oy = gx * w; gx += ox; gy += oy; }
     for (const o of WK.foes) { if (o === f) continue; const ox = f.x - o.x, oy = f.y - o.y, od = Math.hypot(ox, oy); if (od < 0.5 && od > 0) { gx += ox / od * 0.6; gy += oy / od * 0.6; } }
     const s = E.sp * dt, nx = f.x + gx * s, ny = f.y + gy * s, here = cellAt(f.x, f.y);
-    const ok = (x, y) => { const c = cellAt(x, y); return !c.solid && (E.fly ? c.c - c.f > 0.6 : walkable(here, c)); };
+    const goalCell = cellAt(goal[0], goal[1]);                  // walkers don't step off a ledge unless that's where they're going
+    const ok = (x, y) => { const c = cellAt(x, y); return !c.solid && (E.fly ? c.c - c.f > 0.6 : walkable(here, c) && (c === here || c === goalCell || here.f - c.f < 0.4)); };
     if (d > 0.75) { if (ok(nx, f.y)) f.x = nx; if (ok(f.x, ny)) f.y = ny; }
   }
   f.atk -= dt; f.cd -= dt;
@@ -506,6 +582,7 @@ function render() {
   const list = [];
   for (const [k, x, y] of WK.map.A.props) list.push({ s: SP[k], x, y, z: floorAt(x, y), h: 0.55 });
   for (const [x, y, z] of WK.map.A.lamps) list.push({ s: SP.lantern, x, y, z: z - 0.35, h: 0.35, lamp: 1 });
+  if (WK.tut && WK.tut.mark) { const [x, y, z] = WK.tut.mark; list.push({ s: SP.mark, x, y, z: z + Math.sin(T * 4) * 0.08, h: 0.22, lamp: 1 }); }
   for (const p of WK.picks) if (!p.got) list.push({ s: SP[p.k], x: p.x, y: p.y, z: floorAt(p.x, p.y) + 0.03 + Math.sin(T * 3 + p.x) * 0.03, h: p.k === "blunpick" ? 0.18 : 0.22, lamp: p.k === "blunpick" });
   for (const f of WK.foes) { const E = FOES[f.t]; list.push({ s: SP[f.t], x: f.x, y: f.y, z: f.z, h: E.h * (f.born > 0 ? 1 - f.born : 1), hit: f.hit > 0, stag: f.stag > 0 && Math.sin(T * 14) > -0.4, flip: !E.fly && !f.stag && Math.sin(f.ph * 2) > 0, foe: f }); }
   for (const o of WK.shots) list.push({ s: SP[o.k], x: o.x, y: o.y, z: o.z - 0.08, h: o.k === "orb" ? 0.16 : 0.1, lamp: o.k === "orb" });
@@ -601,6 +678,7 @@ function drawWreck() {
   if (WK.bannerT > 0 && !WK.paused && !WK.result) { g.globalAlpha = Math.min(1, WK.bannerT * 1.5); text(WK.banner, W / 2, 24, 2, GOLD); g.globalAlpha = 1; }
   for (let i = 0; i < 2; i++) rect(i < P.dashN ? "#9fd8e2" : "#2c3358", W / 2 - 9 + i * 10, VH - 6, 8, 2);
   if (WK.phase === "break" && !P.dead) text("NEXT WAVE IN " + Math.ceil(WK.phaseT), W / 2, 40, 1, "#aadcff");
+  if (WK.tut && WK.tut.i >= 0 && !WK.paused) drawTut();
   hud();
   if (WK.touch.on) drawTouch();
   if (WK.result) drawResult();
@@ -618,7 +696,7 @@ function hud() {
   lab("ARMS", 183);
   face(240, Y + 16);
   text(P.ar + "%", 307, Y + 13, 2, "#9fd8e2", "center", false); lab("ARMOR", 307);
-  text("WAVE " + Math.max(1, WK.wave), 356, Y + 9, 1, "#d8dcea", "left", false); text("KILLS " + WK.kills, 356, Y + 20, 1, "#8a93b4", "left", false);
+  text(WK.tut ? "TRAINING" : "WAVE " + Math.max(1, WK.wave), 356, Y + 9, 1, "#d8dcea", "left", false); text("KILLS " + WK.kills, 356, Y + 20, 1, "#8a93b4", "left", false);
   text(String(WK.score), 474, Y + 9, 1, "#fad660", "right", false);
   if (WK.combo > 1) text("X" + WK.combo, 474, Y + 20, 1, "#ff9a50", "right", false); else text("SCORE", 474, Y + 20, 1, "#8a93b4", "right", false);
 }
@@ -636,13 +714,13 @@ function face(cx, cy) {                                          // you, behind 
   rect(P.hurt > 0 ? "#7a2a2a" : "#8a5a4a", cx - 2, cy + 4, 5, 1);
   rect("#e6fbff", cx - 5, cy - 4, 1, 1); rect("#e6fbff", cx - 4, cy - 5, 1, 1);
 }
-const BTN = { resume: [170, 120, 140, 18], quit: [170, 146, 140, 18], again: [150, 168, 180, 18], leave: [150, 192, 180, 18] };
+const BTN = { resume: [170, 112, 140, 18], tut: [170, 134, 140, 18], quit: [170, 156, 140, 18], again: [150, 168, 180, 18], leave: [150, 192, 180, 18] };
 function button(r, lab, col) { const [x, y, w, h] = r; rect(INK, x, y, w, h); rect("#0e1a30", x + 1, y + 1, w - 2, h - 2); rect(col, x + 1, y + 1, w - 2, 1); rect(col, x + 1, y + h - 2, w - 2, 1); text(lab, x + w / 2, y + h / 2 + 1, 1, WHITE); }
 function drawPause() {
   g.globalAlpha = 0.6; rect("#060a1e", 0, 0, W, H); g.globalAlpha = 1;
   text("WRECKONING", W / 2, 60, 3, GOLD);
   text("PAUSED", W / 2, 90, 1, "#aadcff");
-  button(BTN.resume, "RESUME (CLICK)", "#78bee6"); button(BTN.quit, WK.test ? "LEAVE (ENTER)" : "LEAVE THE WRECK (ENTER)", RED);
+  button(BTN.resume, "RESUME (CLICK)", "#78bee6"); button(BTN.tut, WK.tut ? "SKIP TUTORIAL" : "TUTORIAL", GOLD); button(BTN.quit, WK.test ? "LEAVE (ENTER)" : "LEAVE THE WRECK (ENTER)", RED);
   text("WASD MOVE  MOUSE LOOK  CLICK FIRE  RIGHT CLICK AIM", W / 2, 190, 1, "#96a0c8");
   text("SPACE JUMP (TWICE)  SHIFT DASH  E SCUTTLE  1-3 OR WHEEL: GUNS", W / 2, 202, 1, "#96a0c8");
 }
@@ -659,7 +737,7 @@ function drawResult() {
 
 // ---------------------------------------------------------------------------------------------------- touch (phones)
 // Left half: a stick that moves you. Right half: drag to look; hold to fire. Buttons up the right side.
-const TBTN = { jump: [420, 150, 52, 22, "JUMP"], dash: [420, 176, 52, 22, "DASH"], aim: [364, 176, 52, 22, "AIM"], e: [364, 150, 52, 22, "E"], gun: [420, 124, 52, 22, "GUN"] };
+const TBTN = { pause: [452, 4, 24, 14, "II"], jump: [420, 150, 52, 22, "JUMP"], dash: [420, 176, 52, 22, "DASH"], aim: [364, 176, 52, 22, "AIM"], e: [364, 150, 52, 22, "E"], gun: [420, 124, 52, 22, "GUN"] };
 function drawTouch() {
   const T = WK.touch;
   g.globalAlpha = 0.35;
@@ -674,13 +752,14 @@ function wreckTouch(e) {
   const [x, y] = pos(e), P = WK.P;
   if (WK.result) { if (WK.result.t > 0.8) { if (inR(x, y, BTN.again)) again(); else if (inR(x, y, BTN.leave)) leaveWreck(); } return; }
   if (e.pointerType === "touch") {
-    WK.touch.on = true; WK.paused = false;
-    for (const k in TBTN) if (inR(x, y, TBTN[k])) { if (k === "jump") jump(); else if (k === "dash") dash(); else if (k === "aim") P.adsOn = !P.adsOn; else if (k === "e") scuttle(); else cycle(1); return; }
+    WK.touch.on = true;
+    if (WK.paused) { if (inR(x, y, BTN.quit)) leaveWreck(); else { if (inR(x, y, BTN.tut)) { if (WK.tut) tutEnd(); else startWreck(WK.id, { test: WK.test, tut: true }); WK.touch.on = true; } WK.paused = false; } return; }
+    for (const k in TBTN) if (inR(x, y, TBTN[k])) { if (k === "pause") { WK.paused = true; return; } if (k === "jump") jump(); else if (k === "dash") dash(); else if (k === "aim") P.adsOn = !P.adsOn; else if (k === "e") scuttle(); else cycle(1); return; }
     if (x < W / 2) WK.touch.move = { id: e.pointerId, o: [x, y], v: [0, 0] };
     else WK.touch.look = { id: e.pointerId, at: [x, y], t: performance.now(), fire: false, moved: 0 };
     return;
   }
-  if (WK.paused) { if (inR(x, y, BTN.quit)) { leaveWreck(); return; } lockMouse(); WK.paused = false; return; }
+  if (WK.paused) { if (inR(x, y, BTN.quit)) { leaveWreck(); return; } if (inR(x, y, BTN.tut)) { if (WK.tut) tutEnd(); else startWreck(WK.id, { test: WK.test, tut: true }); } lockMouse(); WK.paused = false; return; }
   if (!locked()) { lockMouse(); return; }
   if (e.button === 0) WK.fireHeld = true;
   if (e.button === 2) P.adsOn = true;
@@ -726,6 +805,7 @@ function wreckKey(e, down) {
   else if (c === "KeyE") scuttle();
   else if (c === "KeyQ") { WK.P.adsToggle = !WK.P.adsToggle; WK.P.adsOn = WK.P.adsToggle; }
   else if (/^Digit[1-7]$/.test(c)) swapTo(+c.slice(5) - 1);
+  else if (c === "Enter" && WK.tut) tutEnd();                    // skip the tutorial
   else if (c === "KeyJ" || c === "Enter") { WK.fireHeld = true; fire(); WK.fireHeld = false; }   // keyboard-only fire
 }
 function wreckUpdate(dt) {
@@ -736,7 +816,7 @@ function wreckUpdate(dt) {
 
 // ---------------------------------------------------------------------------------------------------- hand-over for game.js
 Object.assign(window, { wreckOn: () => !!WK, wreckResize, wreckUpdate, drawWreck, wreckTouch, wreckMove, wreckUp, wreckKey, startWreck });
-window.WRECK = { get WK() { return WK; }, startWreck, leaveWreck, sim, render, fire, scuttle, dash, jump, swapTo, cycle, hurtFoe, killFoe, addFoe, nextWave, buildArena, buildField, sightLine, scuttleTarget, hitAt,
+window.WRECK = { get WK() { return WK; }, TUT, tutTick, tutEnd, tutGo, startWreck, leaveWreck, sim, render, fire, scuttle, dash, jump, swapTo, cycle, hurtFoe, killFoe, addFoe, nextWave, buildArena, buildField, sightLine, scuttleTarget, hitAt,
   ARENAS, FOES, GUNS, SP, TEX, LEGEND, STAGGER, cellAt, floorAt };
-if (TEST) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); startWreck(TEST, { test: true }); } }, 50); }
+if (TEST) { const w = setInterval(() => { if (S && atlas && atlas.complete) { clearInterval(w); if (TEST === "tutorial") startWreck("hold", { test: true, tut: true }); else startWreck(TEST, { test: true }); } }, 50); }
 })();
