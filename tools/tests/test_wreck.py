@@ -87,6 +87,7 @@ async def main():
             P.x = 4.5; P.y = 9.6; P.feet = 0; P.a = -Math.PI / 2; K.keys.add('KeyW'); Q.jump();
             for (let i = 0; i < 90; i++) { if (i === 16) Q.jump(); if (i === 36) K.keys.clear(); Q.sim(1 / 60); } K.keys.clear(); for (let i = 0; i < 30; i++) Q.sim(1 / 60); return P.feet; })()""")
         check("a double jump reaches the tall crates", r > 0.95, r)
+        len_tut = await ev("WRECK.TUT.length")
         # the tutorial, done for real step by step
         r = await ev("""(() => { const Q = WRECK; Q.startWreck('hold', {test: true, tut: true}); const K = Q.WK, P = K.P, log = [];
             const run = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); Q.sim(1 / 60); if (i % 4 === 0) Q.render(); } };
@@ -109,15 +110,74 @@ async def main():
             Q.swapTo(0); run(30);
             for (let n = 0; n < 20 && K.tut.i === 8; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } P.x = f.x - 1; P.y = f.y; P.feet = Q.floorAt(P.x, P.y); aim(f); P.fireT = 0; Q.fire(); run(20); }
             waitNext(); log.push(step());
+            const ring = K.map.A.rings[0]; P.x = 11.5; P.y = 14.5; P.feet = 0; P.a = Math.atan2(ring[1] - P.y, ring[0] - P.x); P.pitch = 60; run(5); Q.grapple(); run(90);
+            waitNext(); log.push(step());
+            for (let n = 0; n < 30 && K.tut.i === 10; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } P.x = f.x - 2; P.y = f.y; P.feet = Q.floorAt(P.x, P.y); aim(f); Q.render();
+              if (!f.burn) { P.flareT = 0; Q.flare(); } else { P.gun = 1; P.fireT = 0; Q.fire(); } run(20); }
+            run(60); waitNext(); log.push(step());
+            for (const p of K.picks.filter(p => p.k === 'modbox' && !p.got)) { P.x = p.x; P.y = p.y; P.feet = Q.floorAt(p.x, p.y); run(40); }
+            Q.swapTo(2); run(30); P.altT = 0; Q.altFire(true); run(90); waitNext(); log.push(step());
+            Q.fury(); run(10);
+            for (let n = 0; n < 40 && K.tut.i === 12; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } P.x = f.x - 1.2; P.y = f.y; P.feet = Q.floorAt(P.x, P.y); aim(f); P.fireT = 0; Q.fire(); run(15); }
+            waitNext(); log.push(step());
             Q.swapTo(2); run(30);
-            for (let n = 0; n < 40 && K.tut.i === 9; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } aim(f); Q.render(); P.fireT = 0; P.adsOn = true; run(15); aim(f); Q.render(); Q.fire(); run(10); }
+            for (let n = 0; n < 40 && K.tut.i === 13; n++) { const f = K.foes.find(f => f.dummy); if (!f) { run(5); continue; } aim(f); Q.render(); P.fireT = 0; P.adsOn = true; run(15); aim(f); Q.render(); Q.fire(); run(10); }
             P.adsOn = false; waitNext(); log.push(step());
             for (const p of K.picks.filter(p => !p.got)) { P.x = p.x; P.y = p.y; P.feet = Q.floorAt(p.x, p.y); run(3); }
             waitNext(); log.push(step());
             run(300); return { log, done: Q.WK !== K && !Q.WK.tut && ['intro', 'fight'].includes(Q.WK.phase), hp: P.hp }; })()""")
-        check("the tutorial goes through every step", r["log"] == list(range(0, 12)) and r["done"], r)
+        check("the tutorial goes through every step", r["log"] == list(range(0, len_tut)) and r["done"], r)
         await ev("WRECK.startWreck('hold', {test: true, tut: true}); WRECK.tutGo(7)"); await pg.wait_for_timeout(400)
         await pg.screenshot(path=os.path.join(OUT, "pc_tutorial.png"))
+        # ---- part 2: the arsenal, mods, grapple, flare, Fury, the big enemies and the Captain
+        r = await ev("""(() => { const Q = WRECK, out = {}; const fresh = () => { Q.startWreck('hold', {test: true}); const K = Q.WK; K.phase = 'break'; K.phaseT = 999; return K; };
+            let K = fresh(), P = K.P; P.x = 11.5; P.y = 15.5; P.a = -Math.PI / 2; P.pitch = 0;
+            const tgt = () => { const f = Q.addFoe('deck', 11.5, 12.5); f.born = 0; f.hp = f.max = 100; Q.render(); return f; };
+            P.guns = [true, true, true, true, true, true, true]; Object.assign(P.ammo, { shot: 40, rivet: 200, torp: 16, charge: 3 });
+            let f = tgt(); P.gun = 3; P.fireT = 0; Q.fire(); out.twin = 100 - f.hp >= 8 && P.ammo.shot === 38;
+            f.hp = 100; P.gun = 4; P.fireT = 0; for (let i = 0; i < 60; i++) { K.fireHeld = true; Q.sim(1 / 60); if (i % 3 === 0) Q.render(); } K.fireHeld = false; out.rivet = 100 - f.hp >= 6 && P.ammo.rivet < 200;
+            f.hp = 100; P.gun = 5; P.fireT = 0; Q.fire(); for (let i = 0; i < 60; i++) Q.sim(1 / 60); out.torp = 100 - f.hp >= 8 && P.ammo.torp === 15;
+            f.hp = 100; P.gun = 6; P.fireT = 0; P.warm = 0; Q.fire(); out.sonarNeedsWarm = P.ammo.charge === 3;
+            for (let i = 0; i < 40; i++) { K.fireHeld = true; Q.sim(1 / 60); Q.render(); } K.fireHeld = false; for (let i = 0; i < 120; i++) Q.sim(1 / 60); out.sonar = P.ammo.charge === 2 && 100 - f.hp >= 20;
+            // rocket jump: a torpedo at your own feet throws you up
+            K = fresh(); P = K.P; P.hp = 100; P.feet = 0; Q.boom(P.x, P.y, 0.1, 1.8, 14, 0.5); out.rocketJump = P.vz > 3 && P.hp > 90;
+            // gun pickups turn up by wave; a mod crate after wave 3
+            K = fresh(); P = K.P; K.wave = 4; Q.refreshPicks(); out.twinPick = K.picks.some(p => p.gun === 3) && !K.picks.some(p => p.gun === 4);
+            K.wave = 12; Q.refreshPicks(); out.allGuns = [2, 3, 4, 5, 6].every(i => K.picks.some(p => p.gun === i));
+            P.guns[2] = true; K.modDue = true; Q.refreshPicks(); const mb = K.picks.find(p => p.k === 'modbox'); P.x = mb.x; P.y = mb.y; P.feet = Q.floorAt(P.x, P.y); Q.sim(1 / 60);
+            out.mod = Object.keys(P.mods).length === 1;
+            // grapple to a ring
+            K = fresh(); P = K.P; const ring = K.map.A.rings[0]; P.x = 11.5; P.y = 14.5; P.feet = 0; P.a = Math.atan2(ring[1] - P.y, ring[0] - P.x); P.pitch = 60;
+            Q.grapple(); for (let i = 0; i < 90; i++) Q.sim(1 / 60); out.grapRing = Math.hypot(P.x - ring[0], P.y - ring[1]) < 1 && !Q.cellAt(P.x, P.y).solid;
+            // grapple to an enemy
+            K = fresh(); P = K.P; P.x = 11.5; P.y = 15.5; P.a = -Math.PI / 2; P.pitch = 0; f = Q.addFoe('deck', 11.5, 9.5); f.born = 0; f.hp = f.max = 50; Q.render();
+            Q.grapple(); for (let i = 0; i < 60; i++) Q.sim(1 / 60); out.grapFoe = Math.hypot(P.x - f.x, P.y - f.y) < 1.3 && f.hp < 50;
+            // flare: burning enemies shed armour when hit
+            K = fresh(); P = K.P; P.x = 11.5; P.y = 15.5; P.a = -Math.PI / 2; P.ar = 0; f = Q.addFoe('deck', 11.5, 13.5); f.born = 0; f.hp = f.max = 80; Q.render(); Q.flare();
+            out.burn = f.burn > 0; for (let n = 0; n < 12; n++) { Q.render(); P.fireT = 0; Q.fire(); for (let i = 0; i < 20; i++) Q.sim(1 / 60); } out.armor = P.ar > 0;
+            // Fury: invulnerable, the trident sinks things
+            K = fresh(); P = K.P; P.fury = 100; Q.fury(); const hp0 = P.hp; f = Q.addFoe('deck', P.x, P.y - 1.5); f.born = 0;
+            for (let i = 0; i < 120; i++) { P.a = Math.atan2(f.y - P.y, f.x - P.x); Q.sim(1 / 60); } out.furySafe = P.hp === hp0;
+            const k0 = K.kills; P.fireT = 0; Q.fire(); out.trident = K.kills > k0;
+            for (let i = 0; i < 60 * 11; i++) Q.sim(1 / 60); out.furyEnds = P.furyT === 0;
+            // the Hammerhead charges and stuns itself on a wall
+            K = fresh(); P = K.P; P.x = 11.5; P.y = 15.5; f = Q.addFoe('hammer', 11.5, 8.5); f.born = 0; f.cd = 0;
+            let charged = false, stunned = false; for (let i = 0; i < 400; i++) { P.hp = 100; if (f.charge > 0) { charged = true; P.x = 3.5; P.y = 15.5; } Q.sim(1 / 60); if (f.stag > 0 && charged) { stunned = true; break; } }
+            out.hammerCharge = charged; out.hammerStun = stunned;
+            // the Brute's slam: hits you on the floor, misses if you jump it
+            const slam = (jumping) => { const K = fresh(), P = K.P; P.x = 11.5; P.y = 15.5; P.feet = 0; const b = Q.addFoe('brute', 11.5, 12.5); b.born = 0; b.slamT = 0;
+              let hit = false; for (let i = 0; i < 300; i++) { const hp = P.hp; b.x = 11.5; b.y = 12.5;
+                if (jumping && K.quakes.length) { const q = K.quakes[0], d = Math.hypot(P.x - q.x, P.y - q.y); if (d - q.r < 0.9 && d - q.r > 0.5 && P.feet === 0) Q.jump(); }
+                Q.sim(1 / 60); if (P.hp < hp && K.quakes.length) hit = true; } return hit; };
+            out.slamHits = slam(false); out.slamJumped = !slam(true);
+            // the Captain: every 10th wave, with his entrance and a health bar
+            K = fresh(); P = K.P; K.wave = 9; K.phase = 'break'; K.phaseT = 0.01; for (let i = 0; i < 5; i++) Q.sim(1 / 60);
+            out.intro = !!K.intro && K.wave === 10; for (let i = 0; i < 60 * 4; i++) { P.hp = 100; Q.sim(1 / 60); }
+            const cap = K.foes.find(f => f.t === 'captain'); out.captain = !!cap && K.boss === cap;
+            if (cap) { cap.hp = 3; Q.hurtFoe(cap, 5, 0.1, true); for (let i = 0; i < 60 * 30 && (K.foes.length || K.phase === 'fight'); i++) { for (const o of K.foes.slice()) Q.killFoe(o, false); P.hp = 100; Q.sim(1 / 60); } }
+            out.capSunk = !K.foes.some(f => f.t === 'captain') && K.phase === 'break';
+            return out; })()""")
+        for k, v in r.items(): check("part 2: " + k, v, r)
         # pistol, blunderbuss, stagger and Scuttle
         r = await ev("""(() => { const Q = WRECK; Q.startWreck('hold', {test: true}); const K = Q.WK, P = K.P; K.phase = 'break'; K.phaseT = 99;
             P.x = 11.5; P.y = 15.5; P.a = -Math.PI / 2; P.pitch = 0; const f = Q.addFoe('deck', 11.5, 12.5); f.born = 0; Q.render();
@@ -169,6 +229,12 @@ async def main():
         await ev("(() => { const K = WRECK.WK; K.P.pitch = -40; K.P.gun = 0; })()"); await pg.wait_for_timeout(100); await pg.screenshot(path=os.path.join(OUT, "pc_hook.png"))
         await ev("(() => { const K = WRECK.WK; K.P.pitch = 0; K.P.gun = 1; K.P.adsOn = true; })()"); await pg.wait_for_timeout(400); await pg.screenshot(path=os.path.join(OUT, "pc_ads_pistol.png"))
         await ev("(() => { const K = WRECK.WK; K.P.guns[2] = true; K.P.gun = 2; K.P.want = 2; })()"); await pg.wait_for_timeout(200); await pg.screenshot(path=os.path.join(OUT, "pc_ads_blun.png"))
+        for gi, nm in [(3, "twin"), (4, "rivet"), (5, "torp"), (6, "sonar")]:
+            await ev(f"(() => {{ const K = WRECK.WK; K.P.adsOn = false; K.P.guns[{gi}] = true; K.P.gun = {gi}; K.P.want = {gi}; K.P.ammo.torp = 5; }})()"); await pg.wait_for_timeout(150); await pg.screenshot(path=os.path.join(OUT, f"pc_gun_{nm}.png"))
+        await ev("(() => { const K = WRECK.WK; K.P.fury = 100; WRECK.fury(); })()"); await pg.wait_for_timeout(300); await pg.screenshot(path=os.path.join(OUT, "pc_fury.png"))
+        await ev("(() => { WRECK.startWreck('hold', {test: true}); const K = WRECK.WK; K.wave = 9; K.phase = 'break'; K.phaseT = 0.01; })()"); await pg.wait_for_timeout(1500); await pg.screenshot(path=os.path.join(OUT, "pc_captain_intro.png"))
+        await pg.wait_for_timeout(2500); await ev("(() => { const K = WRECK.WK, c = K.foes.find(f => f.t === 'captain'); if (c) { K.P.x = c.x; K.P.y = c.y + 3; K.P.a = -Math.PI / 2; K.P.hp = 100; } })()"); await pg.wait_for_timeout(200); await pg.screenshot(path=os.path.join(OUT, "pc_captain.png"))
+        await ev("(() => { WRECK.startWreck('hold', {test: true}); const K = WRECK.WK; K.phase = 'break'; K.phaseT = 99; const P = K.P; P.x = 11.5; P.y = 15.5; P.a = -Math.PI / 2; for (const [t, x, y] of [['brute', 9.5, 12.5], ['hammer', 13.5, 11.5], ['deck', 11.5, 10.5]]) { const f = WRECK.addFoe(t, x, y); f.born = 0; f.dummy = true; } })()"); await pg.wait_for_timeout(300); await pg.screenshot(path=os.path.join(OUT, "pc_bigfoes.png"))
         await ev("(() => { const K = WRECK.WK; K.P.adsOn = false; K.paused = true; })()"); await pg.wait_for_timeout(200); await pg.screenshot(path=os.path.join(OUT, "pc_pause.png"))
         check("no script errors (PC)", errs == [], errs[:3])
         await b.close()
